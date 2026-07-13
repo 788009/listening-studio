@@ -1,0 +1,280 @@
+2026-07-12 23:46:25.306 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-12 23:46:45.200 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x7b924abc6680>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x7b924abc6320>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.1118d56b3f224598bb4133749e272174.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x7b924abc5ea0>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x7b93efbdc160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x7b927e71f7f0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x7b9275aed900>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7b924abbeb00>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x7b924abbceb0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x7b91c68635b0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7b924abbeb00>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 169, in from_engine_args
+    vllm_config = engine_args.create_engine_config(usage_context)
+                  │           │                    └ <UsageContext.ENGINE_CONTEXT: 'ENGINE_CONTEXT'>
+                  │           └ <function EngineArgs.create_engine_config at 0x7b91c6a15cf0>
+                  └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/engine/arg_utils.py", line 1131, in create_engine_config
+    device_config = DeviceConfig(
+                    └ <class 'vllm.config.device.DeviceConfig'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/pydantic/_internal/_dataclasses.py", line 121, in __init__
+    s.__pydantic_validator__.validate_python(ArgsKwargs(args, kwargs), self_instance=s)
+    │ │                      │               │          │     │                      └ DeviceConfig(device='', device_type='')
+    │ │                      │               │          │     └ {'device': ''}
+    │ │                      │               │          └ ()
+    │ │                      │               └ <class 'pydantic_core._pydantic_core.ArgsKwargs'>
+    │ │                      └ <method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects>
+    │ └ SchemaValidator(title="DeviceConfig", validator=Dataclass(
+    │       DataclassValidator {
+    │           strict: false,
+    │           validator:...
+    └ DeviceConfig(device='', device_type='')
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/config/device.py", line 74, in __post_init__
+    self.device = torch.device(self.device_type)
+    │    │        │     │      │    └ ''
+    │    │        │     │      └ DeviceConfig(device='', device_type='')
+    │    │        │     └ <class 'torch.device'>
+    │    │        └ <module 'torch' from '/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/__init__.py'>
+    │    └ ''
+    └ DeviceConfig(device='', device_type='')
+
+RuntimeError: Device string must not be empty
+2026-07-12 23:47:07.384 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-12 23:47:24.856 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x78cf471e2440>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x78cf471e20e0>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.37ecf5a93c1f4f768be52d41aea558cc.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x78cf471e1c60>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x78d0ec30c160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x78cf7ae677f0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x78cf721ed900>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x78cf471dea40>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x78cf471dc7c0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x78cec2d877f0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x78cf471dea40>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 169, in from_engine_args
+    vllm_config = engine_args.create_engine_config(usage_context)
+                  │           │                    └ <UsageContext.ENGINE_CONTEXT: 'ENGINE_CONTEXT'>
+                  │           └ <function EngineArgs.create_engine_config at 0x78cec2f35f30>
+                  └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/engine/arg_utils.py", line 1131, in create_engine_config
+    device_config = DeviceConfig(
+                    └ <class 'vllm.config.device.DeviceConfig'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/pydantic/_internal/_dataclasses.py", line 121, in __init__
+    s.__pydantic_validator__.validate_python(ArgsKwargs(args, kwargs), self_instance=s)
+    │ │                      │               │          │     │                      └ DeviceConfig(device='', device_type='')
+    │ │                      │               │          │     └ {'device': ''}
+    │ │                      │               │          └ ()
+    │ │                      │               └ <class 'pydantic_core._pydantic_core.ArgsKwargs'>
+    │ │                      └ <method 'validate_python' of 'pydantic_core._pydantic_core.SchemaValidator' objects>
+    │ └ SchemaValidator(title="DeviceConfig", validator=Dataclass(
+    │       DataclassValidator {
+    │           strict: false,
+    │           validator:...
+    └ DeviceConfig(device='', device_type='')
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/config/device.py", line 74, in __post_init__
+    self.device = torch.device(self.device_type)
+    │    │        │     │      │    └ ''
+    │    │        │     │      └ DeviceConfig(device='', device_type='')
+    │    │        │     └ <class 'torch.device'>
+    │    │        └ <module 'torch' from '/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/__init__.py'>
+    │    └ ''
+    └ DeviceConfig(device='', device_type='')
+
+RuntimeError: Device string must not be empty
+2026-07-13 00:19:16.599 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-13 00:19:41.394 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x7125be30bc70>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x7125be30b910>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.732fdfa1ca1d4f5d8a23ea476d4d9f16.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x7125be30b490>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x7127979dc160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x712609821bd0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x712600ac3b50>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x7125c3a078b0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x7125b938dfc0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+           │               └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+    │                  │                └ <staticmethod(<function EngineCoreClient.make_client at 0x7125b9337370>)>
+    │                  └ <class 'vllm.v1.engine.core_client.EngineCoreClient'>
+    └ <vllm.v1.engine.llm_engine.LLMEngine object at 0x7125b6c99ae0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+           │            │            │               └ True
+           │            │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+           │            └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.core_client.SyncMPClient'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+         │                   │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+         │                   └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+         └ <function launch_core_engines at 0x7125b9335120>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+         │    └ <generator object launch_core_engines at 0x7125b6e637d0>
+         └ <contextlib._GeneratorContextManager object at 0x7125b6c99d80>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+    └ <function wait_for_engine_startup at 0x7125b93351b0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+2026-07-13 00:21:10.014 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-13 00:22:07.129 | INFO     | voice.modules:create_voice:126 - Voice created: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:07.130 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input, speech_name=output, text_length=53
+2026-07-13 00:22:09.983 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:221 - Forking voice: source=test/input, target=test/input_fork
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:245 - Voice forked: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:09.984 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input_fork, speech_name=output, text_length=53
+2026-07-13 00:22:11.907 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:54 - Voice file: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:55 - Audio file: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:56 - Forked voice file: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:57 - Forked audio file: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:26:15.467 | WARNING  | voice.modules:delete_voice:181 - Deleting voice: username=test, voice_name=input
+2026-07-13 00:26:15.468 | INFO     | voice.modules:delete_voice:185 - Voice deleted: /home/uuk/listening/voice/data/test/voice/input
+2026-07-13 00:26:15.468 | WARNING  | voice.modules:delete_voice:181 - Deleting voice: username=test, voice_name=input_fork
+2026-07-13 00:26:15.468 | INFO     | voice.modules:delete_voice:185 - Voice deleted: /home/uuk/listening/voice/data/test/voice/input_fork
+2026-07-13 00:26:15.469 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-13 00:27:08.659 | INFO     | voice.modules:create_voice:126 - Voice created: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:27:08.660 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input, speech_name=output, text_length=53
+2026-07-13 00:27:11.869 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:27:11.870 | INFO     | voice.modules:fork_voice:221 - Forking voice: source=test/input, target=test/input_fork
+2026-07-13 00:27:11.871 | INFO     | voice.modules:fork_voice:245 - Voice forked: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:27:11.872 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input_fork, speech_name=output, text_length=53
+2026-07-13 00:27:13.819 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:27:13.819 | INFO     | __main__:main:54 - Voice file: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:27:13.819 | INFO     | __main__:main:55 - Audio file: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:27:13.820 | INFO     | __main__:main:56 - Forked voice file: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:27:13.820 | INFO     | __main__:main:57 - Forked audio file: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav

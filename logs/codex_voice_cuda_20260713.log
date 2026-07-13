@@ -1,0 +1,737 @@
+[2026-07-13 00:12:31] CUDA and vLLM diagnostics
+/usr/lib/wsl/lib/nvidia-smi
+Failed to initialize NVML: GPU access blocked by the operating system
+Failed to properly shut down NVML: GPU access blocked by the operating system
+
+--- interpreter ---
+/home/uuk/listening/.venv/bin/python
+3.10.17 (main, May 30 2025, 05:37:34) [Clang 20.1.4 ]
+--- torch ---
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/cuda/__init__.py:829: UserWarning: Can't initialize NVML
+  warnings.warn("Can't initialize NVML")
+torch 2.8.0+cu128
+built_cuda 12.8
+available False
+count 0
+device None
+--- vllm ---
+INFO 07-13 00:12:38 [__init__.py:220] No platform detected, vLLM is running on UnspecifiedPlatform
+vllm 0.11.0
+<class 'vllm.platforms.interface.UnspecifiedPlatform'> <vllm.platforms.interface.UnspecifiedPlatform object at 0x726f3525e5f0>
+--- device nodes and libraries ---
+zsh:16: no matches found: /dev/nvidia*
+	libnvidia-ml.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libnvidia-ml.so.1
+	libcudadebugger.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcudadebugger.so.1
+	libcuda.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcuda.so.1
+INFO 07-13 00:19:10 [__init__.py:216] Automatically detected platform cuda.
+2026-07-13 00:19:16.599 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+/home/uuk/listening/.venv/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+2026-07-13 00:19:20,936 INFO input frame rate=25
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+[0;93m2026-07-13 00:19:25.153883985 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[0;93m2026-07-13 00:19:25.158510382 [W:onnxruntime:, session_state.cc:1316 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-07-13 00:19:25.158545881 [W:onnxruntime:, session_state.cc:1318 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-07-13 00:19:25,556 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:25,844 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:25,958 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,080 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:26,380 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:26,502 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,621 INFO use wetext frontend
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+INFO 07-13 00:19:32 [model.py:547] Resolved architecture: Qwen2ForCausalLM
+`torch_dtype` is deprecated! Use `dtype` instead!
+INFO 07-13 00:19:32 [model.py:1510] Using max model len 32768
+WARNING 07-13 00:19:32 [arg_utils.py:1554] --enable-prompt-embeds and --enable-prefix-caching are not supported together in V1. Prefix caching has been disabled.
+INFO 07-13 00:19:32 [scheduler.py:205] Chunked prefill is enabled with max_num_batched_tokens=2048.
+WARNING 07-13 00:19:32 [__init__.py:3036] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+INFO 07-13 00:19:34 [__init__.py:216] Automatically detected platform cuda.
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 116, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 125, in _main
+    prepare(preparation_data)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 236, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 287, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 289, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 96, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/uuk/listening/voice/modules_test.py", line 8, in <module>
+    from modules import create_voice, delete_voice, fork_voice, synthesize_speech
+ImportError: cannot import name 'create_voice' from 'modules' (/home/uuk/listening/voice/CosyVoice/modules.py)
+2026-07-13 00:19:41.394 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x7125be30bc70>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x7125be30b910>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.732fdfa1ca1d4f5d8a23ea476d4d9f16.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x7125be30b490>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x7127979dc160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x712609821bd0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x712600ac3b50>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x7125c3a078b0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x7125b938dfc0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+           │               └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+    │                  │                └ <staticmethod(<function EngineCoreClient.make_client at 0x7125b9337370>)>
+    │                  └ <class 'vllm.v1.engine.core_client.EngineCoreClient'>
+    └ <vllm.v1.engine.llm_engine.LLMEngine object at 0x7125b6c99ae0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+           │            │            │               └ True
+           │            │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+           │            └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.core_client.SyncMPClient'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+         │                   │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+         │                   └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+         └ <function launch_core_engines at 0x7125b9335120>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+         │    └ <generator object launch_core_engines at 0x7125b6e637d0>
+         └ <contextlib._GeneratorContextManager object at 0x7125b6c99d80>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+    └ <function wait_for_engine_startup at 0x7125b93351b0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+Traceback (most recent call last):
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+  File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+[2026-07-13 00:19:45] inspect escalated integration result
+[2026-07-13 00:12:31] CUDA and vLLM diagnostics
+/usr/lib/wsl/lib/nvidia-smi
+Failed to initialize NVML: GPU access blocked by the operating system
+Failed to properly shut down NVML: GPU access blocked by the operating system
+
+--- interpreter ---
+/home/uuk/listening/.venv/bin/python
+3.10.17 (main, May 30 2025, 05:37:34) [Clang 20.1.4 ]
+--- torch ---
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/cuda/__init__.py:829: UserWarning: Can't initialize NVML
+  warnings.warn("Can't initialize NVML")
+torch 2.8.0+cu128
+built_cuda 12.8
+available False
+count 0
+device None
+--- vllm ---
+INFO 07-13 00:12:38 [__init__.py:220] No platform detected, vLLM is running on UnspecifiedPlatform
+vllm 0.11.0
+<class 'vllm.platforms.interface.UnspecifiedPlatform'> <vllm.platforms.interface.UnspecifiedPlatform object at 0x726f3525e5f0>
+--- device nodes and libraries ---
+zsh:16: no matches found: /dev/nvidia*
+	libnvidia-ml.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libnvidia-ml.so.1
+	libcudadebugger.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcudadebugger.so.1
+	libcuda.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcuda.so.1
+INFO 07-13 00:19:10 [__init__.py:216] Automatically detected platform cuda.
+2026-07-13 00:19:16.599 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+/home/uuk/listening/.venv/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+2026-07-13 00:19:20,936 INFO input frame rate=25
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+[0;93m2026-07-13 00:19:25.153883985 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[0;93m2026-07-13 00:19:25.158510382 [W:onnxruntime:, session_state.cc:1316 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-07-13 00:19:25.158545881 [W:onnxruntime:, session_state.cc:1318 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-07-13 00:19:25,556 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:25,844 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:25,958 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,080 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:26,380 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:26,502 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,621 INFO use wetext frontend
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+INFO 07-13 00:19:32 [model.py:547] Resolved architecture: Qwen2ForCausalLM
+`torch_dtype` is deprecated! Use `dtype` instead!
+INFO 07-13 00:19:32 [model.py:1510] Using max model len 32768
+WARNING 07-13 00:19:32 [arg_utils.py:1554] --enable-prompt-embeds and --enable-prefix-caching are not supported together in V1. Prefix caching has been disabled.
+INFO 07-13 00:19:32 [scheduler.py:205] Chunked prefill is enabled with max_num_batched_tokens=2048.
+WARNING 07-13 00:19:32 [__init__.py:3036] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+INFO 07-13 00:19:34 [__init__.py:216] Automatically detected platform cuda.
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 116, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 125, in _main
+    prepare(preparation_data)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 236, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 287, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 289, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 96, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/uuk/listening/voice/modules_test.py", line 8, in <module>
+    from modules import create_voice, delete_voice, fork_voice, synthesize_speech
+ImportError: cannot import name 'create_voice' from 'modules' (/home/uuk/listening/voice/CosyVoice/modules.py)
+2026-07-13 00:19:41.394 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x7125be30bc70>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x7125be30b910>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.732fdfa1ca1d4f5d8a23ea476d4d9f16.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x7125be30b490>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x7127979dc160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x712609821bd0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x712600ac3b50>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x7125c3a078b0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x7125b938dfc0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+           │               └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+    │                  │                └ <staticmethod(<function EngineCoreClient.make_client at 0x7125b9337370>)>
+    │                  └ <class 'vllm.v1.engine.core_client.EngineCoreClient'>
+    └ <vllm.v1.engine.llm_engine.LLMEngine object at 0x7125b6c99ae0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+           │            │            │               └ True
+           │            │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+           │            └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.core_client.SyncMPClient'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+         │                   │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+         │                   └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+         └ <function launch_core_engines at 0x7125b9335120>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+         │    └ <generator object launch_core_engines at 0x7125b6e637d0>
+         └ <contextlib._GeneratorContextManager object at 0x7125b6c99d80>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+    └ <function wait_for_engine_startup at 0x7125b93351b0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+Traceback (most recent call last):
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+  File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+[2026-07-13 00:19:45] inspect escalated integration result
+--- artifacts ---
+--- running process ---
+INFO 07-13 00:21:03 [__init__.py:216] Automatically detected platform cuda.
+2026-07-13 00:21:10.014 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+/home/uuk/listening/.venv/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+2026-07-13 00:21:14,330 INFO input frame rate=25
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+[0;93m2026-07-13 00:21:18.552966225 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[0;93m2026-07-13 00:21:18.558519807 [W:onnxruntime:, session_state.cc:1316 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-07-13 00:21:18.558558990 [W:onnxruntime:, session_state.cc:1318 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-07-13 00:21:18,967 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:21:19,291 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:21:19,912 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:21:20,043 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:21:20,357 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:21:20,478 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:21:20,594 INFO use wetext frontend
+[2026-07-13 00:21:22] inspect second integration result
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+[2026-07-13 00:19:45] inspect escalated integration result
+[2026-07-13 00:12:31] CUDA and vLLM diagnostics
+/usr/lib/wsl/lib/nvidia-smi
+Failed to initialize NVML: GPU access blocked by the operating system
+Failed to properly shut down NVML: GPU access blocked by the operating system
+
+--- interpreter ---
+/home/uuk/listening/.venv/bin/python
+3.10.17 (main, May 30 2025, 05:37:34) [Clang 20.1.4 ]
+--- torch ---
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/cuda/__init__.py:829: UserWarning: Can't initialize NVML
+  warnings.warn("Can't initialize NVML")
+torch 2.8.0+cu128
+built_cuda 12.8
+available False
+count 0
+device None
+--- vllm ---
+INFO 07-13 00:12:38 [__init__.py:220] No platform detected, vLLM is running on UnspecifiedPlatform
+vllm 0.11.0
+<class 'vllm.platforms.interface.UnspecifiedPlatform'> <vllm.platforms.interface.UnspecifiedPlatform object at 0x726f3525e5f0>
+--- device nodes and libraries ---
+zsh:16: no matches found: /dev/nvidia*
+	libnvidia-ml.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libnvidia-ml.so.1
+	libcudadebugger.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcudadebugger.so.1
+	libcuda.so.1 (libc6,x86-64) => /usr/lib/wsl/lib/libcuda.so.1
+INFO 07-13 00:19:10 [__init__.py:216] Automatically detected platform cuda.
+2026-07-13 00:19:16.599 | INFO     | modules:create_voice:104 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+/home/uuk/listening/.venv/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+2026-07-13 00:19:20,936 INFO input frame rate=25
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+[0;93m2026-07-13 00:19:25.153883985 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[0;93m2026-07-13 00:19:25.158510382 [W:onnxruntime:, session_state.cc:1316 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-07-13 00:19:25.158545881 [W:onnxruntime:, session_state.cc:1318 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-07-13 00:19:25,556 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:25,844 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:25,958 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,080 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:19:26,380 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:19:26,502 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:19:26,621 INFO use wetext frontend
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+INFO 07-13 00:19:32 [model.py:547] Resolved architecture: Qwen2ForCausalLM
+`torch_dtype` is deprecated! Use `dtype` instead!
+INFO 07-13 00:19:32 [model.py:1510] Using max model len 32768
+WARNING 07-13 00:19:32 [arg_utils.py:1554] --enable-prompt-embeds and --enable-prefix-caching are not supported together in V1. Prefix caching has been disabled.
+INFO 07-13 00:19:32 [scheduler.py:205] Chunked prefill is enabled with max_num_batched_tokens=2048.
+WARNING 07-13 00:19:32 [__init__.py:3036] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+INFO 07-13 00:19:34 [__init__.py:216] Automatically detected platform cuda.
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 116, in spawn_main
+    exitcode = _main(fd, parent_sentinel)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 125, in _main
+    prepare(preparation_data)
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 236, in prepare
+    _fixup_main_from_path(data['init_main_from_path'])
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/multiprocessing/spawn.py", line 287, in _fixup_main_from_path
+    main_content = runpy.run_path(main_path,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 289, in run_path
+    return _run_module_code(code, init_globals, run_name,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 96, in _run_module_code
+    _run_code(code, mod_globals, init_globals,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/home/uuk/listening/voice/modules_test.py", line 8, in <module>
+    from modules import create_voice, delete_voice, fork_voice, synthesize_speech
+ImportError: cannot import name 'create_voice' from 'modules' (/home/uuk/listening/voice/CosyVoice/modules.py)
+2026-07-13 00:19:41.394 | ERROR    | modules:create_voice:113 - Failed to create voice: username=test, voice_name=input
+Traceback (most recent call last):
+
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+    └ <function main at 0x7125be30bc70>
+
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+                 │            │         │                  └ PosixPath('/home/uuk/listening/voice/test')
+                 │            │         └ 'input'
+                 │            └ 'test'
+                 └ <function create_voice at 0x7125be30b910>
+
+> File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+    │                     │            └ PosixPath('/home/uuk/listening/voice/data/test/voice/input/.voice.pt.732fdfa1ca1d4f5d8a23ea476d4d9f16.tmp')
+    │                     └ PosixPath('/home/uuk/listening/voice/test/input.wav')
+    └ <function save_zero_shot_voice at 0x7125be30b490>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+            └ <function _get_model at 0x7127979dc160>
+
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+             └ <function AutoModel at 0x712609821bd0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+           │            └ {'model_dir': '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B', 'load_vllm': True, 'fp16': False}
+           └ <class 'cosyvoice.cli.cosyvoice.CosyVoice3'>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+    │    │     │                          └ '/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B'
+    │    │     └ <function CosyVoice2Model.load_vllm at 0x712600ac3b50>
+    │    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+    └ <cosyvoice.cli.cosyvoice.CosyVoice3 object at 0x7125c3a078b0>
+
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+    │    │          │         │                └ EngineArgs(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', served_model_name=None, to...
+    │    │          │         └ <classmethod(<function LLMEngine.from_engine_args at 0x7125b938dfc0>)>
+    │    │          └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+    │    └ CosyVoice3LM(
+    │        (llm): Qwen2Encoder(
+    │          (model): Qwen2ForCausalLM(
+    │            (model): Qwen2Model(
+    │              (embed_tokens): Embedd...
+    └ <cosyvoice.cli.model.CosyVoice3Model object at 0x7126641216f0>
+
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+           │               └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.llm_engine.LLMEngine'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+    │                  │                └ <staticmethod(<function EngineCoreClient.make_client at 0x7125b9337370>)>
+    │                  └ <class 'vllm.v1.engine.core_client.EngineCoreClient'>
+    └ <vllm.v1.engine.llm_engine.LLMEngine object at 0x7125b6c99ae0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+           │            │            │               └ True
+           │            │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+           │            └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+           └ <class 'vllm.v1.engine.core_client.SyncMPClient'>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+         │                   │            └ <class 'vllm.v1.executor.abstract.UniProcExecutor'>
+         │                   └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+         └ <function launch_core_engines at 0x7125b9335120>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+         │    └ <generator object launch_core_engines at 0x7125b6e637d0>
+         └ <contextlib._GeneratorContextManager object at 0x7125b6c99d80>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+    └ <function wait_for_engine_startup at 0x7125b93351b0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+Traceback (most recent call last):
+  File "/home/uuk/listening/voice/modules_test.py", line 58, in <module>
+    main()
+  File "/home/uuk/listening/voice/modules_test.py", line 31, in main
+    voice_path = create_voice(USERNAME, SOURCE_VOICE_NAME, TEST_DIR / "input.wav")
+  File "/home/uuk/listening/voice/modules.py", line 110, in create_voice
+    _save_zero_shot_voice(source_path, temporary_path)
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 70, in save_zero_shot_voice
+    model = _get_model()
+  File "/home/uuk/listening/voice/CosyVoice/modules.py", line 42, in _get_model
+    _MODEL = AutoModel(
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 236, in AutoModel
+    return CosyVoice3(**kwargs)
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/cosyvoice.py", line 217, in __init__
+    self.model.load_vllm('{}/vllm'.format(model_dir))
+  File "/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py", line 288, in load_vllm
+    self.llm.vllm = LLMEngine.from_engine_args(engine_args)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 177, in from_engine_args
+    return cls(vllm_config=vllm_config,
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/llm_engine.py", line 114, in __init__
+    self.engine_core = EngineCoreClient.make_client(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 80, in make_client
+    return SyncMPClient(vllm_config, executor_class, log_stats)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 602, in __init__
+    super().__init__(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/core_client.py", line 448, in __init__
+    with launch_core_engines(vllm_config, executor_class,
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+[2026-07-13 00:19:45] inspect escalated integration result
+--- artifacts ---
+--- running process ---
+INFO 07-13 00:21:03 [__init__.py:216] Automatically detected platform cuda.
+2026-07-13 00:21:10.014 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+/home/uuk/listening/.venv/lib/python3.10/site-packages/lightning/fabric/__init__.py:41: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+2026-07-13 00:21:14,330 INFO input frame rate=25
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torch/nn/utils/weight_norm.py:144: FutureWarning: `torch.nn.utils.weight_norm` is deprecated in favor of `torch.nn.utils.parametrizations.weight_norm`.
+  WeightNorm.apply(module, name, dim)
+[0;93m2026-07-13 00:21:18.552966225 [W:onnxruntime:, transformer_memcpy.cc:111 ApplyImpl] 14 Memcpy nodes are added to the graph main_graph for CUDAExecutionProvider. It might have negative impact on performance (including unable to run CUDA graph). Set session_options.log_severity_level=1 to see the detail logs before this message.[m
+[0;93m2026-07-13 00:21:18.558519807 [W:onnxruntime:, session_state.cc:1316 VerifyEachNodeIsAssignedToAnEp] Some nodes were not assigned to the preferred execution providers which may or may not have an negative impact on performance. e.g. ORT explicitly assigns shape related ops to CPU to improve perf.[m
+[0;93m2026-07-13 00:21:18.558558990 [W:onnxruntime:, session_state.cc:1318 VerifyEachNodeIsAssignedToAnEp] Rerunning with verbose output on a non-minimal build will show node assignments.[m
+2026-07-13 00:21:18,967 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:21:19,291 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:21:19,912 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:21:20,043 DEBUG Starting new HTTPS connection (1): www.modelscope.cn:443
+2026-07-13 00:21:20,357 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/revisions HTTP/1.1" 200 222
+2026-07-13 00:21:20,478 DEBUG https://www.modelscope.cn:443 "GET /api/v1/models/pengzhendong/wetext/repo/files?Revision=master&Recursive=True HTTP/1.1" 200 None
+2026-07-13 00:21:20,594 INFO use wetext frontend
+[2026-07-13 00:21:22] inspect second integration result
+--- artifacts ---
+--- running process ---
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+Downloading Model to directory: /home/uuk/.cache/modelscope/hub/pengzhendong/wetext
+INFO 07-13 00:21:26 [model.py:547] Resolved architecture: Qwen2ForCausalLM
+`torch_dtype` is deprecated! Use `dtype` instead!
+INFO 07-13 00:21:26 [model.py:1510] Using max model len 32768
+WARNING 07-13 00:21:26 [arg_utils.py:1554] --enable-prompt-embeds and --enable-prefix-caching are not supported together in V1. Prefix caching has been disabled.
+INFO 07-13 00:21:26 [scheduler.py:205] Chunked prefill is enabled with max_num_batched_tokens=2048.
+WARNING 07-13 00:21:26 [__init__.py:3036] We must use the `spawn` multiprocessing start method. Overriding VLLM_WORKER_MULTIPROC_METHOD to 'spawn'. See https://docs.vllm.ai/en/latest/usage/troubleshooting.html#python-multiprocessing for more information. Reasons: CUDA is initialized
+INFO 07-13 00:21:28 [__init__.py:216] Automatically detected platform cuda.
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:33 [core.py:644] Waiting for init message from front-end.
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:33 [core.py:77] Initializing a V1 LLM engine (v0.11.0) with config: model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', speculative_config=None, tokenizer='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', skip_tokenizer_init=True, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=32768, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_fallback=False, disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser=''), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None), seed=0, served_model_name=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm, enable_prefix_caching=False, chunked_prefill_enabled=True, pooler_config=None, compilation_config={"level":3,"debug_dump_path":"","cache_dir":"","backend":"","custom_ops":[],"splitting_ops":["vllm.unified_attention","vllm.unified_attention_with_output","vllm.mamba_mixer2","vllm.mamba_mixer","vllm.short_conv","vllm.linear_attention","vllm.plamo2_mamba_mixer","vllm.gdn_attention","vllm.sparse_attn_indexer"],"use_inductor":true,"compile_sizes":[],"inductor_compile_config":{"enable_auto_functionalized_v2":false},"inductor_passes":{},"cudagraph_mode":[2,1],"use_cudagraph":true,"cudagraph_num_of_warmups":1,"cudagraph_capture_sizes":[256,248,240,232,224,216,208,200,192,184,176,168,160,152,144,136,128,120,112,104,96,88,80,72,64,56,48,40,32,24,16,8,4,2,1],"cudagraph_copy_inputs":false,"full_cuda_graph":false,"use_inductor_graph_partition":false,"pass_config":{},"max_capture_size":256,"local_cache_dir":null}
+[1;36m(EngineCore_DP0 pid=469501)[0;0m WARNING 07-13 00:21:34 [interface.py:381] Using 'pin_memory=False' as WSL is detected. This may slow down the performance.
+[W713 00:21:44.455692023 socket.cpp:200] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+[W713 00:21:54.466745599 socket.cpp:200] [c10d] The hostname of the client socket cannot be retrieved. err=-3
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[Gloo] Rank 0 is connected to 0 peer ranks. Expected number of connected peer ranks is : 0
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:54 [parallel_state.py:1208] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, TP rank 0, EP rank 0
+[1;36m(EngineCore_DP0 pid=469501)[0;0m WARNING 07-13 00:21:54 [topk_topp_sampler.py:66] FlashInfer is not available. Falling back to the PyTorch-native implementation of top-p & top-k sampling. For the best performance, please install FlashInfer.
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:54 [gpu_model_runner.py:2602] Starting to load model /home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm...
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:55 [gpu_model_runner.py:2634] Loading model from scratch...
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:55 [cuda.py:366] Using Flash Attention backend on V1 engine.
+[1;36m(EngineCore_DP0 pid=469501)[0;0m Loading safetensors checkpoint shards:   0% Completed | 0/1 [00:00<?, ?it/s]
+[1;36m(EngineCore_DP0 pid=469501)[0;0m 2026-07-13 00:21:55,835 DEBUG Starting new HTTPS connection (1): stats.vllm.ai:443
+[1;36m(EngineCore_DP0 pid=469501)[0;0m Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.38it/s]
+[1;36m(EngineCore_DP0 pid=469501)[0;0m Loading safetensors checkpoint shards: 100% Completed | 1/1 [00:00<00:00,  1.38it/s]
+[1;36m(EngineCore_DP0 pid=469501)[0;0m 
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:56 [default_loader.py:267] Loading weights took 0.76 seconds
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:21:56 [gpu_model_runner.py:2653] Model loading took 0.6953 GiB and 1.094942 seconds
+[1;36m(EngineCore_DP0 pid=469501)[0;0m 2026-07-13 00:21:57,868 DEBUG https://stats.vllm.ai:443 "POST / HTTP/1.1" 200 None
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:00 [backends.py:548] Using cache directory: /home/uuk/.cache/vllm/torch_compile_cache/c65cf6bf2d/rank_0_0/backbone for vLLM's torch.compile
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:00 [backends.py:559] Dynamo bytecode transform time: 3.34 s
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:01 [backends.py:164] Directly load the compiled graph(s) for dynamic shape from the cache, took 0.850 s
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:02 [monitor.py:34] torch.compile takes 3.34 s in total
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:03 [gpu_worker.py:298] Available KV cache memory: 0.80 GiB
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:03 [kv_cache_utils.py:1087] GPU KV cache size: 69,632 tokens
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:03 [kv_cache_utils.py:1091] Maximum concurrency for 32,768 tokens per request: 2.12x
+[1;36m(EngineCore_DP0 pid=469501)[0;0m Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   0%|          | 0/35 [00:00<?, ?it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):   9%|▊         | 3/35 [00:00<00:01, 20.80it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  17%|█▋        | 6/35 [00:00<00:01, 23.72it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  29%|██▊       | 10/35 [00:00<00:00, 27.00it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  40%|████      | 14/35 [00:00<00:00, 30.05it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  51%|█████▏    | 18/35 [00:00<00:00, 30.68it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  63%|██████▎   | 22/35 [00:00<00:00, 32.73it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  77%|███████▋  | 27/35 [00:00<00:00, 36.00it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE):  91%|█████████▏| 32/35 [00:00<00:00, 37.39it/s]Capturing CUDA graphs (mixed prefill-decode, PIECEWISE): 100%|██████████| 35/35 [00:01<00:00, 32.39it/s]
+[1;36m(EngineCore_DP0 pid=469501)[0;0m Capturing CUDA graphs (decode, FULL):   0%|          | 0/19 [00:00<?, ?it/s]Capturing CUDA graphs (decode, FULL):  16%|█▌        | 3/19 [00:00<00:00, 24.14it/s]Capturing CUDA graphs (decode, FULL):  37%|███▋      | 7/19 [00:00<00:00, 32.20it/s]Capturing CUDA graphs (decode, FULL):  63%|██████▎   | 12/19 [00:00<00:00, 36.64it/s]Capturing CUDA graphs (decode, FULL):  84%|████████▍ | 16/19 [00:00<00:00, 36.97it/s]Capturing CUDA graphs (decode, FULL): 100%|██████████| 19/19 [00:00<00:00, 36.20it/s]
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:06 [gpu_model_runner.py:3480] Graph capturing finished in 2 secs, took 0.64 GiB
+[1;36m(EngineCore_DP0 pid=469501)[0;0m INFO 07-13 00:22:06 [core.py:210] init engine (profile, create kv cache, warmup model) took 9.29 seconds
+INFO 07-13 00:22:06 [loggers.py:147] Engine 000: vllm cache_config_info with initialization after num_gpu_blocks is: 4352
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torchaudio/_backend/utils.py:213: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.load_with_torchcodec` under the hood. Some parameters like ``normalize``, ``format``, ``buffer_size``, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's decoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.decoders.AudioDecoder.html#torchcodec.decoders.AudioDecoder.
+  warnings.warn(
+2026-07-13 00:22:07.129 | INFO     | voice.modules:create_voice:126 - Voice created: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:07.130 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input, speech_name=output, text_length=53
+  0%|          | 0/1 [00:00<?, ?it/s]2026-07-13 00:22:07,134 INFO synthesis text You are a helpful assistant.<|endofprompt|>Listen to the conversations and answer the questions.
+/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py:103: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with self.llm_context, torch.cuda.amp.autocast(self.fp16 is True and hasattr(self.llm, 'vllm') is False):
+WARNING 07-13 00:22:07 [preprocess.py:60] Using None for EOS token id because tokenizer is not initialized
+/home/uuk/listening/voice/CosyVoice/cosyvoice/cli/model.py:426: FutureWarning: `torch.cuda.amp.autocast(args...)` is deprecated. Please use `torch.amp.autocast('cuda', args...)` instead.
+  with torch.cuda.amp.autocast(self.fp16):
+2026-07-13 00:22:09,956 INFO yield speech len 4.2, rtf 0.6720162005651564
+100%|██████████| 1/1 [00:02<00:00,  2.85s/it]100%|██████████| 1/1 [00:02<00:00,  2.85s/it]
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torchaudio/_backend/utils.py:337: UserWarning: In 2.9, this function's implementation will be changed to use torchaudio.save_with_torchcodec` under the hood. Some parameters like format, encoding, bits_per_sample, buffer_size, and ``backend`` will be ignored. We recommend that you port your code to rely directly on TorchCodec's encoder instead: https://docs.pytorch.org/torchcodec/stable/generated/torchcodec.encoders.AudioEncoder
+  warnings.warn(
+2026-07-13 00:22:09.983 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:221 - Forking voice: source=test/input, target=test/input_fork
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:245 - Voice forked: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:09.984 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input_fork, speech_name=output, text_length=53
+  0%|          | 0/1 [00:00<?, ?it/s]2026-07-13 00:22:09,987 INFO synthesis text You are a helpful assistant.<|endofprompt|>Listen to the conversations and answer the questions.
+WARNING 07-13 00:22:09 [preprocess.py:60] Using None for EOS token id because tokenizer is not initialized
+2026-07-13 00:22:11,893 INFO yield speech len 2.96, rtf 0.6441101834580705
+100%|██████████| 1/1 [00:01<00:00,  1.91s/it]100%|██████████| 1/1 [00:01<00:00,  1.91s/it]
+2026-07-13 00:22:11.907 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:54 - Voice file: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:55 - Audio file: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:56 - Forked voice file: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:57 - Forked audio file: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+[rank0]:[W713 00:22:12.125162229 ProcessGroupNCCL.cpp:1538] Warning: WARNING: destroy_process_group() was not called before program exit, which can leak resources. For more info, please see https://pytorch.org/docs/stable/distributed.html#shutdown (function operator())
+ERROR 07-13 00:22:13 [core_client.py:564] Engine core proc EngineCore_DP0 died unexpectedly, shutting down client.
+[2026-07-13 00:26:57] monitor integration process
+      2       1  3840 S          00:00 /usr/bin/zsh -c export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B source .venv/bin/activate {   echo "[$(date '+%F %T')] monitor integration process"   ps -eo pid,ppid,rss,stat,etime,cmd --sort=-rss | rg 'modules_test|EngineCore|resource_tracker|spawn_main' || true   find voice/data/test -maxdepth 4 -type f -printf '%p %s bytes\n' 2>/dev/null | sort   tail -n 30 voice/logs/modules.log } 2>&1 | tee -a logs/codex_voice_cuda_20260713.log
+      5       2  2028 D          00:00 /usr/bin/zsh -c export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B source .venv/bin/activate {   echo "[$(date '+%F %T')] monitor integration process"   ps -eo pid,ppid,rss,stat,etime,cmd --sort=-rss | rg 'modules_test|EngineCore|resource_tracker|spawn_main' || true   find voice/data/test -maxdepth 4 -type f -printf '%p %s bytes\n' 2>/dev/null | sort   tail -n 30 voice/logs/modules.log } 2>&1 | tee -a logs/codex_voice_cuda_20260713.log
+      1       0   256 Ss         00:00 bwrap --new-session --die-with-parent --ro-bind / / --dev /dev --bind /tmp /tmp --perms 555 --tmpfs /tmp/.git --remount-ro /tmp/.git --perms 555 --tmpfs /tmp/.agents --remount-ro /tmp/.agents --perms 555 --tmpfs /tmp/.codex --remount-ro /tmp/.codex --bind /home/uuk/listening /home/uuk/listening --perms 555 --tmpfs /home/uuk/listening/.git --remount-ro /home/uuk/listening/.git --perms 555 --tmpfs /home/uuk/listening/.agents --remount-ro /home/uuk/listening/.agents --perms 555 --tmpfs /home/uuk/listening/.codex --remount-ro /home/uuk/listening/.codex --unshare-user --unshare-pid --unshare-net --proc /proc --argv0 codex-linux-sandbox -- /home/uuk/.vscode-server/extensions/openai.chatgpt-26.707.41301-linux-x64/bin/linux-x86_64/codex --sandbox-policy-cwd /home/uuk/listening --command-cwd /home/uuk/listening --permission-profile {"type":"managed","file_system":{"type":"restricted","entries":[{"path":{"type":"special","value":{"kind":"root"}},"access":"read"},{"path":{"type":"path","path":"/home/uuk/listening"},"access":"write"},{"path":{"type":"special","value":{"kind":"slash_tmp"}},"access":"write"},{"path":{"type":"special","value":{"kind":"tmpdir"}},"access":"write"},{"path":{"type":"path","path":"/home/uuk/listening/.git"},"access":"read"},{"path":{"type":"path","path":"/home/uuk/listening/.agents"},"access":"read"},{"path":{"type":"path","path":"/home/uuk/listening/.codex"},"access":"read"}]},"network":"restricted"} --apply-seccomp-then-exec -- /usr/bin/zsh -c __CODEX_SNAPSHOT_OVERRIDE_SET_0="${CODEX_PERMISSION_PROFILE+x}" __CODEX_SNAPSHOT_OVERRIDE_0="${CODEX_PERMISSION_PROFILE-}" __CODEX_SNAPSHOT_OVERRIDE_SET_1="${CODEX_THREAD_ID+x}" __CODEX_SNAPSHOT_OVERRIDE_1="${CODEX_THREAD_ID-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0="${ALL_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_0="${ALL_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1="${BUNDLE_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_1="${BUNDLE_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2="${BUNDLE_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_2="${BUNDLE_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3="${BUNDLE_NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_3="${BUNDLE_NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4="${BUNDLE_SSL_CA_CERT+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_4="${BUNDLE_SSL_CA_CERT-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5="${CODEX_CA_CERTIFICATE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_5="${CODEX_CA_CERTIFICATE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6="${CODEX_NETWORK_ALLOW_LOCAL_BINDING+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_6="${CODEX_NETWORK_ALLOW_LOCAL_BINDING-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7="${CODEX_NETWORK_PROXY_ACTIVE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_7="${CODEX_NETWORK_PROXY_ACTIVE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8="${CODEX_NETWORK_PROXY_ATTRIBUTION+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_8="${CODEX_NETWORK_PROXY_ATTRIBUTION-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9="${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_9="${CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10="${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_10="${CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11="${CURL_CA_BUNDLE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_11="${CURL_CA_BUNDLE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12="${DOCKER_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_12="${DOCKER_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13="${DOCKER_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_13="${DOCKER_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14="${ELECTRON_GET_USE_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_14="${ELECTRON_GET_USE_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15="${FTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_15="${FTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16="${GIT_SSL_CAINFO+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_16="${GIT_SSL_CAINFO-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17="${HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_17="${HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18="${HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_18="${HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19="${NODE_EXTRA_CA_CERTS+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_19="${NODE_EXTRA_CA_CERTS-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20="${NODE_USE_ENV_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_20="${NODE_USE_ENV_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21="${NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_21="${NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22="${NPM_CONFIG_CAFILE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_22="${NPM_CONFIG_CAFILE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23="${NPM_CONFIG_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_23="${NPM_CONFIG_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24="${NPM_CONFIG_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_24="${NPM_CONFIG_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25="${NPM_CONFIG_NOPROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_25="${NPM_CONFIG_NOPROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26="${NPM_CONFIG_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_26="${NPM_CONFIG_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27="${PIP_CERT+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_27="${PIP_CERT-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28="${PIP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_28="${PIP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29="${REQUESTS_CA_BUNDLE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_29="${REQUESTS_CA_BUNDLE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30="${SSL_CERT_FILE+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_30="${SSL_CERT_FILE-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31="${WSS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_31="${WSS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32="${WS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_32="${WS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33="${YARN_HTTPS_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_33="${YARN_HTTPS_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34="${YARN_HTTP_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_34="${YARN_HTTP_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35="${YARN_NO_PROXY+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_35="${YARN_NO_PROXY-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36="${all_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_36="${all_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37="${ftp_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_37="${ftp_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38="${http_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_38="${http_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39="${https_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_39="${https_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40="${no_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_40="${no_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41="${npm_config_cafile+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_41="${npm_config_cafile-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42="${npm_config_http_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_42="${npm_config_http_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43="${npm_config_https_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_43="${npm_config_https_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44="${npm_config_noproxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_44="${npm_config_noproxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45="${npm_config_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_45="${npm_config_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46="${ws_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_46="${ws_proxy-}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47="${wss_proxy+x}" __CODEX_SNAPSHOT_PROXY_OVERRIDE_47="${wss_proxy-}" __CODEX_SNAPSHOT_PROXY_ENV_SET="${CODEX_NETWORK_PROXY_ACTIVE+x}"  if . '/home/uuk/.codex/shell_snapshots/019f56fb-a73e-78f1-abd3-c29c9aca8766.1783870760767205573.sh' >/dev/null 2>&1; then :; fi  if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_0}" ]; then export CODEX_PERMISSION_PROFILE="${__CODEX_SNAPSHOT_OVERRIDE_0}"; else unset CODEX_PERMISSION_PROFILE; fi if [ -n "${__CODEX_SNAPSHOT_OVERRIDE_SET_1}" ]; then export CODEX_THREAD_ID="${__CODEX_SNAPSHOT_OVERRIDE_1}"; else unset CODEX_THREAD_ID; fi if [ -n "$__CODEX_SNAPSHOT_PROXY_ENV_SET" ] || [ -n "${CODEX_NETWORK_PROXY_ACTIVE+x}" ]; then if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_0}" ]; then export ALL_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_0}"; else unset ALL_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_1}" ]; then export BUNDLE_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_1}"; else unset BUNDLE_HTTPS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_2}" ]; then export BUNDLE_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_2}"; else unset BUNDLE_HTTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_3}" ]; then export BUNDLE_NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_3}"; else unset BUNDLE_NO_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_4}" ]; then export BUNDLE_SSL_CA_CERT="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_4}"; else unset BUNDLE_SSL_CA_CERT; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_5}" ]; then export CODEX_CA_CERTIFICATE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_5}"; else unset CODEX_CA_CERTIFICATE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_6}" ]; then export CODEX_NETWORK_ALLOW_LOCAL_BINDING="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_6}"; else unset CODEX_NETWORK_ALLOW_LOCAL_BINDING; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_7}" ]; then export CODEX_NETWORK_PROXY_ACTIVE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_7}"; else unset CODEX_NETWORK_PROXY_ACTIVE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_8}" ]; then export CODEX_NETWORK_PROXY_ATTRIBUTION="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_8}"; else unset CODEX_NETWORK_PROXY_ATTRIBUTION; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_9}" ]; then export CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_9}"; else unset CODEX_NETWORK_PROXY_BROKERED_CREDENTIALS; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_10}" ]; then export CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_10}"; else unset CODEX_NETWORK_PROXY_CREDENTIAL_BROKER_ACTIVE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_11}" ]; then export CURL_CA_BUNDLE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_11}"; else unset CURL_CA_BUNDLE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_12}" ]; then export DOCKER_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_12}"; else unset DOCKER_HTTPS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_13}" ]; then export DOCKER_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_13}"; else unset DOCKER_HTTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_14}" ]; then export ELECTRON_GET_USE_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_14}"; else unset ELECTRON_GET_USE_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_15}" ]; then export FTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_15}"; else unset FTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_16}" ]; then export GIT_SSL_CAINFO="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_16}"; else unset GIT_SSL_CAINFO; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_17}" ]; then export HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_17}"; else unset HTTPS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_18}" ]; then export HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_18}"; else unset HTTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_19}" ]; then export NODE_EXTRA_CA_CERTS="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_19}"; else unset NODE_EXTRA_CA_CERTS; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_20}" ]; then export NODE_USE_ENV_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_20}"; else unset NODE_USE_ENV_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_21}" ]; then export NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_21}"; else unset NO_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_22}" ]; then export NPM_CONFIG_CAFILE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_22}"; else unset NPM_CONFIG_CAFILE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_23}" ]; then export NPM_CONFIG_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_23}"; else unset NPM_CONFIG_HTTPS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_24}" ]; then export NPM_CONFIG_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_24}"; else unset NPM_CONFIG_HTTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_25}" ]; then export NPM_CONFIG_NOPROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_25}"; else unset NPM_CONFIG_NOPROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_26}" ]; then export NPM_CONFIG_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_26}"; else unset NPM_CONFIG_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_27}" ]; then export PIP_CERT="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_27}"; else unset PIP_CERT; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_28}" ]; then export PIP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_28}"; else unset PIP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_29}" ]; then export REQUESTS_CA_BUNDLE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_29}"; else unset REQUESTS_CA_BUNDLE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_30}" ]; then export SSL_CERT_FILE="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_30}"; else unset SSL_CERT_FILE; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_31}" ]; then export WSS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_31}"; else unset WSS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_32}" ]; then export WS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_32}"; else unset WS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_33}" ]; then export YARN_HTTPS_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_33}"; else unset YARN_HTTPS_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_34}" ]; then export YARN_HTTP_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_34}"; else unset YARN_HTTP_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_35}" ]; then export YARN_NO_PROXY="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_35}"; else unset YARN_NO_PROXY; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_36}" ]; then export all_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_36}"; else unset all_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_37}" ]; then export ftp_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_37}"; else unset ftp_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_38}" ]; then export http_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_38}"; else unset http_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_39}" ]; then export https_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_39}"; else unset https_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_40}" ]; then export no_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_40}"; else unset no_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_41}" ]; then export npm_config_cafile="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_41}"; else unset npm_config_cafile; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_42}" ]; then export npm_config_http_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_42}"; else unset npm_config_http_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_43}" ]; then export npm_config_https_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_43}"; else unset npm_config_https_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_44}" ]; then export npm_config_noproxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_44}"; else unset npm_config_noproxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_45}" ]; then export npm_config_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_45}"; else unset npm_config_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_46}" ]; then export ws_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_46}"; else unset ws_proxy; fi if [ -n "${__CODEX_SNAPSHOT_PROXY_OVERRIDE_SET_47}" ]; then export wss_proxy="${__CODEX_SNAPSHOT_PROXY_OVERRIDE_47}"; else unset wss_proxy; fi fi  exec '/usr/bin/zsh' -c 'export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B source .venv/bin/activate {   echo "[$(date '"'"'+%F %T'"'"')] monitor integration process"   ps -eo pid,ppid,rss,stat,etime,cmd --sort=-rss | rg '"'"'modules_test|EngineCore|resource_tracker|spawn_main'"'"' || true   find voice/data/test -maxdepth 4 -type f -printf '"'"'%p %s bytes\n'"'"' 2>/dev/null | sort   tail -n 30 voice/logs/modules.log } 2>&1 | tee -a logs/codex_voice_cuda_20260713.log'
+         │                   └ VllmConfig(model_config=ModelConfig(model='/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B/vllm', r...
+         └ <function launch_core_engines at 0x7125b9335120>
+  File "/home/uuk/.local/share/uv/python/cpython-3.10-linux-x86_64-gnu/lib/python3.10/contextlib.py", line 142, in __exit__
+    next(self.gen)
+         │    └ <generator object launch_core_engines at 0x7125b6e637d0>
+         └ <contextlib._GeneratorContextManager object at 0x7125b6c99d80>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 732, in launch_core_engines
+    wait_for_engine_startup(
+    └ <function wait_for_engine_startup at 0x7125b93351b0>
+  File "/home/uuk/listening/.venv/lib/python3.10/site-packages/vllm/v1/engine/utils.py", line 785, in wait_for_engine_startup
+    raise RuntimeError("Engine core initialization failed. "
+
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+2026-07-13 00:21:10.014 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+2026-07-13 00:22:07.129 | INFO     | voice.modules:create_voice:126 - Voice created: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:07.130 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input, speech_name=output, text_length=53
+2026-07-13 00:22:09.983 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:221 - Forking voice: source=test/input, target=test/input_fork
+2026-07-13 00:22:09.984 | INFO     | voice.modules:fork_voice:245 - Voice forked: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:09.984 | INFO     | voice.modules:synthesize_speech:150 - Synthesizing speech: username=test, voice_name=input_fork, speech_name=output, text_length=53
+2026-07-13 00:22:11.907 | INFO     | voice.modules:synthesize_speech:171 - Speech synthesized: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:54 - Voice file: /home/uuk/listening/voice/data/test/voice/input/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:55 - Audio file: /home/uuk/listening/voice/data/test/voice/input/output.wav
+2026-07-13 00:22:11.908 | INFO     | __main__:main:56 - Forked voice file: /home/uuk/listening/voice/data/test/voice/input_fork/voice.pt
+2026-07-13 00:22:11.908 | INFO     | __main__:main:57 - Forked audio file: /home/uuk/listening/voice/data/test/voice/input_fork/output.wav
+2026-07-13 00:26:15.467 | WARNING  | voice.modules:delete_voice:181 - Deleting voice: username=test, voice_name=input
+2026-07-13 00:26:15.468 | INFO     | voice.modules:delete_voice:185 - Voice deleted: /home/uuk/listening/voice/data/test/voice/input
+2026-07-13 00:26:15.468 | WARNING  | voice.modules:delete_voice:181 - Deleting voice: username=test, voice_name=input_fork
+2026-07-13 00:26:15.468 | INFO     | voice.modules:delete_voice:185 - Voice deleted: /home/uuk/listening/voice/data/test/voice/input_fork
+2026-07-13 00:26:15.469 | INFO     | voice.modules:create_voice:105 - Creating voice: username=test, voice_name=input, audio_path=/home/uuk/listening/voice/test/input.wav
+[2026-07-13 00:28:33] final artifact validation
+745638634e4e0f52f6a6002ec56c112bc0de51a17bc04a9df8ada387bfe359e5  voice/data/test/voice/input/voice.pt
+745638634e4e0f52f6a6002ec56c112bc0de51a17bc04a9df8ada387bfe359e5  voice/data/test/voice/input_fork/voice.pt
+voice/data/test/voice/input/output.wav:      RIFF (little-endian) data, WAVE audio, IEEE Float, mono 24000 Hz
+voice/data/test/voice/input_fork/output.wav: RIFF (little-endian) data, WAVE audio, IEEE Float, mono 24000 Hz
+<string>:1: UserWarning: torchaudio._backend.utils.info has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. The decoding and encoding capabilities of PyTorch for both audio and video are being consolidated into TorchCodec. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+/home/uuk/listening/.venv/lib/python3.10/site-packages/torchaudio/_backend/soundfile_backend.py:120: UserWarning: torchaudio._backend.common.AudioMetaData has been deprecated. This deprecation is part of a large refactoring effort to transition TorchAudio into a maintenance phase. The decoding and encoding capabilities of PyTorch for both audio and video are being consolidated into TorchCodec. Please see https://github.com/pytorch/audio/issues/3902 for more information. It will be removed from the 2.9 release. 
+  return AudioMetaData(
+voice/data/test/voice/input/output.wav AudioMetaData(sample_rate=24000, num_frames=100800, num_channels=1, bits_per_sample=32, encoding=PCM_F)
+voice/data/test/voice/input_fork/output.wav AudioMetaData(sample_rate=24000, num_frames=71040, num_channels=1, bits_per_sample=32, encoding=PCM_F)

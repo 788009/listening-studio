@@ -1,0 +1,246 @@
+import os
+import shutil
+import sys
+import uuid
+from pathlib import Path
+from threading import RLock
+from typing import Any
+
+from loguru import logger
+
+
+MODULE_DIR = Path(__file__).resolve().parent
+DATA_DIR = MODULE_DIR / "data"
+LOG_DIR = MODULE_DIR / "logs"
+COSYVOICE_DIR = MODULE_DIR / "CosyVoice"
+
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+logger.add(
+    LOG_DIR / "modules.log",
+    level="DEBUG",
+    rotation="10 MB",
+    retention=10,
+    encoding="utf-8",
+)
+_LOGGER = logger.bind(module="voice.modules")
+
+# CosyVoice is a local namespace package and imports its own packages as
+# top-level modules. Keep MODULE_DIR first so a spawned process cannot resolve
+# this module name to CosyVoice/modules.py.
+if str(COSYVOICE_DIR) not in sys.path:
+    sys.path.insert(0, str(COSYVOICE_DIR))
+if str(MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(MODULE_DIR))
+
+from CosyVoice.modules import generate_speech as _generate_speech
+from CosyVoice.modules import save_zero_shot_voice as _save_zero_shot_voice
+
+
+VOICE_FILENAME = "voice.pt"
+_STORAGE_LOCK = RLock()
+
+
+def _validate_component(value: str, description: str) -> str:
+    if not isinstance(value, str):
+        raise TypeError(f"{description} must be a string")
+    if not value.strip():
+        raise ValueError(f"{description} must not be empty")
+    if value in {".", ".."} or any(
+        separator in value for separator in ("/", "\\", "\0")
+    ):
+        raise ValueError(f"{description} must be a single path component")
+    return value
+
+
+def _voice_dir(username: str, voice_name: str) -> Path:
+    username = _validate_component(username, "username")
+    voice_name = _validate_component(voice_name, "voice name")
+    return DATA_DIR / username / "voice" / voice_name
+
+
+def _voice_path(username: str, voice_name: str) -> Path:
+    return _voice_dir(username, voice_name) / VOICE_FILENAME
+
+
+def _speech_path(username: str, voice_name: str, speech_name: str) -> Path:
+    speech_name = _validate_component(speech_name, "speech name")
+    return _voice_dir(username, voice_name) / f"{speech_name}.wav"
+
+
+def _require_file(path: Path, description: str) -> None:
+    if not path.is_file():
+        raise FileNotFoundError(f"{description} does not exist: {path}")
+
+
+def get_final_prompt(text: str, params: dict[str, Any] | None = None) -> str:
+    """Build the text passed to the speech model.
+
+    The parameters are reserved for later prompt processing. For now the input
+    text is returned unchanged.
+    """
+    if not isinstance(text, str):
+        raise TypeError("text must be a string")
+    if params is not None and not isinstance(params, dict):
+        raise TypeError("params must be a dictionary or None")
+    return text
+
+
+def create_voice(
+    username: str,
+    voice_name: str,
+    audio_path: str | os.PathLike[str],
+) -> Path:
+    """Create a voice at data/<username>/voice/<voice_name>/voice.pt."""
+    source_path = Path(audio_path).expanduser().resolve()
+    _require_file(source_path, "source audio")
+    voice_dir = _voice_dir(username, voice_name)
+    voice_path = voice_dir / VOICE_FILENAME
+
+    with _STORAGE_LOCK:
+        if voice_dir.exists():
+            raise FileExistsError(f"voice already exists: {voice_path}")
+        voice_dir.mkdir(parents=True)
+        temporary_path = voice_dir / f".{VOICE_FILENAME}.{uuid.uuid4().hex}.tmp"
+        try:
+            _LOGGER.info(
+                "Creating voice: username={}, voice_name={}, audio_path={}",
+                username,
+                voice_name,
+                source_path,
+            )
+            _save_zero_shot_voice(source_path, temporary_path)
+            temporary_path.replace(voice_path)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to create voice: username={}, voice_name={}",
+                username,
+                voice_name,
+            )
+            temporary_path.unlink(missing_ok=True)
+            try:
+                voice_dir.rmdir()
+            except OSError:
+                pass
+            raise
+
+    _LOGGER.info("Voice created: {}", voice_path)
+    return voice_path
+
+
+def synthesize_speech(
+    username: str,
+    voice_name: str,
+    speech_name: str,
+    text: str,
+    params: dict[str, Any] | None = None,
+) -> Path:
+    """Synthesize speech with a stored voice and return the WAV path."""
+    voice_path = _voice_path(username, voice_name)
+    output_path = _speech_path(username, voice_name, speech_name)
+    prompt = get_final_prompt(text, params)
+
+    with _STORAGE_LOCK:
+        _require_file(voice_path, "voice")
+        if output_path.exists():
+            raise FileExistsError(f"speech already exists: {output_path}")
+        temporary_path = output_path.with_name(
+            f".{output_path.name}.{uuid.uuid4().hex}.tmp.wav"
+        )
+        try:
+            _LOGGER.info(
+                "Synthesizing speech: username={}, voice_name={}, "
+                "speech_name={}, text_length={}",
+                username,
+                voice_name,
+                speech_name,
+                len(prompt),
+            )
+            _generate_speech(voice_path, prompt, temporary_path)
+            temporary_path.replace(output_path)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to synthesize speech: username={}, voice_name={}, "
+                "speech_name={}",
+                username,
+                voice_name,
+                speech_name,
+            )
+            temporary_path.unlink(missing_ok=True)
+            raise
+
+    _LOGGER.info("Speech synthesized: {}", output_path)
+    return output_path
+
+
+def delete_voice(username: str, voice_name: str) -> None:
+    """Delete a voice and all speech files stored under it."""
+    voice_dir = _voice_dir(username, voice_name)
+    with _STORAGE_LOCK:
+        if not voice_dir.is_dir():
+            raise FileNotFoundError(f"voice does not exist: {voice_dir}")
+        _LOGGER.warning(
+            "Deleting voice: username={}, voice_name={}", username, voice_name
+        )
+        shutil.rmtree(voice_dir)
+    _LOGGER.info("Voice deleted: {}", voice_dir)
+
+
+def delete_speech(username: str, voice_name: str, speech_name: str) -> None:
+    """Delete one synthesized WAV file."""
+    speech_path = _speech_path(username, voice_name, speech_name)
+    with _STORAGE_LOCK:
+        _require_file(speech_path, "speech")
+        _LOGGER.warning(
+            "Deleting speech: username={}, voice_name={}, speech_name={}",
+            username,
+            voice_name,
+            speech_name,
+        )
+        speech_path.unlink()
+    _LOGGER.info("Speech deleted: {}", speech_path)
+
+
+def fork_voice(
+    source_username: str,
+    source_voice_name: str,
+    target_username: str,
+    target_voice_name: str,
+) -> Path:
+    """Copy a voice file to another voice directory without copying speech."""
+    source_path = _voice_path(source_username, source_voice_name)
+    target_dir = _voice_dir(target_username, target_voice_name)
+    target_path = target_dir / VOICE_FILENAME
+
+    with _STORAGE_LOCK:
+        _require_file(source_path, "source voice")
+        if target_dir.exists():
+            raise FileExistsError(f"target voice already exists: {target_path}")
+        target_dir.mkdir(parents=True)
+        temporary_path = target_dir / f".{VOICE_FILENAME}.{uuid.uuid4().hex}.tmp"
+        try:
+            _LOGGER.info(
+                "Forking voice: source={}/{}, target={}/{}",
+                source_username,
+                source_voice_name,
+                target_username,
+                target_voice_name,
+            )
+            shutil.copy2(source_path, temporary_path)
+            temporary_path.replace(target_path)
+        except Exception:
+            _LOGGER.exception(
+                "Failed to fork voice: source={}/{}, target={}/{}",
+                source_username,
+                source_voice_name,
+                target_username,
+                target_voice_name,
+            )
+            temporary_path.unlink(missing_ok=True)
+            try:
+                target_dir.rmdir()
+            except OSError:
+                pass
+            raise
+
+    _LOGGER.info("Voice forked: {}", target_path)
+    return target_path
