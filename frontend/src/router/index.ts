@@ -34,6 +34,12 @@ const routes = [
     meta: { title: 'Generation batch', requiresTeacher: true },
   },
   {
+    path: '/papers/new',
+    name: 'paper-create',
+    component: () => import('@/views/PaperComposerView.vue'),
+    meta: { title: 'Assemble paper', requiresTeacher: true },
+  },
+  {
     path: '/voices',
     name: 'voices',
     component: () => import('@/views/VoiceListView.vue'),

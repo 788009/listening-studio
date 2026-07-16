@@ -75,4 +75,19 @@ describe('profile completion guard', () => {
 
     expect(router.currentRoute.value.name).toBe('generation-batch')
   })
+
+  it('allows a completed teacher to open the paper composer', async () => {
+    const auth = useAuthStore()
+    auth.setCurrentUser({
+      userId: 'TeacherOne',
+      username: 'Teacher One',
+      locale: 'en',
+      profileComplete: true,
+    })
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/papers/new')
+
+    expect(router.currentRoute.value.name).toBe('paper-create')
+  })
 })
