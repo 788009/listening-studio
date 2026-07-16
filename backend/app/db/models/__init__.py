@@ -1,5 +1,13 @@
 """ORM model registry."""
 
+from backend.app.db.models.audio import (
+    Audio,
+    AudioSourceType,
+    AudioStatus,
+    AudioUtterance,
+    AudioVisibility,
+    audio_tag_associations,
+)
 from backend.app.db.models.audio_tag import (
     AudioTag,
     AudioTagTranslation,
@@ -20,9 +28,14 @@ from backend.app.db.models.voice_tag import (
 )
 
 __all__ = [
+    "Audio",
+    "AudioSourceType",
+    "AudioStatus",
     "AudioTag",
     "AudioTagTranslation",
     "AudioTagType",
+    "AudioUtterance",
+    "AudioVisibility",
     "User",
     "UserStatus",
     "Voice",
@@ -32,5 +45,6 @@ __all__ = [
     "VoiceTag",
     "VoiceTagTranslation",
     "VoiceTagType",
+    "audio_tag_associations",
     "voice_tag_associations",
 ]

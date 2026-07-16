@@ -11,7 +11,6 @@ from sqlalchemy import (
     Enum as SqlEnum,
     ForeignKey,
     Index,
-    Integer,
     String,
     Table,
     func,
@@ -21,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.app.db.base import Base
 
 if TYPE_CHECKING:
+    from backend.app.db.models.audio import Audio
     from backend.app.db.models.user import User
     from backend.app.db.models.voice_tag import VoiceTag
 
@@ -115,8 +115,13 @@ class Voice(Base):
         server_default=VoiceExampleMode.REFERENCE.value,
         nullable=False,
     )
-    # E01 adds the foreign key after the audio table exists.
-    example_audio_id: Mapped[int | None] = mapped_column(Integer)
+    example_audio_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "audios.id",
+            name="fk_voices_example_audio_id_audios",
+            ondelete="RESTRICT",
+        )
+    )
     error_summary: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -130,6 +135,9 @@ class Voice(Base):
         nullable=False,
     )
     author: Mapped["User"] = relationship()
+    example_audio: Mapped["Audio | None"] = relationship(
+        foreign_keys=[example_audio_id]
+    )
     tags: Mapped[list["VoiceTag"]] = relationship(
         secondary=voice_tag_associations,
         order_by="VoiceTag.id",
