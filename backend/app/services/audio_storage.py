@@ -65,6 +65,16 @@ class AudioStorage:
         path = self.path(audio_id)
         if not self.exists(audio_id):
             raise ConflictError("Audio file does not exist")
+        return self._inspect_path(path)
+
+    def inspect_temporary(self, job_id: int) -> StoredAudioMetadata:
+        path = self.temporary_audio_path(job_id)
+        if path.is_symlink() or not path.is_file():
+            raise ConflictError("Temporary audio file does not exist")
+        return self._inspect_path(path)
+
+    @staticmethod
+    def _inspect_path(path: Path) -> StoredAudioMetadata:
         try:
             with wave.open(str(path), "rb") as audio_file:
                 sample_rate = audio_file.getframerate()

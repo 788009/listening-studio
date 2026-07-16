@@ -8,6 +8,8 @@ from backend.app.api.audio_schemas import (
     AudioAuthorResponse,
     AudioListResponse,
     AudioResponse,
+    AudioSynthesisAccepted,
+    AudioSynthesisRequest,
     AudioUpdateRequest,
     AudioUtteranceResponse,
 )
@@ -20,8 +22,10 @@ from backend.app.db.models.audio_tag import AudioTag
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_management import AudioManagementService
+from backend.app.services.audio_synthesis import AudioSynthesisService
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.tag_values import select_tag_display_value
+from backend.app.services.voice_storage import VoiceStorage
 
 
 router = APIRouter(prefix="/api/audios", tags=["audios"])
@@ -73,6 +77,36 @@ def _response(audio: Audio, principal: Principal, language: str) -> AudioRespons
             )
             for item in audio.utterances
         ],
+    )
+
+
+@router.post(
+    "",
+    response_model=AudioSynthesisAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_audio(
+    payload: AudioSynthesisRequest,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> AudioSynthesisAccepted:
+    settings = request.app.state.settings
+    submission = AudioSynthesisService(
+        audio_storage=AudioStorage(settings.data_dir),
+        voice_storage=VoiceStorage(settings.data_dir),
+    ).prepare_single_speaker(
+        session,
+        author=user,
+        title=payload.title,
+        text=payload.text,
+        voice_id=payload.voice_id,
+        tag_ids=payload.tag_ids,
+        target_visibility=payload.visibility,
+    )
+    return AudioSynthesisAccepted(
+        audio_id=submission.audio.id,
+        job_id=submission.job.id,
     )
 
 

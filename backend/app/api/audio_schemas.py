@@ -45,6 +45,19 @@ class AudioListResponse(TagApiModel):
     total: int = Field(ge=0)
 
 
+class AudioSynthesisRequest(TagApiModel):
+    title: Title
+    text: str = Field(min_length=1)
+    voice_id: ResourceId
+    tag_ids: list[ResourceId] = Field(default_factory=list)
+    visibility: AudioVisibility = AudioVisibility.PRIVATE
+
+
+class AudioSynthesisAccepted(TagApiModel):
+    audio_id: int
+    job_id: int
+
+
 class AudioUpdateRequest(TagApiModel):
     title: Title | None = None
     tag_ids: list[ResourceId] | None = None
