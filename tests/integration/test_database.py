@@ -24,10 +24,11 @@ class DatabaseIntegrationTest(unittest.TestCase):
             config.set_main_option("sqlalchemy.url", database_url)
 
             command.upgrade(config, "head")
+            command.check(config)
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260716_0001")
+            self.assertEqual(revision, "20260716_0002")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:

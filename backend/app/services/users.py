@@ -1,0 +1,100 @@
+from __future__ import annotations
+
+import re
+
+from pydantic import TypeAdapter, ValidationError
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from backend.app.api.schemas import LanguageCode
+from backend.app.core.exceptions import ConflictError, DomainValidationError
+from backend.app.db.models.user import User, UserStatus
+from backend.app.repositories.users import UserRepository
+
+
+_USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9]{1,64}$")
+_LANGUAGE_CODE_ADAPTER = TypeAdapter(LanguageCode)
+
+
+class UserService:
+    def __init__(self, repository: UserRepository | None = None) -> None:
+        self.repository = repository or UserRepository()
+
+    def create_pending_user(
+        self,
+        session: Session,
+        *,
+        issuer: str,
+        subject: str,
+        locale: str = "en",
+    ) -> User:
+        self._validate_identity(issuer, subject)
+        normalized_locale = self._validate_locale(locale)
+        if self.repository.get_by_identity(session, issuer, subject):
+            raise ConflictError("Identity already exists")
+
+        try:
+            return self.repository.create_pending(
+                session,
+                issuer=issuer,
+                subject=subject,
+                locale=normalized_locale,
+            )
+        except IntegrityError as exc:
+            session.rollback()
+            raise ConflictError("Identity already exists") from exc
+
+    def set_user_id(self, session: Session, user: User, user_id: str) -> User:
+        if user.user_id is not None:
+            raise ConflictError("User ID cannot be changed")
+        if not _USER_ID_PATTERN.fullmatch(user_id):
+            raise DomainValidationError(
+                "User ID must contain only ASCII letters and numbers",
+                details={"field": "userId"},
+            )
+
+        normalized_user_id = user_id.lower()
+        existing = self.repository.get_by_normalized_user_id(
+            session, normalized_user_id
+        )
+        if existing and existing.id != user.id:
+            raise ConflictError("User ID is already in use")
+
+        user.user_id = user_id
+        user.normalized_user_id = normalized_user_id
+        user.status = UserStatus.ACTIVE
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            raise ConflictError("User ID is already in use") from exc
+        return user
+
+    def update_username(self, session: Session, user: User, username: str) -> User:
+        normalized_username = username.strip()
+        if not normalized_username or len(normalized_username) > 200:
+            raise DomainValidationError(
+                "Username must contain between 1 and 200 characters",
+                details={"field": "username"},
+            )
+        user.username = normalized_username
+        session.flush()
+        return user
+
+    @staticmethod
+    def _validate_identity(issuer: str, subject: str) -> None:
+        if not issuer.strip() or not subject.strip():
+            raise DomainValidationError(
+                "Issuer and subject are required",
+                details={"fields": ["issuer", "subject"]},
+            )
+
+    @staticmethod
+    def _validate_locale(locale: str) -> str:
+        try:
+            return _LANGUAGE_CODE_ADAPTER.validate_python(locale)
+        except ValidationError:
+            raise DomainValidationError(
+                "Locale is invalid",
+                details={"field": "locale"},
+            ) from None

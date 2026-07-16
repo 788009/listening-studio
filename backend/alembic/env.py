@@ -3,6 +3,7 @@ from __future__ import annotations
 from alembic import context
 from sqlalchemy import pool
 
+import backend.app.db.models
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.db.session import create_db_engine
