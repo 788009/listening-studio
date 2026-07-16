@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import re
+import unicodedata
+from dataclasses import dataclass
+
+from backend.app.core.exceptions import DomainValidationError
+
+
+_WHITESPACE = re.compile(r"\s+")
+_ENGLISH_VALUE = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9_-]+$")
+MAX_TAG_VALUE_LENGTH = 255
+
+
+@dataclass(frozen=True)
+class NormalizedTagValue:
+    value: str
+    normalized_value: str
+
+
+def _canonical_value(raw_value: object, field: str) -> str:
+    if not isinstance(raw_value, str):
+        raise DomainValidationError(
+            "Tag value is required",
+            details={"field": field},
+        )
+    value = unicodedata.normalize("NFKC", raw_value.strip())
+    value = _WHITESPACE.sub("_", value)
+    if not value:
+        raise DomainValidationError(
+            "Tag value cannot be empty",
+            details={"field": field},
+        )
+    if ":" in value:
+        raise DomainValidationError(
+            "Tag values cannot contain colons",
+            details={"field": field},
+        )
+    if len(value) > MAX_TAG_VALUE_LENGTH:
+        raise DomainValidationError(
+            "Tag value is too long",
+            details={"field": field},
+        )
+    return value
+
+
+def normalize_english_tag_value(raw_value: object) -> NormalizedTagValue:
+    value = _canonical_value(raw_value, "value")
+    if not _ENGLISH_VALUE.fullmatch(value):
+        raise DomainValidationError(
+            "English tag values allow only ASCII letters, numbers, "
+            "underscores, and hyphens",
+            details={"field": "value"},
+        )
+    return NormalizedTagValue(value=value, normalized_value=value.lower())
+
+
+def normalize_translated_tag_value(raw_value: object) -> NormalizedTagValue:
+    value = _canonical_value(raw_value, "translation.value")
+    has_letter_or_number = False
+    for character in value:
+        if character.isalnum():
+            has_letter_or_number = True
+            continue
+        if character not in {"_", "-"}:
+            raise DomainValidationError(
+                "Translated tag values allow only letters, numbers, "
+                "underscores, and hyphens",
+                details={"field": "translation.value"},
+            )
+    if not has_letter_or_number:
+        raise DomainValidationError(
+            "Translated tag values require a letter or number",
+            details={"field": "translation.value"},
+        )
+    return NormalizedTagValue(
+        value=value,
+        normalized_value=value.casefold(),
+    )
