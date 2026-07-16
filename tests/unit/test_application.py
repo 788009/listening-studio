@@ -33,7 +33,14 @@ class ApplicationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 404)
         self.assertEqual(
             response.json(),
-            {"error": {"code": "http_404", "message": "Not Found"}},
+            {
+                "error": {
+                    "code": "not_found",
+                    "message": "Not Found",
+                    "details": None,
+                    "request_id": response.headers["X-Request-ID"],
+                }
+            },
         )
 
     def test_application_import_does_not_import_cosyvoice(self) -> None:

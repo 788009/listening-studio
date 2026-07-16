@@ -61,7 +61,14 @@ class ReadinessIntegrationTest(unittest.TestCase):
         self.assertEqual(response.headers["X-Request-ID"], "readiness-request")
         self.assertEqual(
             response.json(),
-            {"error": {"code": "http_503", "message": "Service not ready"}},
+            {
+                "error": {
+                    "code": "http_503",
+                    "message": "Service not ready",
+                    "details": None,
+                    "request_id": "readiness-request",
+                }
+            },
         )
         self.assertIn("request_id=readiness-request", log_text)
         self.assertIn("Readiness check failed component=database", log_text)

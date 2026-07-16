@@ -50,6 +50,24 @@ source .venv/bin/activate
 .venv/bin/alembic -c alembic.ini downgrade base
 ```
 
+## API Conventions
+
+Errors use one stable envelope. `details` is `null` when no structured detail
+is available, and `request_id` matches the `X-Request-ID` response header:
+
+```json
+{
+  "error": {
+    "code": "not_found",
+    "message": "Resource not found",
+    "details": null,
+    "request_id": "request-123"
+  }
+}
+```
+
+Paginated JSON responses contain `items`, `page`, `page_size`, and `total`.
+
 ## Tests
 
 Run the test suite from the repository root:
