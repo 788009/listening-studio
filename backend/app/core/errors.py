@@ -41,6 +41,7 @@ def _error_response(
     code: str,
     message: str,
     details: ErrorDetails = None,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     request_id = _get_request_id(request)
     payload = ErrorResponse(
@@ -56,6 +57,8 @@ def _error_response(
         content=payload.model_dump(mode="json"),
     )
     response.headers[REQUEST_ID_HEADER] = request_id
+    if headers:
+        response.headers.update(headers)
     return response
 
 
@@ -88,7 +91,13 @@ def install_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         message = exc.detail if isinstance(exc.detail, str) else "Request failed"
         code = _HTTP_ERROR_CODES.get(exc.status_code, f"http_{exc.status_code}")
-        return _error_response(request, exc.status_code, code, message)
+        return _error_response(
+            request,
+            exc.status_code,
+            code,
+            message,
+            headers=exc.headers,
+        )
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(

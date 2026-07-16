@@ -90,6 +90,24 @@ class AudioStorage:
     def cleanup_job(self, job_id: int) -> None:
         self._delete_directory(self.job_directory(job_id))
 
+    def stage_delete(self, audio_id: int) -> Path | None:
+        directory = self.directory(audio_id)
+        if not directory.exists() and not directory.is_symlink():
+            return None
+        staged = self.audio_root / f".deleting-{audio_id}"
+        if staged.exists() or staged.is_symlink():
+            raise FileExistsError("Staged audio deletion already exists")
+        os.replace(directory, staged)
+        return staged
+
+    def restore_staged_delete(self, audio_id: int, staged: Path | None) -> None:
+        if staged is not None and staged.exists():
+            os.replace(staged, self.directory(audio_id))
+
+    def finalize_staged_delete(self, staged: Path | None) -> None:
+        if staged is not None:
+            self._delete_directory(staged)
+
     @staticmethod
     def _delete_directory(directory: Path) -> None:
         if directory.is_symlink():

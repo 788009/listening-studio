@@ -192,6 +192,29 @@ class AudioService:
             file_exists=self.storage.exists(audio.id),
         )
 
+    def update_title(self, session: Session, audio: Audio, title: str) -> Audio:
+        value, normalized = self._normalize_title(title)
+        audio.title = value
+        audio.normalized_title = normalized
+        session.flush()
+        return audio
+
+    def replace_user_tags(
+        self,
+        session: Session,
+        audio: Audio,
+        tags: list[AudioTag],
+    ) -> Audio:
+        if any(tag.type is AudioTagType.AUTHOR for tag in tags):
+            raise DomainValidationError(
+                "Author tags are managed by the system",
+                details={"field": "tagIds"},
+            )
+        author_tags = [tag for tag in audio.tags if tag.type is AudioTagType.AUTHOR]
+        audio.tags = author_tags + list(dict.fromkeys(tags))
+        session.flush()
+        return audio
+
     def _resolve_tags(
         self,
         session: Session,

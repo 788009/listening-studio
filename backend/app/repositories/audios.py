@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
 from backend.app.db.models.audio import Audio, AudioSourceType, AudioUtterance
 from backend.app.db.models.audio_tag import AudioTag
@@ -12,6 +13,28 @@ from backend.app.db.models.user import User
 class AudioRepository:
     def get_by_id(self, session: Session, audio_id: int) -> Audio | None:
         return session.get(Audio, audio_id)
+
+    def list_all(self, session: Session) -> list[Audio]:
+        statement = (
+            select(Audio)
+            .options(
+                selectinload(Audio.author),
+                selectinload(Audio.tags).selectinload(AudioTag.translations),
+                selectinload(Audio.utterances),
+            )
+            .order_by(Audio.id.desc())
+        )
+        return list(session.scalars(statement))
+
+    def count_voice_example_references(self, session: Session, audio_id: int) -> int:
+        from backend.app.db.models.voice import Voice
+
+        statement = select(func.count()).where(Voice.example_audio_id == audio_id)
+        return session.scalar(statement) or 0
+
+    def delete(self, session: Session, audio: Audio) -> None:
+        session.delete(audio)
+        session.flush()
 
     def create(
         self,
