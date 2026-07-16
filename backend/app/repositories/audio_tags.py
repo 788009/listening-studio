@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, selectinload
 
+from backend.app.db.models.audio import audio_tag_associations
 from backend.app.db.models.audio_tag import (
     AudioTag,
     AudioTagTranslation,
@@ -13,6 +14,28 @@ from backend.app.db.models.audio_tag import (
 class AudioTagRepository:
     def get_by_id(self, session: Session, tag_id: int) -> AudioTag | None:
         return session.get(AudioTag, tag_id)
+
+    def get_by_id_for_update(
+        self,
+        session: Session,
+        tag_id: int,
+    ) -> AudioTag | None:
+        statement = select(AudioTag).where(AudioTag.id == tag_id).with_for_update()
+        return session.scalar(statement)
+
+    def list_tags(
+        self,
+        session: Session,
+        tag_type: AudioTagType | None = None,
+    ) -> list[AudioTag]:
+        statement = (
+            select(AudioTag)
+            .options(selectinload(AudioTag.translations))
+            .order_by(AudioTag.type, AudioTag.normalized_value, AudioTag.id)
+        )
+        if tag_type is not None:
+            statement = statement.where(AudioTag.type == tag_type)
+        return list(session.scalars(statement))
 
     def get_by_normalized_value(
         self,
@@ -61,3 +84,28 @@ class AudioTagRepository:
         session.add(translation)
         session.flush()
         return translation
+
+    def get_translation(
+        self,
+        session: Session,
+        *,
+        tag_id: int,
+        language: str,
+    ) -> AudioTagTranslation | None:
+        statement = select(AudioTagTranslation).where(
+            AudioTagTranslation.tag_id == tag_id,
+            AudioTagTranslation.language == language,
+        )
+        return session.scalar(statement)
+
+    def count_usage(self, session: Session, tag_id: int) -> int:
+        statement = (
+            select(func.count())
+            .select_from(audio_tag_associations)
+            .where(audio_tag_associations.c.tag_id == tag_id)
+        )
+        return session.scalar(statement) or 0
+
+    def delete(self, session: Session, tag: AudioTag) -> None:
+        session.delete(tag)
+        session.flush()

@@ -7,49 +7,58 @@ from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.voice_tag import VoiceTagType
 
 
-class VoiceTagTranslationCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+def _to_camel(field_name: str) -> str:
+    first, *rest = field_name.split("_")
+    return first + "".join(part.capitalize() for part in rest)
 
+
+class TagApiModel(BaseModel):
+    model_config = ConfigDict(
+        populate_by_name=True,
+        alias_generator=_to_camel,
+        extra="forbid",
+    )
+
+
+class TagTranslationCreate(TagApiModel):
     language: LanguageCode
     value: str = Field(min_length=1, max_length=255)
 
 
-class VoiceTagCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+class TagTranslationUpdate(TagApiModel):
+    value: str = Field(min_length=1, max_length=255)
 
+
+class VoiceTagCreate(TagApiModel):
     type: VoiceTagType
     value: str = Field(min_length=1, max_length=255)
-    translations: list[VoiceTagTranslationCreate] = Field(default_factory=list)
+    translations: list[TagTranslationCreate] = Field(default_factory=list)
 
 
-class VoiceTagTranslationResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class AudioTagCreate(TagApiModel):
+    type: AudioTagType
+    value: str = Field(min_length=1, max_length=255)
+    translations: list[TagTranslationCreate] = Field(default_factory=list)
 
+
+class TagTranslationResponse(TagApiModel):
     language: str
     value: str
 
 
-class VoiceTagResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class VoiceTagResponse(TagApiModel):
     id: int
     type: VoiceTagType
-    value: str
-    translations: list[VoiceTagTranslationResponse]
+    english_value: str
+    display_value: str
+    full_tag: str
+    translations: list[TagTranslationResponse]
 
 
-class AudioTagCreate(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    type: AudioTagType
-    value: str = Field(min_length=1, max_length=255)
-    translations: list[VoiceTagTranslationCreate] = Field(default_factory=list)
-
-
-class AudioTagResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class AudioTagResponse(TagApiModel):
     id: int
     type: AudioTagType
-    value: str
-    translations: list[VoiceTagTranslationResponse]
+    english_value: str
+    display_value: str
+    full_tag: str
+    translations: list[TagTranslationResponse]

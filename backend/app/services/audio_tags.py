@@ -5,7 +5,11 @@ from collections.abc import Iterable
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.core.exceptions import ConflictError, DomainValidationError
+from backend.app.core.exceptions import (
+    ConflictError,
+    DomainValidationError,
+    NotFoundError,
+)
 from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.services.tag_values import (
@@ -61,3 +65,84 @@ class AudioTagService:
         except IntegrityError as exc:
             session.rollback()
             raise ConflictError("Audio tag or translation already exists") from exc
+
+    def create_user_tag(
+        self,
+        session: Session,
+        *,
+        tag_type: AudioTagType,
+        english_value: object,
+        translations: Iterable[TagTranslationInput] = (),
+    ) -> AudioTag:
+        if tag_type is AudioTagType.AUTHOR:
+            raise DomainValidationError(
+                "Author tags are managed by the system",
+                details={"field": "type"},
+            )
+        return self.create_tag(
+            session,
+            tag_type=tag_type,
+            english_value=english_value,
+            translations=translations,
+        )
+
+    def get_tag(self, session: Session, tag_id: int) -> AudioTag:
+        tag = self.repository.get_by_id(session, tag_id)
+        if tag is None:
+            raise NotFoundError("Audio tag not found")
+        return tag
+
+    def list_tags(
+        self,
+        session: Session,
+        tag_type: AudioTagType | None = None,
+    ) -> list[AudioTag]:
+        return self.repository.list_tags(session, tag_type)
+
+    def upsert_translation(
+        self,
+        session: Session,
+        *,
+        tag_id: int,
+        translation: TagTranslationInput,
+    ) -> AudioTag:
+        tag = self.get_tag(session, tag_id)
+        if tag.type is AudioTagType.AUTHOR:
+            raise ConflictError("Author tags are managed by the system")
+        normalized = normalize_tag_translations([translation])[0]
+        existing = self.repository.get_translation(
+            session,
+            tag_id=tag.id,
+            language=normalized.language,
+        )
+        try:
+            if existing is None:
+                self.repository.add_translation(
+                    session,
+                    tag=tag,
+                    language=normalized.language,
+                    value=normalized.value.value,
+                    normalized_value=normalized.value.normalized_value,
+                )
+            else:
+                existing.value = normalized.value.value
+                existing.normalized_value = normalized.value.normalized_value
+                session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            raise ConflictError("Audio tag translation already exists") from exc
+        return tag
+
+    def delete_tag(self, session: Session, tag_id: int) -> None:
+        tag = self.repository.get_by_id_for_update(session, tag_id)
+        if tag is None:
+            raise NotFoundError("Audio tag not found")
+        if tag.type is AudioTagType.AUTHOR:
+            raise ConflictError("Author tags are managed by the system")
+        usage_count = self.repository.count_usage(session, tag.id)
+        if usage_count:
+            raise ConflictError(
+                "Audio tag is still in use",
+                details={"usageCount": usage_count},
+            )
+        self.repository.delete(session, tag)
