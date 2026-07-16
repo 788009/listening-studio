@@ -117,7 +117,12 @@ async def complete_profile(
         service.update_username(session, user, payload.username)
     if payload.locale is not None:
         service.update_locale(session, user, payload.locale)
-    logger.bind(request_id=request.state.request_id).info(
+    logger.bind(
+        request_id=request.state.request_id,
+        user_db_id=user.id,
+        resource_type="user",
+        resource_id=user.id,
+    ).info(
         "User profile completed user_db_id={}", user.id
     )
     return _current_user_response(user)
@@ -136,7 +141,12 @@ async def update_profile(
         service.update_username(session, user, payload.username)
     if payload.locale is not None:
         service.update_locale(session, user, payload.locale)
-    logger.bind(request_id=request.state.request_id).info(
+    logger.bind(
+        request_id=request.state.request_id,
+        user_db_id=user.id,
+        resource_type="user",
+        resource_id=user.id,
+    ).info(
         "User profile updated user_db_id={}", user.id
     )
     return _current_user_response(user)

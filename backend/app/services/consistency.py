@@ -613,7 +613,10 @@ class ConsistencyService:
 
     @staticmethod
     def _log_repair(issue: ConsistencyIssue) -> None:
-        logger.info(
+        logger.bind(
+            resource_type=issue.resource_type,
+            resource_id=issue.resource_id or "-",
+        ).info(
             "Consistency repair resource_type={} resource_id={} original_status={} "
             "target_status={} action={} result={}",
             issue.resource_type,

@@ -204,7 +204,12 @@ class VoiceManagementService:
             self.voice_storage.restore_staged_delete(voice_id, staged)
             raise
         self.voice_storage.finalize_staged_delete(staged)
-        logger.bind(request_id=request_id).info("Voice deleted voice_id={}", voice_id)
+        logger.bind(
+            request_id=request_id,
+            user_db_id=voice.author_id,
+            resource_type="voice",
+            resource_id=voice_id,
+        ).info("Voice deleted voice_id={}", voice_id)
 
     def _descriptor(self, voice: Voice) -> ResourceDescriptor:
         return ResourceDescriptor(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from backend.app.api.paper_schemas import (
@@ -176,6 +177,13 @@ async def render_paper(
     session: Session = Depends(get_db_session),
 ) -> PaperRenderAccepted:
     submission = _render_service(request).prepare(session, user, paper_id)
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=user.id,
+        resource_type="paper",
+        resource_id=submission.paper.id,
+    ).info("Paper rendering submitted")
     return PaperRenderAccepted(
         paper_id=submission.paper.id,
         audio_id=submission.audio.id,

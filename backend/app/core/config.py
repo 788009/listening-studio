@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     dialogue_silence_milliseconds: int = Field(default=500, ge=0, le=10_000)
     debug_auth_enabled: bool = False
     auth_session_secret: SecretStr = SecretStr("development-only-change-before-use")
+    metrics_token: SecretStr | None = None
     auth_session_cookie_name: str = "listening_session"
     auth_session_max_age_seconds: PositiveInt = 8 * 60 * 60
     cosyvoice_model_dir: Path = Field(

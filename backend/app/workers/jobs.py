@@ -126,13 +126,13 @@ class JobWorker:
     def recover(self) -> dict[str, int]:
         with self.session_factory() as session:
             interrupted = {
-                job.id: (job.status, target)
+                job.id: (job.status, target, job.owner_id)
                 for job in session.scalars(select(Job).order_by(Job.id))
                 if (target := interrupted_job_target(job)) is not None
             }
             result = self.repository.recover_interrupted(session)
             session.commit()
-        for job_id, (original, target) in interrupted.items():
+        for job_id, (original, target, owner_id) in interrupted.items():
             cleanup_result = "not_required"
             if self.job_storage is not None and target in {
                 JobStatus.FAILED,
@@ -142,7 +142,12 @@ class JobWorker:
                 existed = directory.exists() or directory.is_symlink()
                 self.job_storage.cleanup(job_id)
                 cleanup_result = "removed" if existed else "absent"
-            logger.info(
+            logger.bind(
+                job_id=job_id,
+                user_db_id=owner_id,
+                resource_type="job",
+                resource_id=job_id,
+            ).info(
                 "Startup job recovery resource_id={} original_status={} "
                 "target_status={} result=repaired temporary_cleanup={}",
                 job_id,
@@ -179,7 +184,14 @@ class JobWorker:
             return True
 
         context = JobContext(payload.id, self.session_factory, self.repository)
-        job_logger = logger.bind(request_id=f"job-{payload.id}")
+        resource_type, resource_id = self._resource_context(payload.input_summary)
+        job_logger = logger.bind(
+            request_id=f"job-{payload.id}",
+            job_id=payload.id,
+            user_db_id=payload.owner_id,
+            resource_type=resource_type,
+            resource_id=resource_id,
+        )
         job_logger.info("Job started job_id={} job_type={}", payload.id, payload.type)
         try:
             result = handler(context, payload) or JobResult()
@@ -215,6 +227,20 @@ class JobWorker:
                     self._cancel(payload.id)
                     job_logger.info("Job cancelled at completion job_id={}", payload.id)
         return True
+
+    @staticmethod
+    def _resource_context(input_summary: dict[str, Any]) -> tuple[str, object]:
+        for key, resource_type in (
+            ("batchId", "generation_batch"),
+            ("paperId", "paper"),
+            ("audioId", "audio"),
+            ("voiceId", "voice"),
+            ("itemId", "generation_batch_item"),
+        ):
+            value = input_summary.get(key)
+            if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+                return resource_type, value
+        return "job", "-"
 
     def run_forever(self, stop_event: Event | None = None) -> None:
         stop_event = stop_event or Event()

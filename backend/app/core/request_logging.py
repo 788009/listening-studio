@@ -26,6 +26,24 @@ def _normalized_path(scope: Scope) -> str:
     return route_path if isinstance(route_path, str) else "<unmatched>"
 
 
+def _business_context(scope: Scope) -> dict[str, object]:
+    state = scope.get("state", {})
+    user = state.get("current_user") if isinstance(state, dict) else None
+    context: dict[str, object] = {
+        "user_db_id": getattr(user, "id", "-"),
+        "resource_type": "-",
+        "resource_id": "-",
+    }
+    path_params = scope.get("path_params")
+    if isinstance(path_params, dict):
+        for name, value in path_params.items():
+            if name.endswith("_id") and isinstance(value, int):
+                context["resource_type"] = name.removesuffix("_id")
+                context["resource_id"] = value
+                break
+    return context
+
+
 class RequestLoggingMiddleware:
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
@@ -57,7 +75,7 @@ class RequestLoggingMiddleware:
             await self.app(scope, receive, send_with_request_id)
         except Exception as exc:
             duration_ms = (time.perf_counter() - started_at) * 1000
-            request_logger.error(
+            request_logger.bind(**_business_context(scope)).error(
                 "HTTP request failed method={} path={} duration_ms={:.2f} "
                 "exception_type={}",
                 scope["method"],
@@ -68,7 +86,7 @@ class RequestLoggingMiddleware:
             raise
 
         duration_ms = (time.perf_counter() - started_at) * 1000
-        request_logger.info(
+        request_logger.bind(**_business_context(scope)).info(
             "HTTP request completed method={} path={} "
             "status_code={} duration_ms={:.2f}",
             scope["method"],

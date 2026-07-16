@@ -24,6 +24,7 @@ class SettingsTest(unittest.TestCase):
             "LISTENING_MAX_BATCH_GENERATION_COUNT": "12",
             "LISTENING_DIALOGUE_SILENCE_MILLISECONDS": "750",
             "LISTENING_DEBUG_AUTH_ENABLED": "true",
+            "LISTENING_METRICS_TOKEN": "internal-metrics-token",
         }
 
         with patch.dict(os.environ, environment, clear=True):
@@ -41,6 +42,10 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.max_batch_generation_count, 12)
         self.assertEqual(settings.dialogue_silence_milliseconds, 750)
         self.assertTrue(settings.debug_auth_enabled)
+        self.assertEqual(
+            settings.metrics_token.get_secret_value() if settings.metrics_token else None,
+            "internal-metrics-token",
+        )
         self.assertEqual(settings.cosyvoice_model_dir, Path("/models/cosyvoice"))
 
     def test_auth_session_secret_has_minimum_length(self) -> None:

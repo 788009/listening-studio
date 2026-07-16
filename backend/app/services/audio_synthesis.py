@@ -247,7 +247,13 @@ class AudioSynthesisService:
             self.audio_service.transition_status(session, audio, AudioStatus.READY)
             self.audio_service.set_visibility(session, audio, target_visibility)
             session.commit()
-            logger.bind(request_id=request_id).info(
+            logger.bind(
+                request_id=request_id,
+                job_id=job_id,
+                user_db_id=audio.author_id,
+                resource_type="audio",
+                resource_id=audio.id,
+            ).info(
                 "Audio synthesis completed audio_id={} job_id={}",
                 audio.id,
                 job_id,
@@ -257,6 +263,7 @@ class AudioSynthesisService:
             self._handle_failure(
                 session,
                 audio.id,
+                job_id=job_id,
                 request_id=request_id,
                 exception=exc,
             )
@@ -328,6 +335,7 @@ class AudioSynthesisService:
         session: Session,
         audio_id: int,
         *,
+        job_id: int,
         request_id: str,
         exception: Exception,
     ) -> None:
@@ -350,7 +358,13 @@ class AudioSynthesisService:
                 error_summary=f"Audio synthesis failed ({type(exception).__name__})",
             )
             session.commit()
-        logger.bind(request_id=request_id).error(
+        logger.bind(
+            request_id=request_id,
+            job_id=job_id,
+            user_db_id=audio.author_id,
+            resource_type="audio",
+            resource_id=audio_id,
+        ).error(
             "Audio synthesis failed audio_id={} exception_type={}",
             audio_id,
             type(exception).__name__,

@@ -137,11 +137,15 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
         subject: str = "first",
         tag_ids: list[int] | None = None,
         visibility: str = "public",
+        request_id: str | None = None,
     ) -> httpx.Response:
+        headers = self.headers(subject)
+        if request_id is not None:
+            headers["X-Request-ID"] = request_id
         return self.send(
             "POST",
             "/api/audios",
-            headers=self.headers(subject),
+            headers=headers,
             json={
                 "title": "Morning practice",
                 "text": "  Good morning, class.  ",
@@ -303,7 +307,11 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
 
     def test_worker_failure_marks_audio_and_job_and_cleans_files(self) -> None:
         voice_id = self.create_voice(user_id="TeacherOne", title="Failure voice")
-        response = self.create_request(voice_id, visibility="private")
+        response = self.create_request(
+            voice_id,
+            visibility="private",
+            request_id="failed-submit",
+        )
         self.assertEqual(response.status_code, 202)
         audio_id = response.json()["audioId"]
         job_id = response.json()["jobId"]
@@ -322,6 +330,37 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
             self.assertIn("Verify the selected voice", job.error_summary or "")
         self.assertFalse(self.audio_storage.directory(audio_id).exists())
         self.assertFalse(self.audio_storage.job_directory(job_id).exists())
+        log_lines = (self.settings.log_dir / "backend.log").read_text(
+            encoding="utf-8"
+        ).splitlines()
+        shared_context = (
+            f"job_id={job_id} user_db_id=1 resource_type=audio "
+            f"resource_id={audio_id}"
+        )
+        self.assertTrue(
+            any(
+                "request_id=failed-submit" in line
+                and shared_context in line
+                and "Audio synthesis submitted" in line
+                for line in log_lines
+            )
+        )
+        self.assertTrue(
+            any(
+                f"request_id=job-{job_id}" in line
+                and shared_context in line
+                and "Job started" in line
+                for line in log_lines
+            )
+        )
+        self.assertTrue(
+            any(
+                f"request_id=job-{job_id}" in line
+                and shared_context in line
+                and "Audio synthesis failed" in line
+                for line in log_lines
+            )
+        )
 
 
 if __name__ == "__main__":

@@ -193,7 +193,12 @@ class AudioManagementService:
             self.storage.restore_staged_delete(audio_id, staged)
             raise
         self.storage.finalize_staged_delete(staged)
-        logger.bind(request_id=request_id).info("Audio deleted audio_id={}", audio_id)
+        logger.bind(
+            request_id=request_id,
+            user_db_id=audio.author_id,
+            resource_type="audio",
+            resource_id=audio_id,
+        ).info("Audio deleted audio_id={}", audio_id)
 
     def _tags(self, session: Session, tag_ids: list[int]) -> list[AudioTag]:
         tags: list[AudioTag] = []

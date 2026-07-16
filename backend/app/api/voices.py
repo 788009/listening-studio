@@ -13,6 +13,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -131,6 +132,13 @@ async def create_voice(
         gender_tag_id=gender_tag_id,
         target_visibility=visibility,
     )
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=current_user.id,
+        resource_type="voice",
+        resource_id=submission.voice.id,
+    ).info("Voice upload submitted")
     return VoiceUploadAccepted(
         voice_id=submission.voice.id,
         job_id=submission.job.id,

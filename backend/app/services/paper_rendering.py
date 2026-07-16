@@ -160,7 +160,13 @@ class PaperRenderService:
             paper.status = PaperStatus.READY
             paper.error_summary = None
             session.commit()
-            logger.bind(request_id=request_id).info(
+            logger.bind(
+                request_id=request_id,
+                job_id=job_id,
+                user_db_id=owner_id,
+                resource_type="paper",
+                resource_id=paper.id,
+            ).info(
                 "Paper rendering completed paper_id={} audio_id={} job_id={}",
                 paper.id,
                 audio.id,
@@ -172,6 +178,7 @@ class PaperRenderService:
                 session,
                 paper_id=paper.id,
                 audio_id=audio.id,
+                job_id=job_id,
                 request_id=request_id,
                 exception=exc,
             )
@@ -194,6 +201,7 @@ class PaperRenderService:
         *,
         paper_id: int,
         audio_id: int,
+        job_id: int,
         request_id: str,
         exception: Exception,
     ) -> NoReturn:
@@ -222,7 +230,13 @@ class PaperRenderService:
                     error_summary=f"Paper rendering failed ({type(exception).__name__})",
                 )
         session.commit()
-        logger.bind(request_id=request_id).error(
+        logger.bind(
+            request_id=request_id,
+            job_id=job_id,
+            user_db_id=paper.owner_id if paper is not None else "-",
+            resource_type="paper",
+            resource_id=paper_id,
+        ).error(
             "Paper rendering failed paper_id={} audio_id={} exception_type={}",
             paper_id,
             audio_id,

@@ -11,7 +11,9 @@ from backend.app.core.config import Settings
 
 LOG_FORMAT = (
     "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<8} | "
-    "request_id={extra[request_id]} | {message}"
+    "request_id={extra[request_id]} job_id={extra[job_id]} "
+    "user_db_id={extra[user_db_id]} resource_type={extra[resource_type]} "
+    "resource_id={extra[resource_id]} | {message}"
 )
 
 
@@ -33,7 +35,15 @@ def configure_logging(settings: Settings) -> Path:
     log_path = settings.log_dir / "backend.log"
 
     logger.remove()
-    logger.configure(extra={"request_id": "-"})
+    logger.configure(
+        extra={
+            "request_id": "-",
+            "job_id": "-",
+            "user_db_id": "-",
+            "resource_type": "-",
+            "resource_id": "-",
+        }
+    )
     logger.add(
         sys.stderr,
         level="INFO",

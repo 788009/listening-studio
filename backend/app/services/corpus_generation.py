@@ -264,7 +264,13 @@ class CorpusGenerationService:
             item.status = GenerationBatchStatus.FAILED
             item.error_summary = f"Audio generation failed ({type(exc).__name__})"
             session.commit()
-            logger.bind(request_id=request_id).warning(
+            logger.bind(
+                request_id=request_id,
+                job_id=job_id,
+                user_db_id=owner.id,
+                resource_type="audio",
+                resource_id=audio.id,
+            ).warning(
                 "Corpus batch item failed batch_id={} item_id={} audio_id={}",
                 batch.id,
                 item.id,

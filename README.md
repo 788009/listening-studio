@@ -10,9 +10,17 @@ uv sync --python 3.10
 source .venv/bin/activate
 ```
 
-## Backend
+## Operations
 
-Start the development server:
+Apply database migrations before starting the services:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/alembic -c alembic.ini upgrade head
+```
+
+Start the Web service:
 
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
@@ -20,9 +28,24 @@ source .venv/bin/activate
 uvicorn backend.app.main:app --reload
 ```
 
+Start the persistent job worker in a separate process:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/python -m backend.app.workers.main
+```
+
 The liveness endpoint is available at `http://127.0.0.1:8000/health/live`.
 Database and data-directory readiness is available at
 `http://127.0.0.1:8000/health/ready`.
+Set `LISTENING_METRICS_TOKEN` to enable the internal job metrics endpoint at
+`http://127.0.0.1:8000/health/metrics`. It requires that value as a Bearer token.
+
+Run only one TTS worker for a single GPU. Web processes can scale independently
+because they do not load CosyVoice. A SQLite deployment is intended for a
+single host; multi-host deployment requires a shared production database and
+shared managed-file storage and is not supported by the SQLite configuration.
 
 ## Configuration
 
@@ -86,8 +109,27 @@ source .venv/bin/activate
 .venv/bin/python -m backend.app.consistency
 ```
 
-Pass `--apply` to perform the repairs listed in the JSON report. Unknown and
-orphaned filesystem entries are reported but retained.
+Apply the reported repairs explicitly:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/python -m backend.app.consistency --apply
+```
+
+Unknown and orphaned filesystem entries are reported but retained.
+
+## GPU Smoke Test
+
+Run the manually gated real-model test with a readable reference WAV file:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+export COSYVOICE_SMOKE_INPUT_WAV=/absolute/path/to/reference.wav
+export RUN_COSYVOICE_GPU_TESTS=1
+.venv/bin/python -m unittest tests.gpu.test_cosyvoice_smoke
+```
 
 ## API Conventions
 

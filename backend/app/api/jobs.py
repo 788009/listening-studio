@@ -97,7 +97,13 @@ async def cancel_job(
     session: Session = Depends(get_db_session),
 ) -> JobResponse:
     job = JobService().request_cancel(session, current_user, job_id)
-    logger.bind(request_id=request.state.request_id).info(
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=job.id,
+        user_db_id=current_user.id,
+        resource_type="job",
+        resource_id=job.id,
+    ).info(
         "Job cancellation requested job_id={} status={}",
         job.id,
         job.status.value,

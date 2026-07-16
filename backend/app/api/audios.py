@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
+from loguru import logger
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -107,6 +108,13 @@ async def create_audio(
         tag_ids=payload.tag_ids,
         target_visibility=payload.visibility,
     )
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=user.id,
+        resource_type="audio",
+        resource_id=submission.audio.id,
+    ).info("Audio synthesis submitted")
     return AudioSynthesisAccepted(
         audio_id=submission.audio.id,
         job_id=submission.job.id,
@@ -144,6 +152,13 @@ async def create_dialogue(
         target_visibility=payload.visibility,
         silence_milliseconds=settings.dialogue_silence_milliseconds,
     )
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=user.id,
+        resource_type="audio",
+        resource_id=submission.audio.id,
+    ).info("Dialogue synthesis submitted")
     return AudioSynthesisAccepted(
         audio_id=submission.audio.id,
         job_id=submission.job.id,

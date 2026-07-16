@@ -351,7 +351,13 @@ class GenerationBatchService:
             if job is not None:
                 self.storage.cleanup(job.id)
             raise
-        logger.bind(request_id=request_id).info(
+        logger.bind(
+            request_id=request_id,
+            job_id=job.id,
+            user_db_id=owner.id,
+            resource_type="generation_batch",
+            resource_id=batch.id,
+        ).info(
             "Corpus generation batch submitted batch_id={} job_id={} "
             "corpus_length={} requested_count={}",
             batch.id,

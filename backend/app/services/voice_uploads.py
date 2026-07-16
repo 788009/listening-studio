@@ -308,7 +308,13 @@ class VoiceUploadService:
             self.voice_service.transition_status(session, voice, VoiceStatus.READY)
             self.voice_service.set_visibility(session, voice, target_visibility)
             session.commit()
-            logger.bind(request_id=request_id).info(
+            logger.bind(
+                request_id=request_id,
+                job_id=job_id,
+                user_db_id=voice.author_id,
+                resource_type="voice",
+                resource_id=voice.id,
+            ).info(
                 "Voice upload completed voice_id={} job_id={}",
                 voice.id,
                 job_id,
@@ -318,6 +324,7 @@ class VoiceUploadService:
             self._handle_failure(
                 session,
                 voice.id,
+                job_id=job_id,
                 request_id=request_id,
                 exception=exc,
                 temporary_paths=(reference_temporary, model_temporary),
@@ -389,6 +396,7 @@ class VoiceUploadService:
             self._handle_failure(
                 session,
                 voice.id,
+                job_id=None,
                 request_id=request_id,
                 exception=exc,
                 temporary_paths=(reference_temporary, model_temporary),
@@ -404,6 +412,7 @@ class VoiceUploadService:
         session: Session,
         voice_id: int,
         *,
+        job_id: int | None,
         request_id: str,
         exception: Exception,
         temporary_paths: tuple[Path | None, Path | None],
@@ -423,7 +432,13 @@ class VoiceUploadService:
             error_summary=self._error_summary(exception),
         )
         session.commit()
-        logger.bind(request_id=request_id).error(
+        logger.bind(
+            request_id=request_id,
+            job_id=job_id or "-",
+            user_db_id=voice.author_id,
+            resource_type="voice",
+            resource_id=voice_id,
+        ).error(
             "Voice upload failed voice_id={} exception_type={}",
             voice_id,
             type(exception).__name__,
