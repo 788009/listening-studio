@@ -20,6 +20,10 @@ from backend.app.services.corpus_generation import CorpusGenerationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.generation_batches import CORPUS_GENERATION_JOB_TYPE
 from backend.app.services.job_storage import JobStorage
+from backend.app.services.paper_rendering import (
+    PAPER_RENDER_JOB_TYPE,
+    PaperRenderService,
+)
 from backend.app.services.voice_storage import VoiceStorage
 from backend.app.services.voice_uploads import (
     VOICE_UPLOAD_JOB_TYPE,
@@ -28,12 +32,14 @@ from backend.app.services.voice_uploads import (
 from backend.app.workers.audio_synthesis import AudioSynthesisJobHandler
 from backend.app.workers.corpus_generation import CorpusGenerationJobHandler
 from backend.app.workers.jobs import JobHandler, JobWorker
+from backend.app.workers.paper_rendering import PaperRenderJobHandler
 from backend.app.workers.voice_upload import VoiceUploadJobHandler
 
 
 def build_handlers(settings: Settings) -> dict[str, JobHandler]:
     integration = CosyVoiceAdapter(settings.cosyvoice_model_dir)
     voice_storage = VoiceStorage(settings.data_dir)
+    audio_storage = AudioStorage(settings.data_dir)
     voice_service = VoiceUploadService(
         storage=voice_storage,
         max_upload_bytes=settings.max_upload_bytes,
@@ -41,7 +47,7 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         job_storage=JobStorage(settings.data_dir),
     )
     audio_service = AudioSynthesisService(
-        audio_storage=AudioStorage(settings.data_dir),
+        audio_storage=audio_storage,
         voice_storage=voice_storage,
         integration=integration,
     )
@@ -58,6 +64,7 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         VOICE_UPLOAD_JOB_TYPE: VoiceUploadJobHandler(voice_service),
         AUDIO_SYNTHESIS_JOB_TYPE: AudioSynthesisJobHandler(audio_service),
         CORPUS_GENERATION_JOB_TYPE: CorpusGenerationJobHandler(corpus_service),
+        PAPER_RENDER_JOB_TYPE: PaperRenderJobHandler(PaperRenderService(audio_storage)),
     }
 
 

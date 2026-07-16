@@ -9,6 +9,7 @@ from backend.app.api.paper_schemas import (
     PaperListResponse,
     PaperPresetResponse,
     PaperPresetWriteRequest,
+    PaperRenderAccepted,
     PaperResponse,
 )
 from backend.app.api.schemas import ResourceId
@@ -17,6 +18,7 @@ from backend.app.db.models.paper import Paper, PaperPreset
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.paper_rendering import PaperRenderService
 from backend.app.services.papers import PaperPresetParameters, PaperService
 
 
@@ -26,6 +28,10 @@ paper_router = APIRouter(prefix="/api/papers", tags=["papers"])
 
 def _service(request: Request) -> PaperService:
     return PaperService(AudioStorage(request.app.state.settings.data_dir))
+
+
+def _render_service(request: Request) -> PaperRenderService:
+    return PaperRenderService(AudioStorage(request.app.state.settings.data_dir))
 
 
 def _parameters(payload: PaperPresetWriteRequest) -> PaperPresetParameters:
@@ -83,8 +89,7 @@ async def list_paper_presets(
     session: Session = Depends(get_db_session),
 ) -> list[PaperPresetResponse]:
     return [
-        _preset_response(item)
-        for item in _service(request).list_presets(session, user)
+        _preset_response(item) for item in _service(request).list_presets(session, user)
     ]
 
 
@@ -157,6 +162,25 @@ async def create_paper(
         audio_ids=payload.audio_ids,
     )
     return _paper_response(paper)
+
+
+@paper_router.post(
+    "/{paper_id}/render",
+    response_model=PaperRenderAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def render_paper(
+    paper_id: ResourceId,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> PaperRenderAccepted:
+    submission = _render_service(request).prepare(session, user, paper_id)
+    return PaperRenderAccepted(
+        paper_id=submission.paper.id,
+        audio_id=submission.audio.id,
+        job_id=submission.job.id,
+    )
 
 
 @paper_router.get(

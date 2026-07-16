@@ -65,3 +65,9 @@ class PaperListResponse(TagApiModel):
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=100)
     total: int = Field(ge=0)
+
+
+class PaperRenderAccepted(TagApiModel):
+    paper_id: int
+    audio_id: int
+    job_id: int
