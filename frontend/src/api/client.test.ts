@@ -6,6 +6,7 @@ import { ApiError } from './errors'
 
 describe('apiRequest', () => {
   afterEach(() => {
+    document.cookie = 'listening_csrf=; Max-Age=0; Path=/'
     vi.unstubAllGlobals()
   })
 
@@ -56,5 +57,21 @@ describe('apiRequest', () => {
     await expect(apiRequest('https://example.com/api')).rejects.toThrow(
       'API paths must be relative',
     )
+  })
+
+  it('adds the CSRF cookie value to write requests', async () => {
+    document.cookie = 'listening_csrf=csrf-token; Path=/'
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, { status: 204 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await apiRequest('/users/me/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ username: 'Teacher' }),
+    })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('csrf-token')
   })
 })

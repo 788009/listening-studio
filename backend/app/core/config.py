@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     )
     log_rotation_bytes: PositiveInt = 10 * 1024 * 1024
     log_retention_files: PositiveInt = 5
+    rate_limit_window_seconds: PositiveInt = 60
+    login_rate_limit: PositiveInt = 20
+    search_rate_limit: PositiveInt = 120
+    upload_rate_limit: PositiveInt = 20
+    generation_rate_limit: PositiveInt = 60
+    playback_rate_limit: PositiveInt = 600
 
     @field_validator("auth_session_secret")
     @classmethod

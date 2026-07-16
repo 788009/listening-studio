@@ -26,6 +26,14 @@ def stream_wav(
         "Content-Length": str(end - start + 1),
         "Cache-Control": cache_control,
     }
+    if "no-store" in cache_control:
+        headers.update(
+            {
+                "Expires": "0",
+                "Pragma": "no-cache",
+                "Vary": "Cookie",
+            }
+        )
     if partial:
         headers["Content-Range"] = f"bytes {start}-{end}/{size}"
     return StreamingResponse(

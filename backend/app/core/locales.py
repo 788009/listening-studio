@@ -18,6 +18,9 @@ _ZH_ERROR_MESSAGES = {
     "job_failed": "任务执行失败",
     "internal_error": "服务器内部错误",
     "http_401": "需要登录",
+    "csrf_failed": "CSRF 验证失败",
+    "rate_limited": "请求过于频繁",
+    "payload_too_large": "请求内容超过大小限制",
 }
 
 

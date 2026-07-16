@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Request, Response
 
 from backend.app.core.exceptions import DomainValidationError
+from backend.app.core.security import CSRF_COOKIE_NAME, issue_csrf_token
 from backend.app.integrations.identity import PlaceholderIdentityProvider
 
 
@@ -36,6 +37,14 @@ async def create_debug_session(request: Request) -> Response:
         secure=request.app.state.settings.environment == "production",
         samesite="lax",
     )
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        issue_csrf_token(token, request.app.state.settings.auth_session_secret),
+        max_age=provider.max_age_seconds,
+        httponly=False,
+        secure=request.app.state.settings.environment == "production",
+        samesite="lax",
+    )
     return response
 
 
@@ -45,6 +54,11 @@ async def delete_session(request: Request) -> Response:
     response.delete_cookie(
         request.app.state.settings.auth_session_cookie_name,
         httponly=True,
+        secure=request.app.state.settings.environment == "production",
+        samesite="lax",
+    )
+    response.delete_cookie(
+        CSRF_COOKIE_NAME,
         secure=request.app.state.settings.environment == "production",
         samesite="lax",
     )

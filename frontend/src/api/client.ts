@@ -1,6 +1,18 @@
 import { ApiError, isApiErrorEnvelope, type ApiErrorContent } from './errors'
 
 const API_PREFIX = '/api'
+const CSRF_COOKIE_NAME = 'listening_csrf'
+const CSRF_HEADER_NAME = 'X-CSRF-Token'
+
+function cookieValue(name: string): string | null {
+  if (typeof document === 'undefined') return null
+  const prefix = `${encodeURIComponent(name)}=`
+  for (const part of document.cookie.split(';')) {
+    const value = part.trim()
+    if (value.startsWith(prefix)) return decodeURIComponent(value.slice(prefix.length))
+  }
+  return null
+}
 
 function apiPath(path: string): string {
   if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) {
@@ -27,6 +39,11 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     headers.set('Content-Type', 'application/json')
   }
   headers.set('Accept', 'application/json')
+  const method = (init.method ?? 'GET').toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = cookieValue(CSRF_COOKIE_NAME)
+    if (csrfToken) headers.set(CSRF_HEADER_NAME, csrfToken)
+  }
 
   const response = await fetch(apiPath(path), {
     ...init,

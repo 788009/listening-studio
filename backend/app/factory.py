@@ -21,6 +21,7 @@ from backend.app.core.config import Settings, get_settings
 from backend.app.core.errors import install_exception_handlers
 from backend.app.core.logging import configure_logging
 from backend.app.core.request_logging import RequestLoggingMiddleware
+from backend.app.core.security import SecurityMiddleware
 from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.frontend import install_frontend
 from backend.app.health import router as health_router
@@ -60,6 +61,20 @@ def create_app(
         AuthenticationMiddleware,
         identity_provider=app.state.identity_provider,
         session_factory=app.state.session_factory,
+    )
+    app.add_middleware(
+        SecurityMiddleware,
+        session_cookie_name=settings.auth_session_cookie_name,
+        session_secret=settings.auth_session_secret,
+        production=settings.environment == "production",
+        max_upload_bytes=settings.max_upload_bytes,
+        max_corpus_bytes=settings.max_corpus_bytes,
+        rate_limit_window_seconds=settings.rate_limit_window_seconds,
+        login_rate_limit=settings.login_rate_limit,
+        search_rate_limit=settings.search_rate_limit,
+        upload_rate_limit=settings.upload_rate_limit,
+        generation_rate_limit=settings.generation_rate_limit,
+        playback_rate_limit=settings.playback_rate_limit,
     )
     app.add_middleware(RequestLoggingMiddleware)
     app.include_router(auth_router)

@@ -81,6 +81,36 @@ describe('voice views', () => {
     expect(wrapper.get('a[href="/voice/7"]').attributes('href')).toBe('/voice/7')
   })
 
+  it('renders untrusted titles as text instead of HTML', async () => {
+    const unsafeTitle = '<img src=x onerror=alert(1)>'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          items: [{ ...voice, title: unsafeTitle }],
+          page: 1,
+          pageSize: 100,
+          total: 1,
+        }),
+      ),
+    )
+    const pinia = setupAuth()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/voices', component: VoiceListView },
+        { path: '/voices/create', component: { template: '<div />' } },
+        { path: '/voice/:id', component: VoiceDetailView },
+      ],
+    })
+    await router.push('/voices')
+    const wrapper = mount(VoiceListView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain(unsafeTitle)
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
   it('shows owner controls, protected sample, and keyboard-accessible deletion', async () => {
     const fetchMock = vi
       .fn()

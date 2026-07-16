@@ -112,6 +112,11 @@ and update username or locale with `PATCH /api/users/me/profile`. Public profile
 are available at `GET /api/users/{userId}`; private statistics are included only
 for the matching authenticated user.
 
+Cookie-authenticated `POST`, `PUT`, `PATCH`, and `DELETE` requests must send the
+`listening_csrf` cookie value in the `X-CSRF-Token` header. Login, search,
+upload, generation, and media endpoints return HTTP 429 with `Retry-After` when
+their configured request limit is exceeded.
+
 ## Tests
 
 Run the test suite from the repository root:

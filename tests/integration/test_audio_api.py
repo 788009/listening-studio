@@ -167,6 +167,9 @@ class AudioApiIntegrationTest(unittest.TestCase):
         self.assertTrue(invalid.headers["content-range"].startswith("bytes */"))
         self.assertEqual(hidden.status_code, 404)
         self.assertEqual(owner.status_code, 200)
+        self.assertEqual(owner.headers["cache-control"], "private, no-store")
+        self.assertEqual(owner.headers["pragma"], "no-cache")
+        self.assertEqual(owner.headers["vary"], "Cookie")
 
         self.storage.path(public.id).unlink()
         missing = self.send("GET", f"/media/audio/{public.id}")

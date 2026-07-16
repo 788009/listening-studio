@@ -46,15 +46,19 @@ class FrontendIntegrationTest(unittest.TestCase):
                 "<html><body>frontend shell</body></html>", encoding="utf-8"
             )
             (assets_dir / "app.js").write_text("export {}", encoding="utf-8")
+            (root / "secret.txt").write_text("secret", encoding="utf-8")
             app = create_app(self.settings(root))
 
             route_response = self.request(app, "/library/example")
             asset_response = self.request(app, "/assets/app.js")
+            traversal_response = self.request(app, "/assets/%2e%2e/secret.txt")
 
         self.assertEqual(route_response.status_code, 200)
         self.assertIn("frontend shell", route_response.text)
         self.assertEqual(asset_response.status_code, 200)
         self.assertEqual(asset_response.text, "export {}")
+        self.assertEqual(traversal_response.status_code, 404)
+        self.assertNotIn("secret", traversal_response.text)
 
     def test_protected_backend_prefixes_do_not_use_spa_fallback(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

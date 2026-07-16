@@ -36,7 +36,7 @@ def _get_request_id(request: Request) -> str:
     return getattr(request.state, "request_id", "-")
 
 
-def _error_response(
+def error_response(
     request: Request,
     status_code: int,
     code: str,
@@ -83,7 +83,7 @@ def install_exception_handlers(app: FastAPI) -> None:
     async def handle_domain_error(
         request: Request, exc: DomainError
     ) -> JSONResponse:
-        return _error_response(
+        return error_response(
             request,
             exc.status_code,
             exc.code,
@@ -97,7 +97,7 @@ def install_exception_handlers(app: FastAPI) -> None:
     ) -> JSONResponse:
         message = exc.detail if isinstance(exc.detail, str) else "Request failed"
         code = _HTTP_ERROR_CODES.get(exc.status_code, f"http_{exc.status_code}")
-        return _error_response(
+        return error_response(
             request,
             exc.status_code,
             code,
@@ -109,7 +109,7 @@ def install_exception_handlers(app: FastAPI) -> None:
     async def handle_validation_error(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        return _error_response(
+        return error_response(
             request,
             422,
             "validation_error",
@@ -120,7 +120,7 @@ def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
         del exc
-        return _error_response(
+        return error_response(
             request,
             500,
             "internal_error",
