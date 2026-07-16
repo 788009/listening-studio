@@ -6,6 +6,7 @@ from backend.app.core.exceptions import DomainValidationError
 from backend.app.services.tag_parser import (
     MAX_QUERY_LENGTH,
     MAX_QUERY_TOKEN_LENGTH,
+    MAX_QUERY_TOKENS,
     ParsedQuery,
     ParsedTagTerm,
     TagDomain,
@@ -144,6 +145,7 @@ class TagParserTest(unittest.TestCase):
             ("   ", TagDomain.AUDIO),
             ("topic:climate", "video"),
             ("a" * (MAX_QUERY_LENGTH + 1), TagDomain.AUDIO),
+            (" ".join(["word"] * (MAX_QUERY_TOKENS + 1)), TagDomain.AUDIO),
         ]
 
         for query, domain in invalid_queries:

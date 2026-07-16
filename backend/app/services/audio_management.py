@@ -16,7 +16,7 @@ from backend.app.services.authorization import (
     AuthorizationPrincipal,
     AuthorizationService,
 )
-from backend.app.services.tag_parser import ParsedQuery, TagType, parse_search_query
+from backend.app.services.tag_parser import parse_search_query
 
 
 @dataclass(frozen=True)
@@ -64,17 +64,27 @@ class AudioManagementService:
         query: str | None = None,
     ) -> AudioListResult:
         parsed = parse_search_query(query, "audio") if query else None
-        audios = [
-            audio
-            for audio in self.repository.list_all(session)
-            if self.authorization.can_view(
-                principal,
-                self.audio_service.descriptor(audio),
-            )
-            and self._matches(audio, author, status, visibility, parsed)
+        principal_user_id = principal.user.id if principal.user is not None else None
+        candidates = self.repository.search_candidates(
+            session,
+            principal_user_id=principal_user_id,
+            author=author,
+            status=status,
+            visibility=visibility,
+            query=parsed,
+        )
+        visible_ids = [
+            candidate.audio_id
+            for candidate in candidates
+            if candidate.author_id == principal_user_id
+            or self.storage.exists(candidate.audio_id)
         ]
         offset = (page - 1) * page_size
-        return AudioListResult(audios[offset : offset + page_size], len(audios))
+        page_ids = visible_ids[offset : offset + page_size]
+        return AudioListResult(
+            self.repository.list_by_ids(session, page_ids),
+            len(visible_ids),
+        )
 
     def update(
         self,
@@ -170,51 +180,4 @@ class AudioManagementService:
                 .where(Voice.sample_audio_id == audio_id)
                 .order_by(Voice.id)
             )
-        )
-
-    @classmethod
-    def _matches(
-        cls,
-        audio: Audio,
-        author: str | None,
-        status: AudioStatus | None,
-        visibility: AudioVisibility | None,
-        query: ParsedQuery | None,
-    ) -> bool:
-        if author and (
-            audio.author.user_id is None
-            or audio.author.user_id.casefold() != author.casefold()
-        ):
-            return False
-        if status is not None and audio.status is not status:
-            return False
-        if visibility is not None and audio.visibility is not visibility:
-            return False
-        if query is None:
-            return True
-        for term in query.tag_terms:
-            if not any(
-                cls._term(tag, term.type, term.normalized_value)
-                for tag in audio.tags
-            ):
-                return False
-        for keyword in query.keywords:
-            if keyword in audio.normalized_title or any(
-                cls._contains(tag, keyword) for tag in audio.tags
-            ):
-                continue
-            return False
-        return True
-
-    @staticmethod
-    def _term(tag: AudioTag, tag_type: TagType, value: str) -> bool:
-        return tag.type.value == tag_type.value and (
-            tag.normalized_value == value
-            or any(item.normalized_value == value for item in tag.translations)
-        )
-
-    @staticmethod
-    def _contains(tag: AudioTag, value: str) -> bool:
-        return value in tag.normalized_value or any(
-            value in item.normalized_value for item in tag.translations
         )

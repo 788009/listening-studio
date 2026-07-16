@@ -10,6 +10,7 @@ from backend.app.services.tag_values import normalize_translated_tag_value
 
 MAX_QUERY_LENGTH = 1024
 MAX_QUERY_TOKEN_LENGTH = 255
+MAX_QUERY_TOKENS = 32
 
 
 class TagDomain(str, Enum):
@@ -127,6 +128,11 @@ def parse_search_query(query: object, domain: TagDomain | str) -> ParsedQuery:
         raise DomainValidationError(
             "Search query cannot be empty",
             details={"field": "query"},
+        )
+    if len(tokens) > MAX_QUERY_TOKENS:
+        raise DomainValidationError(
+            "Search query contains too many terms",
+            details={"field": "query", "maxTerms": MAX_QUERY_TOKENS},
         )
 
     tag_terms: list[ParsedTagTerm] = []
