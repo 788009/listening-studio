@@ -65,6 +65,7 @@ class CosyVoiceIntegrationTest(unittest.TestCase):
             audio_output = output_dir / "audio.wav"
             loader_calls: list[tuple[Path, Path]] = []
             function_calls: list[tuple[object, ...]] = []
+            normalized_outputs: list[Path] = []
 
             def extract(source: Path, output: Path) -> None:
                 function_calls.append(("extract", source, output))
@@ -74,6 +75,14 @@ class CosyVoiceIntegrationTest(unittest.TestCase):
                 function_calls.append(("synthesize", source, text, output))
                 output.write_bytes(b"audio")
 
+            def normalize_audio(output: Path) -> None:
+                normalized_outputs.append(output)
+                with wave.open(str(output), "wb") as audio_file:
+                    audio_file.setnchannels(1)
+                    audio_file.setsampwidth(2)
+                    audio_file.setframerate(8000)
+                    audio_file.writeframes(b"\x00\x00" * 80)
+
             def loader(cosy_root: Path, model: Path) -> CosyVoiceFunctions:
                 loader_calls.append((cosy_root, model))
                 return CosyVoiceFunctions(extract, synthesize)
@@ -82,6 +91,7 @@ class CosyVoiceIntegrationTest(unittest.TestCase):
                 model_dir,
                 cosyvoice_root=cosyvoice_root,
                 function_loader=loader,
+                audio_normalizer=normalize_audio,
             )
             adapter.extract_voice(reference, voice_output)
             adapter.synthesize(voice_output, "  Test text  ", audio_output)
@@ -99,6 +109,10 @@ class CosyVoiceIntegrationTest(unittest.TestCase):
                     ),
                 ],
             )
+            self.assertEqual(normalized_outputs, [audio_output.resolve()])
+            with wave.open(str(audio_output), "rb") as audio_file:
+                self.assertEqual(audio_file.getsampwidth(), 2)
+                self.assertGreater(audio_file.getnframes(), 0)
 
     def test_adapter_rejects_invalid_paths_and_text(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

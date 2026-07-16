@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import tempfile
 import wave
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -19,6 +20,7 @@ DEFAULT_COSYVOICE_ROOT = PROJECT_ROOT / "voice" / "CosyVoice"
 
 ExtractVoiceFunction = Callable[[Path, Path], None]
 SynthesizeFunction = Callable[[Path, str, Path], None]
+NormalizeAudioFunction = Callable[[Path], None]
 
 
 class CosyVoiceIntegration(Protocol):
@@ -67,6 +69,32 @@ def load_cosyvoice_functions(
     )
 
 
+def normalize_audio_to_pcm16(audio_path: Path) -> None:
+    import torchaudio
+
+    waveform, sample_rate = torchaudio.load(str(audio_path))
+    if waveform.numel() == 0 or sample_rate <= 0:
+        raise ValueError("CosyVoice generated empty audio")
+    file_descriptor, temporary_name = tempfile.mkstemp(
+        dir=audio_path.parent,
+        prefix=f".{audio_path.stem}.",
+        suffix=".wav",
+    )
+    os.close(file_descriptor)
+    temporary_path = Path(temporary_name)
+    try:
+        torchaudio.save(
+            str(temporary_path),
+            waveform,
+            sample_rate,
+            encoding="PCM_S",
+            bits_per_sample=16,
+        )
+        os.replace(temporary_path, audio_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
 class CosyVoiceAdapter:
     def __init__(
         self,
@@ -74,10 +102,12 @@ class CosyVoiceAdapter:
         *,
         cosyvoice_root: Path = DEFAULT_COSYVOICE_ROOT,
         function_loader: CosyVoiceFunctionLoader = load_cosyvoice_functions,
+        audio_normalizer: NormalizeAudioFunction = normalize_audio_to_pcm16,
     ) -> None:
         self.model_dir = Path(model_dir).expanduser().resolve()
         self.cosyvoice_root = Path(cosyvoice_root).expanduser().resolve()
         self.function_loader = function_loader
+        self.audio_normalizer = audio_normalizer
         self._functions: CosyVoiceFunctions | None = None
         self._load_lock = Lock()
 
@@ -111,6 +141,7 @@ class CosyVoiceAdapter:
         logger.info("CosyVoice synthesis started text_length={}", len(normalized_text))
         try:
             functions.synthesize(source, normalized_text, output)
+            self.audio_normalizer(output)
         except Exception as exc:
             logger.exception("CosyVoice synthesis failed")
             raise JobFailedError(

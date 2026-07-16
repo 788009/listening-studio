@@ -119,17 +119,45 @@ source .venv/bin/activate
 
 Unknown and orphaned filesystem entries are reported but retained.
 
-## GPU Smoke Test
+## GPU Acceptance Test
 
-Run the manually gated real-model test with a readable reference WAV file:
+Run the manually gated real-model test on an otherwise idle GPU:
 
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-export COSYVOICE_SMOKE_INPUT_WAV=/absolute/path/to/reference.wav
 export RUN_COSYVOICE_GPU_TESTS=1
-.venv/bin/python -m unittest tests.gpu.test_cosyvoice_smoke
+.venv/bin/python -m unittest tests.gpu.test_cosyvoice_smoke -v
 ```
+
+The test defaults to `voice/CosyVoice/asset/zero_shot_prompt.wav`. Set
+`COSYVOICE_SMOKE_INPUT_WAV` to use another readable speech sample. It creates a
+dedicated temporary teacher, runs real voice extraction plus single-turn and
+two-turn synthesis through the persistent job worker, validates PCM16 WAV
+outputs and serial job claims, exercises failure cleanup and structured logs,
+then deletes generated audio and voice resources through their API services.
+The database, logs and any remaining test data are held in a temporary
+directory. The test is skipped unless `RUN_COSYVOICE_GPU_TESTS=1`.
+
+### Verified GPU Baseline
+
+The acceptance test passed on 2026-07-17 with:
+
+- NVIDIA GeForce RTX 4060 Laptop GPU, 8 GB; driver 571.96; CUDA 12.8.
+- Python 3.10.17, PyTorch and torchaudio 2.8.0+cu128, vLLM 0.11.0.
+- Fun-CosyVoice3-0.5B-2512 with CosyVoice repository commit `b4750f9`.
+- Voice extraction 61.184 s; single-turn synthesis 1.459 s; two-turn synthesis
+  1.876 s; total 66.731 s.
+- Generated WAV durations 1.400 s and 2.290 s. Both were parseable PCM16 files.
+
+The timings are a single acceptance run, not performance targets. On this 8 GB
+GPU, the configured 32,768-token vLLM context requires the GPU to be otherwise
+idle. WSL disables pinned memory, and this environment uses the PyTorch sampler
+because FlashInfer is unavailable. The test disables vLLM usage reporting and
+runs its engine in-process so no child process retains GPU memory. CosyVoice's
+WeText frontend may still query ModelScope during initialization, including
+when its files are already cached. Production remains limited to one persistent
+TTS worker per GPU.
 
 ## API Conventions
 
