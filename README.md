@@ -22,6 +22,14 @@ uvicorn backend.app.main:app --reload
 
 The liveness endpoint is available at `http://127.0.0.1:8000/health/live`.
 
+## Configuration
+
+Runtime settings can be placed in `.env`; `.env.example` contains all supported
+variables and their development defaults. `COSYVOICE_MODEL_DIR` is required.
+Other settings use the `LISTENING_` prefix and cover the database URL, runtime
+data and log directories, upload size limit, debug authentication, and log
+rotation retention.
+
 ## Tests
 
 Run the test suite from the repository root:
