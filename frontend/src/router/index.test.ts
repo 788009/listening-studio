@@ -50,4 +50,14 @@ describe('profile completion guard', () => {
 
     expect(router.currentRoute.value.name).toBe('library')
   })
+
+  it('allows anonymous students to open public audio routes', async () => {
+    const auth = useAuthStore()
+    auth.loaded = true
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/audio/5')
+
+    expect(router.currentRoute.value.name).toBe('audio')
+  })
 })

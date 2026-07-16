@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -14,6 +14,7 @@ import {
   type VoiceSampleSource,
 } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
 import VoiceTagLines from '@/components/VoiceTagLines.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -36,9 +37,6 @@ const sampleAudioId = ref('')
 const sampleAudio = ref<AudioSummary[]>([])
 const sampleAudioLoading = ref(false)
 const sampleRevision = ref(0)
-const cancelDeleteButton = ref<HTMLButtonElement | null>(null)
-const deleteDialog = ref<HTMLElement | null>(null)
-let previouslyFocused: HTMLElement | null = null
 
 const voiceId = computed(() => Number(route.params.id))
 const locale = computed(() => auth.user?.locale ?? 'en')
@@ -123,17 +121,13 @@ async function saveVoice(): Promise<void> {
   }
 }
 
-async function openDeleteDialog(): Promise<void> {
-  previouslyFocused = document.activeElement as HTMLElement | null
+function openDeleteDialog(): void {
   confirmDelete.value = true
-  await nextTick()
-  cancelDeleteButton.value?.focus()
 }
 
 function closeDeleteDialog(): void {
   if (deleting.value) return
   confirmDelete.value = false
-  nextTick(() => previouslyFocused?.focus())
 }
 
 async function removeVoice(): Promise<void> {
@@ -151,31 +145,6 @@ async function removeVoice(): Promise<void> {
   }
 }
 
-function handleEscape(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && confirmDelete.value) {
-    closeDeleteDialog()
-  }
-}
-
-function trapDialogFocus(event: KeyboardEvent): void {
-  if (event.key !== 'Tab' || !deleteDialog.value) return
-  const controls = Array.from(
-    deleteDialog.value.querySelectorAll<HTMLElement>('button:not([disabled])'),
-  )
-  const first = controls[0]
-  const last = controls[controls.length - 1]
-  if (!first || !last) return
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first.focus()
-  }
-}
-
-document.addEventListener('keydown', handleEscape)
-onBeforeUnmount(() => document.removeEventListener('keydown', handleEscape))
 watch(() => route.params.id, loadVoice, { immediate: true })
 </script>
 
@@ -356,41 +325,15 @@ watch(() => route.params.id, loadVoice, { immediate: true })
       </div>
     </template>
 
-    <div
-      v-if="confirmDelete"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-      role="presentation"
-      @mousedown.self="closeDeleteDialog"
+    <ConfirmDialog
+      :open="confirmDelete"
+      title="Delete voice"
+      :busy="deleting"
+      confirm-label="Delete"
+      @close="closeDeleteDialog"
+      @confirm="removeVoice"
     >
-      <div
-        ref="deleteDialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-dialog-title"
-        class="w-full max-w-md border border-line bg-surface p-5 shadow-lg"
-        @keydown="trapDialogFocus"
-      >
-        <h2 id="delete-dialog-title" class="text-lg font-semibold">Delete voice</h2>
-        <p class="mt-2 text-sm text-muted">This voice and its stored files will be removed.</p>
-        <div class="mt-6 flex flex-wrap justify-end gap-2">
-          <button
-            ref="cancelDeleteButton"
-            type="button"
-            class="h-9 border border-line px-3 text-sm font-medium hover:border-ink"
-            @click="closeDeleteDialog"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            :disabled="deleting"
-            class="h-9 bg-danger px-3 text-sm font-medium text-white disabled:opacity-60"
-            @click="removeVoice"
-          >
-            {{ deleting ? 'Deleting' : 'Delete' }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <p>This voice and its stored files will be removed.</p>
+    </ConfirmDialog>
   </section>
 </template>

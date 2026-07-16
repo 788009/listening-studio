@@ -10,6 +10,12 @@ const routes = [
     meta: { title: 'Library' },
   },
   {
+    path: '/audio/:id',
+    name: 'audio',
+    component: () => import('@/views/AudioDetailView.vue'),
+    meta: { title: 'Audio' },
+  },
+  {
     path: '/create',
     name: 'create',
     component: () => import('@/views/CreateView.vue'),
