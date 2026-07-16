@@ -35,6 +35,14 @@ rotation retention.
 Set `LISTENING_ENVIRONMENT=production` after building the frontend to serve
 `frontend/dist` from FastAPI. Production startup fails when the build is absent.
 
+### Debug Authentication
+
+When `LISTENING_DEBUG_AUTH_ENABLED=true`, development requests can provide
+`X-Debug-OIDC-Issuer` and `X-Debug-OIDC-Subject`. Posting those headers to
+`/auth/debug/session` creates an HTTP-only signed session cookie. Set a unique
+`LISTENING_AUTH_SESSION_SECRET` of at least 32 characters. Debug headers and
+placeholder session cookies are ignored when debug authentication is disabled.
+
 ## Frontend
 
 The frontend requires Node 24.15 and npm 11.6. Install dependencies and start

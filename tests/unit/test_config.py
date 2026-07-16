@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from pydantic import ValidationError
+
 from backend.app.core.config import Settings
 
 
@@ -34,6 +36,14 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.max_upload_bytes, 1024)
         self.assertTrue(settings.debug_auth_enabled)
         self.assertEqual(settings.cosyvoice_model_dir, Path("/models/cosyvoice"))
+
+    def test_auth_session_secret_has_minimum_length(self) -> None:
+        with self.assertRaises(ValidationError):
+            Settings(
+                _env_file=None,
+                cosyvoice_model_dir=Path("/models/cosyvoice"),
+                auth_session_secret="too-short",
+            )
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, Field, PositiveInt
+from pydantic import AliasChoices, Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     frontend_dist_dir: Path = Path("frontend/dist")
     max_upload_bytes: PositiveInt = 50 * 1024 * 1024
     debug_auth_enabled: bool = False
+    auth_session_secret: SecretStr = SecretStr("development-only-change-before-use")
+    auth_session_cookie_name: str = "listening_session"
+    auth_session_max_age_seconds: PositiveInt = 8 * 60 * 60
     cosyvoice_model_dir: Path = Field(
         validation_alias=AliasChoices(
             "COSYVOICE_MODEL_DIR", "LISTENING_COSYVOICE_MODEL_DIR"
@@ -29,6 +32,15 @@ class Settings(BaseSettings):
     )
     log_rotation_bytes: PositiveInt = 10 * 1024 * 1024
     log_retention_files: PositiveInt = 5
+
+    @field_validator("auth_session_secret")
+    @classmethod
+    def validate_auth_session_secret(cls, value: SecretStr) -> SecretStr:
+        if len(value.get_secret_value()) < 32:
+            raise ValueError(
+                "Authentication session secret must be at least 32 characters"
+            )
+        return value
 
 
 @lru_cache

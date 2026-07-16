@@ -44,6 +44,30 @@ class UserService:
             session.rollback()
             raise ConflictError("Identity already exists") from exc
 
+    def get_or_create_pending_user(
+        self,
+        session: Session,
+        *,
+        issuer: str,
+        subject: str,
+        locale: str = "en",
+    ) -> User:
+        existing = self.repository.get_by_identity(session, issuer, subject)
+        if existing:
+            return existing
+        try:
+            return self.create_pending_user(
+                session,
+                issuer=issuer,
+                subject=subject,
+                locale=locale,
+            )
+        except ConflictError:
+            existing = self.repository.get_by_identity(session, issuer, subject)
+            if existing:
+                return existing
+            raise
+
     def set_user_id(self, session: Session, user: User, user_id: str) -> User:
         if user.user_id is not None:
             raise ConflictError("User ID cannot be changed")
