@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from backend.app.core.exceptions import ForbiddenError
+from backend.app.core.exceptions import ProfileIncompleteError
 from backend.app.db.models.user import User
 from backend.app.integrations.identity import IdentityProvider
 from backend.app.services.users import UserService
@@ -86,5 +86,5 @@ async def require_completed_profile(
     user: User = Depends(require_teacher),
 ) -> User:
     if not user.is_profile_complete:
-        raise ForbiddenError("Profile setup is required")
+        raise ProfileIncompleteError()
     return user

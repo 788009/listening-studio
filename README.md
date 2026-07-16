@@ -94,6 +94,11 @@ is available, and `request_id` matches the `X-Request-ID` response header:
 
 Paginated JSON responses contain `items`, `page`, `page_size`, and `total`.
 
+Authenticated teachers complete their profile with `POST /api/users/me/profile`
+and update username or locale with `PATCH /api/users/me/profile`. Public profiles
+are available at `GET /api/users/{userId}`; private statistics are included only
+for the matching authenticated user.
+
 ## Tests
 
 Run the test suite from the repository root:

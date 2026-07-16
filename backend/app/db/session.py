@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Generator
+from collections.abc import AsyncGenerator
 from typing import Any
 
 from fastapi import Request
@@ -52,7 +52,7 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
     )
 
 
-def get_db_session(request: Request) -> Generator[Session, None, None]:
+async def get_db_session(request: Request) -> AsyncGenerator[Session, None]:
     session_factory: sessionmaker[Session] = request.app.state.session_factory
     with session_factory() as session:
         try:

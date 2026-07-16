@@ -23,6 +23,7 @@ from backend.app.core.exceptions import (
     ForbiddenError,
     JobFailedError,
     NotFoundError,
+    ProfileIncompleteError,
 )
 from backend.app.factory import create_app
 
@@ -68,6 +69,7 @@ class ErrorHandlingTest(unittest.TestCase):
         error_cases = [
             (NotFoundError, 404, "not_found"),
             (ForbiddenError, 403, "forbidden"),
+            (ProfileIncompleteError, 403, "profile_incomplete"),
             (ConflictError, 409, "conflict"),
             (DomainValidationError, 422, "validation_error"),
             (JobFailedError, 500, "job_failed"),

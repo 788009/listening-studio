@@ -34,6 +34,12 @@ class ForbiddenError(DomainError):
     default_message = "Operation is not permitted"
 
 
+class ProfileIncompleteError(DomainError):
+    code = "profile_incomplete"
+    status_code = 403
+    default_message = "Profile setup is required"
+
+
 class ConflictError(DomainError):
     code = "conflict"
     status_code = 409

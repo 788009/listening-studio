@@ -32,6 +32,9 @@ class UserRepository:
         )
         return session.scalar(statement)
 
+    def get_by_user_id(self, session: Session, user_id: str) -> User | None:
+        return self.get_by_normalized_user_id(session, user_id.lower())
+
     def create_pending(
         self,
         session: Session,

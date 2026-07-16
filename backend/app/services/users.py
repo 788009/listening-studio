@@ -105,6 +105,11 @@ class UserService:
         session.flush()
         return user
 
+    def update_locale(self, session: Session, user: User, locale: str) -> User:
+        user.locale = self._validate_locale(locale)
+        session.flush()
+        return user
+
     @staticmethod
     def _validate_identity(issuer: str, subject: str) -> None:
         if not issuer.strip() or not subject.strip():

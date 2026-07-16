@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory, type RouterHistory } from 'vue-router'
 
+import { useAuthStore } from '@/stores/auth'
+
 const routes = [
   {
     path: '/',
@@ -11,7 +13,19 @@ const routes = [
     path: '/create',
     name: 'create',
     component: () => import('@/views/CreateView.vue'),
-    meta: { title: 'Create' },
+    meta: { title: 'Create', requiresTeacher: true },
+  },
+  {
+    path: '/setup-profile',
+    name: 'setup-profile',
+    component: () => import('@/views/ProfileSetupView.vue'),
+    meta: { title: 'Set up profile' },
+  },
+  {
+    path: '/user/:userId',
+    name: 'user',
+    component: () => import('@/views/UserView.vue'),
+    meta: { title: 'Teacher profile' },
   },
   {
     path: '/:pathMatch(.*)*',
@@ -23,6 +37,21 @@ const routes = [
 
 export function createAppRouter(history: RouterHistory = createWebHistory()) {
   const appRouter = createRouter({ history, routes })
+  appRouter.beforeEach(async (route) => {
+    const auth = useAuthStore()
+    await auth.loadCurrentUser()
+
+    if (auth.isTeacher && !auth.profileComplete && route.name !== 'setup-profile') {
+      return { name: 'setup-profile' }
+    }
+    if (route.name === 'setup-profile' && (!auth.isTeacher || auth.profileComplete)) {
+      return { name: 'library' }
+    }
+    if (route.meta.requiresTeacher && !auth.isTeacher) {
+      return { name: 'library' }
+    }
+    return true
+  })
   appRouter.afterEach((route) => {
     const title = typeof route.meta.title === 'string' ? route.meta.title : 'Listening Studio'
     document.title = `${title} | Listening Studio`

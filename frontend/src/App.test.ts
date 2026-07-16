@@ -1,21 +1,26 @@
 import { mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
+import { setActivePinia } from 'pinia'
 import { describe, expect, it } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 
 import App from './App.vue'
 import { createAppRouter } from './router'
+import { useAuthStore } from './stores/auth'
 
 
 describe('App', () => {
   it('renders the application shell and a frontend 404 route', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    useAuthStore().loaded = true
     const router = createAppRouter(createMemoryHistory())
     await router.push('/missing-route')
     await router.isReady()
 
     const wrapper = mount(App, {
       global: {
-        plugins: [createPinia(), router],
+        plugins: [pinia, router],
       },
     })
 
