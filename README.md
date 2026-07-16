@@ -21,6 +21,8 @@ uvicorn backend.app.main:app --reload
 ```
 
 The liveness endpoint is available at `http://127.0.0.1:8000/health/live`.
+Database and data-directory readiness is available at
+`http://127.0.0.1:8000/health/ready`.
 
 ## Configuration
 
@@ -29,6 +31,24 @@ variables and their development defaults. `COSYVOICE_MODEL_DIR` is required.
 Other settings use the `LISTENING_` prefix and cover the database URL, runtime
 data and log directories, upload size limit, debug authentication, and log
 rotation retention.
+
+## Database Migrations
+
+Apply all migrations to the configured database:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/alembic -c alembic.ini upgrade head
+```
+
+Return an empty database to the pre-baseline state:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/alembic -c alembic.ini downgrade base
+```
 
 ## Tests
 
