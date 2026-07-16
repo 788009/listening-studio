@@ -68,6 +68,7 @@ describe('voice views', () => {
       history: createMemoryHistory(),
       routes: [
         { path: '/voices', component: VoiceListView },
+        { path: '/voices/create', component: { template: '<div />' } },
         { path: '/voice/:id', component: VoiceDetailView },
       ],
     })

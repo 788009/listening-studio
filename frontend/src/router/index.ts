@@ -28,6 +28,12 @@ const routes = [
     meta: { title: 'Voices', requiresTeacher: true },
   },
   {
+    path: '/voices/create',
+    name: 'create-voice',
+    component: () => import('@/views/CreateVoiceView.vue'),
+    meta: { title: 'Create voice', requiresTeacher: true },
+  },
+  {
     path: '/voice/:id',
     name: 'voice',
     component: () => import('@/views/VoiceDetailView.vue'),

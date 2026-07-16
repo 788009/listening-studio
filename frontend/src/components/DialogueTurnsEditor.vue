@@ -1,0 +1,146 @@
+<script setup lang="ts">
+import type { Voice } from '@/api/voices'
+import type { DialogueTurnDraft } from './dialogueTurnTypes'
+
+const props = defineProps<{
+  modelValue: DialogueTurnDraft[]
+  voices: Voice[]
+}>()
+const emit = defineEmits<{
+  'update:modelValue': [value: DialogueTurnDraft[]]
+}>()
+
+function updateTurn(index: number, update: Partial<DialogueTurnDraft>): void {
+  const next = props.modelValue.map((turn, position) =>
+    position === index ? { ...turn, ...update } : turn,
+  )
+  emit('update:modelValue', next)
+}
+
+function addTurn(): void {
+  const nextKey = Math.max(0, ...props.modelValue.map((turn) => turn.key)) + 1
+  emit('update:modelValue', [
+    ...props.modelValue,
+    {
+      key: nextKey,
+      voiceId: props.voices[0] ? String(props.voices[0].id) : '',
+      speaker: '',
+      text: '',
+    },
+  ])
+}
+
+function removeTurn(index: number): void {
+  if (props.modelValue.length <= 1) return
+  emit(
+    'update:modelValue',
+    props.modelValue.filter((_, position) => position !== index),
+  )
+}
+
+function moveTurn(index: number, offset: -1 | 1): void {
+  const target = index + offset
+  if (target < 0 || target >= props.modelValue.length) return
+  const next = [...props.modelValue]
+  const [turn] = next.splice(index, 1)
+  if (!turn) return
+  next.splice(target, 0, turn)
+  emit('update:modelValue', next)
+}
+</script>
+
+<template>
+  <div class="min-w-0 border-b border-line">
+    <ol class="min-w-0 divide-y divide-line">
+      <li
+        v-for="(turn, index) in modelValue"
+        :key="turn.key"
+        class="grid min-w-0 gap-4 px-5 py-5 lg:grid-cols-[4.5rem_minmax(10rem,0.8fr)_minmax(10rem,0.7fr)_minmax(14rem,1.5fr)]"
+      >
+        <div class="grid h-9 grid-cols-3" aria-label="Turn controls">
+          <button
+            type="button"
+            class="flex h-9 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
+            :disabled="index === 0"
+            title="Move turn up"
+            :aria-label="`Move turn ${index + 1} up`"
+            @click="moveTurn(index, -1)"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="flex h-9 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
+            :disabled="index === modelValue.length - 1"
+            title="Move turn down"
+            :aria-label="`Move turn ${index + 1} down`"
+            @click="moveTurn(index, 1)"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            class="flex h-9 w-6 items-center justify-center text-muted hover:text-danger disabled:opacity-30"
+            :disabled="modelValue.length === 1"
+            title="Delete turn"
+            :aria-label="`Delete turn ${index + 1}`"
+            @click="removeTurn(index)"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14" stroke="currentColor" stroke-width="2" />
+            </svg>
+          </button>
+        </div>
+        <div class="min-w-0">
+          <label :for="`turn-voice-${turn.key}`" class="mb-1 block text-sm font-medium">Voice</label>
+          <select
+            :id="`turn-voice-${turn.key}`"
+            :value="turn.voiceId"
+            class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm"
+            @change="updateTurn(index, { voiceId: ($event.target as HTMLSelectElement).value })"
+          >
+            <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">
+              {{ voice.title }}
+            </option>
+          </select>
+        </div>
+        <div class="min-w-0">
+          <label :for="`turn-speaker-${turn.key}`" class="mb-1 block text-sm font-medium">Speaker</label>
+          <input
+            :id="`turn-speaker-${turn.key}`"
+            :value="turn.speaker"
+            required
+            maxlength="200"
+            pattern="[A-Za-z0-9_-]+(?:[ ]+[A-Za-z0-9_-]+)*"
+            class="h-10 w-full min-w-0 border border-line px-3 text-sm"
+            @input="updateTurn(index, { speaker: ($event.target as HTMLInputElement).value })"
+          />
+        </div>
+        <div class="min-w-0">
+          <label :for="`turn-text-${turn.key}`" class="mb-1 block text-sm font-medium">Text</label>
+          <textarea
+            :id="`turn-text-${turn.key}`"
+            :value="turn.text"
+            required
+            class="min-h-24 w-full min-w-0 resize-y border border-line p-3 text-sm leading-6"
+            @input="updateTurn(index, { text: ($event.target as HTMLTextAreaElement).value })"
+          />
+        </div>
+      </li>
+    </ol>
+    <button
+      type="button"
+      class="m-5 inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink"
+      @click="addTurn"
+    >
+      <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+        <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
+      </svg>
+      Add turn
+    </button>
+  </div>
+</template>

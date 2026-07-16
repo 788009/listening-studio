@@ -48,7 +48,18 @@ onMounted(loadVoices)
         <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
         <h1 id="voices-title" class="text-2xl font-semibold">Voices</h1>
       </div>
-      <span class="text-sm text-muted">{{ voices.length }} available</span>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-muted">{{ voices.length }} available</span>
+        <RouterLink
+          to="/voices/create"
+          class="inline-flex h-9 items-center gap-2 bg-ink px-3 text-sm font-medium text-white hover:bg-accent"
+        >
+          <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+            <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
+          </svg>
+          New voice
+        </RouterLink>
+      </div>
     </div>
 
     <form

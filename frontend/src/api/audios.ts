@@ -68,6 +68,32 @@ export interface AudioUpdate {
   tagIds?: number[]
 }
 
+export interface AudioCreationAccepted {
+  audioId: number
+  jobId: number
+}
+
+export interface SingleAudioCreationInput {
+  title: string
+  text: string
+  voiceId: number
+  tagIds: number[]
+  visibility: ResourceVisibility
+}
+
+export interface DialogueCreationUtterance {
+  voiceId: number
+  speakerDisplayName: string
+  text: string
+}
+
+export interface DialogueAudioCreationInput {
+  title: string
+  utterances: DialogueCreationUtterance[]
+  tagIds: number[]
+  visibility: ResourceVisibility
+}
+
 export function listAudios(options: AudioListOptions = {}): Promise<AudioList> {
   const parameters = new URLSearchParams({
     page: String(options.page ?? 1),
@@ -97,6 +123,24 @@ export function deleteAudio(audioId: number): Promise<void> {
   return apiRequest<void>(`/audios/${positiveId(audioId)}`, { method: 'DELETE' })
 }
 
+export function createSingleAudio(
+  input: SingleAudioCreationInput,
+): Promise<AudioCreationAccepted> {
+  return apiRequest<AudioCreationAccepted>('/audios', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function createDialogueAudio(
+  input: DialogueAudioCreationInput,
+): Promise<AudioCreationAccepted> {
+  return apiRequest<AudioCreationAccepted>('/audios/dialogues', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
 export function audioMediaPath(audioId: number): string {
   return `/media/audio/${positiveId(audioId)}`
 }
@@ -105,6 +149,15 @@ export function listAudioTags(language = 'en'): Promise<AudioTag[]> {
   return apiRequest<AudioTag[]>(
     `/audio-tags?language=${encodeURIComponent(language)}`,
   )
+}
+
+export async function listAudioCreationTags(language = 'en'): Promise<AudioTag[]> {
+  const encodedLanguage = encodeURIComponent(language)
+  const [topics, categories] = await Promise.all([
+    apiRequest<AudioTag[]>(`/audio-tags?type=topic&language=${encodedLanguage}`),
+    apiRequest<AudioTag[]>(`/audio-tags?type=category&language=${encodedLanguage}`),
+  ])
+  return [...topics, ...categories]
 }
 
 export function autocompleteAudioTags(query: string): Promise<string[]> {

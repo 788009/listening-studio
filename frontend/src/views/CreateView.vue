@@ -1,51 +1,86 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import {
-  listVoiceGenderTags,
+  listAudioCreationTags,
+  type AudioTag,
   type ResourceVisibility,
-  type VoiceTag,
-} from '@/api/voices'
+} from '@/api/audios'
+import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import CreationModeControl from '@/components/CreationModeControl.vue'
+import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
+import type { DialogueTurnDraft } from '@/components/dialogueTurnTypes'
 import { useAuthStore } from '@/stores/auth'
-import { useVoiceCreationStore } from '@/stores/voiceCreation'
+import { useAudioCreationStore } from '@/stores/audioCreation'
 
+type CreationMode = 'single' | 'dialogue'
+
+const route = useRoute()
 const auth = useAuthStore()
-const creation = useVoiceCreationStore()
+const creation = useAudioCreationStore()
+const mode = ref<CreationMode>('single')
 const title = ref('')
-const file = ref<File | null>(null)
-const genderTagId = ref('')
+const singleVoiceId = ref('')
+const singleText = ref('')
+const turns = ref<DialogueTurnDraft[]>([])
 const visibility = ref<ResourceVisibility>('private')
-const genderTags = ref<VoiceTag[]>([])
-const tagsLoading = ref(true)
+const selectedTagIds = ref<number[]>([])
+const voices = ref<Voice[]>([])
+const tags = ref<AudioTag[]>([])
+const loadingOptions = ref(true)
 const formError = ref('')
 
 const locale = computed(() => auth.user?.locale ?? 'en')
-const statusLabel = computed(() => {
-  if (creation.job?.status === 'running') return 'Generating voice model'
-  if (creation.job?.status === 'queued') return 'Waiting for processing'
-  return ''
-})
+const topicTags = computed(() => tags.value.filter((tag) => tag.type === 'topic'))
+const categoryTags = computed(() =>
+  tags.value.filter((tag) => tag.type === 'category'),
+)
 const failureMessage = computed(
   () => creation.job?.errorSummary || creation.errorMessage,
 )
 
-async function loadGenderTags(): Promise<void> {
-  tagsLoading.value = true
-  try {
-    genderTags.value = await listVoiceGenderTags(locale.value)
-  } catch (error) {
-    formError.value =
-      error instanceof ApiError ? error.message : 'Gender tags could not be loaded'
-  } finally {
-    tagsLoading.value = false
+function newTurn(): DialogueTurnDraft {
+  const voiceId = voices.value[0] ? String(voices.value[0].id) : ''
+  return {
+    key: 1,
+    voiceId,
+    speaker: '',
+    text: '',
   }
 }
 
-function selectFile(event: Event): void {
-  const input = event.target as HTMLInputElement
-  file.value = input.files?.[0] ?? null
+function toggleTag(tagId: number): void {
+  selectedTagIds.value = selectedTagIds.value.includes(tagId)
+    ? selectedTagIds.value.filter((id) => id !== tagId)
+    : [...selectedTagIds.value, tagId]
+}
+
+async function loadOptions(): Promise<void> {
+  loadingOptions.value = true
+  formError.value = ''
+  try {
+    const [voiceResponse, tagResponse] = await Promise.all([
+      listVoices({ language: locale.value }),
+      listAudioCreationTags(locale.value),
+    ])
+    voices.value = voiceResponse.items.filter((voice) => voice.status === 'ready')
+    tags.value = tagResponse
+    const requestedVoice = Number(route.query.voice)
+    const selected = voices.value.find((voice) => voice.id === requestedVoice)
+    singleVoiceId.value = selected
+      ? String(selected.id)
+      : voices.value[0]
+        ? String(voices.value[0].id)
+        : ''
+    if (turns.value.length === 0) turns.value = [newTurn()]
+  } catch (error) {
+    formError.value =
+      error instanceof ApiError ? error.message : 'Creation options could not be loaded'
+  } finally {
+    loadingOptions.value = false
+  }
 }
 
 async function submit(): Promise<void> {
@@ -55,183 +90,198 @@ async function submit(): Promise<void> {
     formError.value = 'Enter a title'
     return
   }
-  if (!file.value) {
-    formError.value = 'Choose a WAV reference recording'
+  if (mode.value === 'single') {
+    const voiceId = Number(singleVoiceId.value)
+    if (!Number.isInteger(voiceId) || !singleText.value.trim()) {
+      formError.value = 'Choose a voice and enter listening text'
+      return
+    }
+    await creation.submitSingle({
+      title: normalizedTitle,
+      text: singleText.value.trim(),
+      voiceId,
+      tagIds: selectedTagIds.value,
+      visibility: visibility.value,
+    })
     return
   }
-  const selectedGenderId = Number(genderTagId.value)
-  await creation.submit({
+
+  const utterances = turns.value.map((turn) => ({
+    voiceId: Number(turn.voiceId),
+    speakerDisplayName: turn.speaker.trim(),
+    text: turn.text.trim(),
+  }))
+  if (
+    utterances.some(
+      (turn) =>
+        !Number.isInteger(turn.voiceId) ||
+        turn.voiceId < 1 ||
+        !turn.speakerDisplayName ||
+        !turn.text,
+    )
+  ) {
+    formError.value = 'Complete the voice, speaker, and text for every turn'
+    return
+  }
+  await creation.submitDialogue({
     title: normalizedTitle,
-    file: file.value,
+    utterances,
+    tagIds: selectedTagIds.value,
     visibility: visibility.value,
-    genderTagId:
-      genderTagId.value && Number.isInteger(selectedGenderId)
-        ? selectedGenderId
-        : undefined,
   })
 }
 
 function startAnother(): void {
   creation.reset()
   title.value = ''
-  file.value = null
-  genderTagId.value = ''
+  singleText.value = ''
+  turns.value = [newTurn()]
+  selectedTagIds.value = []
   visibility.value = 'private'
   formError.value = ''
 }
 
 onMounted(() => {
   creation.resume()
-  void loadGenderTags()
+  void loadOptions()
 })
 onUnmounted(creation.stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="create-title">
-    <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-      <h1 id="create-title" class="text-2xl font-semibold">Create voice</h1>
+  <section aria-labelledby="create-title" class="min-w-0">
+    <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+      <div class="min-w-0">
+        <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
+        <h1 id="create-title" class="break-words text-2xl font-semibold">Create listening</h1>
+      </div>
+      <RouterLink
+        to="/voices/create"
+        class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
+      >
+        <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+          <path d="M12 3a5 5 0 0 0-5 5v4a5 5 0 0 0 10 0V8a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="2" />
+          <path d="M4 11v1a8 8 0 0 0 16 0v-1M12 20v2" stroke="currentColor" stroke-width="2" />
+        </svg>
+        Create voice
+      </RouterLink>
     </div>
 
     <div v-if="creation.active" class="border-b border-line bg-surface px-5 py-8">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-base font-semibold">{{ statusLabel }}</p>
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <p class="break-words text-base font-semibold">
+            {{ creation.job?.status === 'running' ? 'Generating audio' : 'Waiting for processing' }}
+          </p>
           <p class="mt-1 text-sm text-muted">Task {{ creation.jobId }}</p>
         </div>
-        <span class="text-sm font-medium tabular-nums">{{ creation.job?.progress ?? 0 }}%</span>
+        <span class="shrink-0 text-sm font-medium tabular-nums">{{ creation.job?.progress ?? 0 }}%</span>
       </div>
       <div
         class="mt-5 h-2 overflow-hidden bg-canvas"
         role="progressbar"
-        aria-label="Voice creation progress"
+        aria-label="Audio generation progress"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="creation.job?.progress ?? 0"
       >
-        <div
-          class="h-full bg-accent transition-[width]"
-          :style="{ width: `${creation.job?.progress ?? 0}%` }"
-        />
+        <div class="h-full bg-accent" :style="{ width: `${creation.job?.progress ?? 0}%` }" />
       </div>
-      <p class="mt-4 text-sm text-muted">
-        You can leave this page. Processing continues in the background.
-      </p>
     </div>
 
-    <div v-else-if="creation.completed && creation.voiceId" class="border-b border-line bg-surface px-5 py-9">
-      <p class="text-base font-semibold text-success">Voice is ready</p>
+    <div v-else-if="creation.completed && creation.audioId" class="border-b border-line bg-surface px-5 py-9">
+      <p class="text-base font-semibold text-success">Audio is ready</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
-          :to="`/voice/${creation.voiceId}`"
+          :to="`/audio/${creation.audioId}`"
           class="inline-flex h-10 items-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent"
         >
-          View voice
+          View audio
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
             <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
           </svg>
         </RouterLink>
-        <button
-          type="button"
-          class="h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink"
-          @click="startAnother"
-        >
+        <button type="button" class="h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink" @click="startAnother">
           Create another
         </button>
       </div>
     </div>
 
-    <div v-else-if="creation.failed" class="border-b border-line bg-surface px-5 py-9">
-      <p class="text-base font-semibold">Voice creation failed</p>
-      <p role="alert" class="mt-2 text-sm text-danger">
-        {{ failureMessage || 'The task could not be completed' }}
-      </p>
-      <button
-        type="button"
-        class="mt-5 h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink"
-        @click="startAnother"
-      >
-        Try again
-      </button>
-    </div>
+    <form v-else class="min-w-0 border-b border-line bg-surface" @submit.prevent="submit">
+      <div v-if="creation.failed" class="border-b border-line px-5 py-4">
+        <p role="alert" class="break-words text-sm text-danger">
+          {{ failureMessage || 'Audio generation failed' }}
+        </p>
+      </div>
 
-    <form
-      v-else
-      class="grid border-b border-line bg-surface lg:grid-cols-[minmax(0,1fr)_18rem]"
-      @submit.prevent="submit"
-    >
-      <div class="space-y-5 px-5 py-7 lg:border-r lg:border-line">
-        <div>
-          <label for="voice-title" class="mb-1 block text-sm font-medium">Title</label>
+      <div class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[minmax(0,1fr)_18rem]">
+        <div class="min-w-0">
+          <label for="audio-title" class="mb-1 block text-sm font-medium">Title</label>
           <input
-            id="voice-title"
+            id="audio-title"
             v-model="title"
             type="text"
             required
             maxlength="200"
-            autocomplete="off"
-            class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+            class="h-10 w-full min-w-0 border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           />
         </div>
-
         <div>
-          <label for="voice-file" class="mb-1 block text-sm font-medium">Reference WAV</label>
-          <input
-            id="voice-file"
-            type="file"
-            required
-            accept=".wav,audio/wav,audio/x-wav"
-            class="block w-full border border-line bg-surface text-sm text-muted file:mr-4 file:h-10 file:border-0 file:border-r file:border-line file:bg-canvas file:px-3 file:text-sm file:font-medium file:text-ink hover:file:bg-accent-soft"
-            @change="selectFile"
-          />
-        </div>
-
-        <div>
-          <label for="voice-gender" class="mb-1 block text-sm font-medium">Gender tag</label>
-          <select
-            id="voice-gender"
-            v-model="genderTagId"
-            :disabled="tagsLoading"
-            class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:text-muted"
-          >
-            <option value="">No gender tag</option>
-            <option v-for="tag in genderTags" :key="tag.id" :value="String(tag.id)">
-              {{ tag.displayValue.replace(/_/g, ' ') }}
-            </option>
-          </select>
+          <span class="mb-1 block text-sm font-medium">Mode</span>
+          <CreationModeControl v-model="mode" />
         </div>
       </div>
 
-      <div class="flex flex-col justify-between gap-7 px-5 py-7">
-        <label class="flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            class="mt-0.5 h-4 w-4 accent-accent"
-            :checked="visibility === 'public'"
-            @change="visibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'"
-          />
-          <span>
-            <span class="block text-sm font-medium">Publish when ready</span>
-            <span class="mt-1 block text-sm text-muted">Private voices remain visible only to you.</span>
-          </span>
-        </label>
+      <div v-if="loadingOptions" class="border-b border-line px-5 py-12 text-sm text-muted">Loading options</div>
+      <div v-else-if="voices.length === 0" class="border-b border-line px-5 py-10">
+        <p class="text-sm text-muted">No ready voices are available</p>
+        <RouterLink to="/voices/create" class="mt-3 inline-block text-sm font-medium text-accent underline">Create voice</RouterLink>
+      </div>
 
-        <div>
-          <p v-if="formError || creation.errorMessage" role="alert" class="mb-3 text-sm text-danger">
-            {{ formError || creation.errorMessage }}
-          </p>
-          <button
-            type="submit"
-            :disabled="creation.submitting || creation.active"
-            class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-              <path d="M12 16V4m0 0L7 9m5-5 5 5" stroke="currentColor" stroke-width="2" />
-              <path d="M5 14v6h14v-6" stroke="currentColor" stroke-width="2" />
-            </svg>
-            {{ creation.submitting ? 'Submitting' : 'Create voice' }}
-          </button>
+      <div v-else-if="mode === 'single'" class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[18rem_minmax(0,1fr)]">
+        <div class="min-w-0">
+          <label for="single-voice" class="mb-1 block text-sm font-medium">Voice</label>
+          <select id="single-voice" v-model="singleVoiceId" class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus">
+            <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">{{ voice.title }}</option>
+          </select>
+        </div>
+        <div class="min-w-0">
+          <label for="single-text" class="mb-1 block text-sm font-medium">Listening text</label>
+          <textarea id="single-text" v-model="singleText" required class="min-h-40 w-full min-w-0 resize-y border border-line p-3 text-sm leading-6 focus:border-accent focus:outline-none focus:shadow-focus" />
+        </div>
+      </div>
+
+      <DialogueTurnsEditor
+        v-else-if="voices.length > 0"
+        v-model="turns"
+        :voices="voices"
+      />
+
+      <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div class="grid min-w-0 gap-5 sm:grid-cols-2">
+          <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
+            <legend class="mb-2 text-sm font-medium">{{ group.label }}</legend>
+            <div class="space-y-2">
+              <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
+                <input type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-accent" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag(tag.id)" />
+                <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
+              </label>
+              <p v-if="group.items.length === 0" class="text-sm text-muted">None available</p>
+            </div>
+          </fieldset>
+        </div>
+        <div class="flex flex-col justify-between gap-6">
+          <label class="flex items-start gap-3">
+            <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent" :checked="visibility === 'public'" @change="visibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'" />
+            <span class="text-sm font-medium">Publish when ready</span>
+          </label>
+          <div>
+            <p v-if="formError || creation.errorMessage" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError || creation.errorMessage }}</p>
+            <button type="submit" :disabled="creation.submitting || creation.active || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
+              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" /></svg>
+              {{ creation.submitting ? 'Submitting' : creation.failed ? 'Retry generation' : 'Generate audio' }}
+            </button>
+          </div>
         </div>
       </div>
     </form>

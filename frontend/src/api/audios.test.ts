@@ -3,9 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   audioMediaPath,
   autocompleteAudioTags,
+  createDialogueAudio,
+  createSingleAudio,
   deleteAudio,
   getAudio,
   listAudios,
+  listAudioCreationTags,
   updateAudio,
 } from './audios'
 
@@ -71,5 +74,45 @@ describe('audio API', () => {
       'topic:climate_change',
     ])
     expect(fetchMock.mock.calls[0]?.[0]).toContain('%E6%B0%94%E5%80%99')
+  })
+
+  it('creates single and dialogue jobs with typed payloads', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ audioId: 8, jobId: 13 }, 202))
+      .mockResolvedValueOnce(jsonResponse({ audioId: 9, jobId: 14 }, 202))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createSingleAudio({
+      title: 'Single',
+      text: 'Text',
+      voiceId: 2,
+      tagIds: [4],
+      visibility: 'private',
+    })
+    await createDialogueAudio({
+      title: 'Dialogue',
+      utterances: [{ voiceId: 2, speakerDisplayName: 'Alice', text: 'Hello' }],
+      tagIds: [],
+      visibility: 'public',
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audios')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/audios/dialogues')
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(
+      expect.objectContaining({ visibility: 'public' }),
+    )
+  })
+
+  it('loads only topic and category creation tags', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse([{ id: 1, type: 'topic' }]))
+      .mockResolvedValueOnce(jsonResponse([{ id: 2, type: 'category' }]))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(listAudioCreationTags('zh-CN')).resolves.toHaveLength(2)
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('type=topic')
+    expect(fetchMock.mock.calls[1]?.[0]).toContain('type=category')
   })
 })
