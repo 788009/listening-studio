@@ -22,7 +22,10 @@ const auth = useAuthStore()
           <img class="h-8 w-8" src="/mark.svg" alt="" />
           <span class="text-base font-semibold">Listening Studio</span>
         </RouterLink>
-        <nav aria-label="Primary navigation" class="flex h-10 items-center gap-1">
+        <nav
+          aria-label="Primary navigation"
+          class="flex min-w-0 flex-wrap items-center justify-end gap-1"
+        >
           <RouterLink
             to="/"
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
@@ -60,6 +63,14 @@ const auth = useAuthStore()
             active-class="border-accent text-ink"
           >
             Voices
+          </RouterLink>
+          <RouterLink
+            v-if="auth.isTeacher"
+            to="/manage"
+            class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
+            active-class="border-accent text-ink"
+          >
+            Manage
           </RouterLink>
         </nav>
       </div>

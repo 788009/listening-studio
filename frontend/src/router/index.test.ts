@@ -90,4 +90,14 @@ describe('profile completion guard', () => {
 
     expect(router.currentRoute.value.name).toBe('paper-create')
   })
+
+  it('protects the teacher resource management route', async () => {
+    const auth = useAuthStore()
+    auth.loaded = true
+    const anonymousRouter = createAppRouter(createMemoryHistory())
+
+    await anonymousRouter.push('/manage')
+
+    expect(anonymousRouter.currentRoute.value.name).toBe('library')
+  })
 })

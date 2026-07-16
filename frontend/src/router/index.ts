@@ -40,6 +40,12 @@ const routes = [
     meta: { title: 'Assemble paper', requiresTeacher: true },
   },
   {
+    path: '/manage',
+    name: 'resource-management',
+    component: () => import('@/views/ResourceManagementView.vue'),
+    meta: { title: 'Resource management', requiresTeacher: true },
+  },
+  {
     path: '/voices',
     name: 'voices',
     component: () => import('@/views/VoiceListView.vue'),
