@@ -60,4 +60,19 @@ describe('profile completion guard', () => {
 
     expect(router.currentRoute.value.name).toBe('audio')
   })
+
+  it('allows a completed teacher to restore a generation batch route', async () => {
+    const auth = useAuthStore()
+    auth.setCurrentUser({
+      userId: 'TeacherOne',
+      username: 'Teacher One',
+      locale: 'en',
+      profileComplete: true,
+    })
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/generate/7')
+
+    expect(router.currentRoute.value.name).toBe('generation-batch')
+  })
 })

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from backend.app.api.generation_batch_schemas import (
     GenerationBatchAccepted,
+    GenerationBatchAudioUpdate,
+    GenerationBatchAudioUpdateResponse,
     GenerationBatchItemResponse,
     GenerationBatchListResponse,
     GenerationBatchResponse,
@@ -18,10 +20,14 @@ from backend.app.api.generation_batch_schemas import (
 from backend.app.api.schemas import ResourceId
 from backend.app.core.auth import require_completed_profile
 from backend.app.core.exceptions import DomainValidationError
-from backend.app.db.models.generation_batch import GenerationBatch
+from backend.app.db.models.generation_batch import (
+    GenerationBatch,
+    GenerationBatchStatus,
+)
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.integrations.llm import QuestionType
+from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.generation_batches import GenerationBatchService
 from backend.app.services.voice_storage import VoiceStorage
@@ -35,6 +41,7 @@ def _service(request: Request) -> GenerationBatchService:
     return GenerationBatchService(
         storage=CorpusStorage(settings.data_dir),
         voice_storage=VoiceStorage(settings.data_dir),
+        audio_storage=AudioStorage(settings.data_dir),
         max_corpus_bytes=settings.max_corpus_bytes,
         max_generation_count=settings.max_batch_generation_count,
     )
@@ -47,6 +54,7 @@ def _response(batch: GenerationBatch) -> GenerationBatchResponse:
         question_types=[QuestionType(value) for value in batch.question_types],
         requested_count=batch.requested_count,
         status=batch.status,
+        progress=_progress(batch),
         tags=[
             GenerationBatchTagResponse(
                 id=tag.id,
@@ -64,6 +72,7 @@ def _response(batch: GenerationBatch) -> GenerationBatchResponse:
                 error_summary=item.error_summary,
                 question_types=_item_question_types(item.generated_content),
                 attempt_count=item.attempt_count,
+                title=item.audio.title if item.audio is not None else None,
             )
             for item in batch.items
         ],
@@ -78,6 +87,17 @@ def _response(batch: GenerationBatch) -> GenerationBatchResponse:
         created_at=batch.created_at,
         updated_at=batch.updated_at,
     )
+
+
+def _progress(batch: GenerationBatch) -> int:
+    if not batch.items:
+        return 0
+    terminal = sum(
+        item.status
+        in {GenerationBatchStatus.COMPLETED, GenerationBatchStatus.FAILED}
+        for item in batch.items
+    )
+    return terminal * 100 // len(batch.items)
 
 
 def _item_question_types(
@@ -237,3 +257,24 @@ async def retry_generation_batch_item(
         item_id=submission.item_id,
         job_id=submission.job.id,
     )
+
+
+@router.patch(
+    "/{batch_id}/completed-audios",
+    response_model=GenerationBatchAudioUpdateResponse,
+)
+async def update_completed_batch_audios(
+    batch_id: ResourceId,
+    payload: GenerationBatchAudioUpdate,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> GenerationBatchAudioUpdateResponse:
+    updated_count = _service(request).update_completed_audios(
+        session,
+        user,
+        batch_id=batch_id,
+        tag_ids=payload.tag_ids,
+        visibility=payload.visibility,
+    )
+    return GenerationBatchAudioUpdateResponse(updated_count=updated_count)

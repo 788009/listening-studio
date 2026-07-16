@@ -283,6 +283,29 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             [item["questionTypes"] for item in detail.json()["items"]],
             [["multiple_choice"], ["multiple_choice"]],
         )
+        bulk_update = self.send(
+            "PATCH",
+            f"/api/generation-batches/{batch_id}/completed-audios",
+            headers=self.headers(),
+            json={"tagIds": [self.bulk_tag_id], "visibility": "public"},
+        )
+        self.assertEqual(bulk_update.status_code, 200, bulk_update.text)
+        self.assertEqual(bulk_update.json()["updatedCount"], 2)
+        with self.app.state.session_factory() as session:
+            batch = session.get(GenerationBatch, batch_id)
+            assert batch is not None
+            for item in batch.items:
+                assert item.audio is not None
+                self.assertEqual(item.audio.visibility.value, "public")
+                self.assertEqual(
+                    {(tag.type, tag.value) for tag in item.audio.tags},
+                    {
+                        (AudioTagType.AUTHOR, "TeacherOne"),
+                        (AudioTagType.TOPIC, "bulk_topic"),
+                        (AudioTagType.SPEAKER, "Host"),
+                        (AudioTagType.SPEAKER, "Guest"),
+                    },
+                )
         delete_mapping_voice = self.send(
             "DELETE",
             f"/api/voices/{self.host_voice}",

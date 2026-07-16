@@ -39,6 +39,14 @@ const auth = useAuthStore()
           </RouterLink>
           <RouterLink
             v-if="auth.isTeacher"
+            to="/generate"
+            class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
+            active-class="border-accent text-ink"
+          >
+            Batch
+          </RouterLink>
+          <RouterLink
+            v-if="auth.isTeacher"
             to="/voices"
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"

@@ -14,6 +14,7 @@ from backend.app.core.exceptions import (
     DomainValidationError,
     NotFoundError,
 )
+from backend.app.db.models.audio import AudioStatus, AudioVisibility
 from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
@@ -29,6 +30,8 @@ from backend.app.integrations.llm import (
 from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.generation_batches import GenerationBatchRepository
 from backend.app.repositories.voices import VoiceRepository
+from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audios import AudioService
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.jobs import JobService
@@ -151,6 +154,7 @@ class GenerationBatchService:
         *,
         storage: CorpusStorage,
         voice_storage: VoiceStorage,
+        audio_storage: AudioStorage,
         max_corpus_bytes: int,
         max_generation_count: int,
         repository: GenerationBatchRepository | None = None,
@@ -169,6 +173,7 @@ class GenerationBatchService:
         self.job_service = job_service or JobService()
         self.voice_repository = voice_repository or VoiceRepository()
         self.voice_service = VoiceService(voice_storage)
+        self.audio_service = AudioService(audio_storage)
         self.authorization = authorization or AuthorizationService()
 
     def submit_text(
@@ -275,6 +280,34 @@ class GenerationBatchService:
         batch.error_summary = None
         session.commit()
         return GenerationBatchRetrySubmission(batch, item.id, job)
+
+    def update_completed_audios(
+        self,
+        session: Session,
+        owner: User,
+        *,
+        batch_id: int,
+        tag_ids: list[int],
+        visibility: AudioVisibility,
+    ) -> int:
+        batch = self.get_owned(session, owner, batch_id)
+        tags = self._tags(session, tag_ids)
+        completed_items = [
+            item
+            for item in batch.items
+            if item.status is GenerationBatchStatus.COMPLETED
+            and item.audio is not None
+        ]
+        if not completed_items:
+            raise ConflictError("Generation batch has no completed audios")
+        for item in completed_items:
+            audio = item.audio
+            assert audio is not None
+            if audio.author_id != owner.id or audio.status is not AudioStatus.READY:
+                raise ConflictError("A completed batch audio is unavailable")
+            self.audio_service.replace_topic_category_tags(session, audio, tags)
+            self.audio_service.set_visibility(session, audio, visibility)
+        return len(completed_items)
 
     def _submit(
         self,

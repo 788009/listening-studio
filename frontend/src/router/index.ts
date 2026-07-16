@@ -22,6 +22,18 @@ const routes = [
     meta: { title: 'Create', requiresTeacher: true },
   },
   {
+    path: '/generate',
+    name: 'generate',
+    component: () => import('@/views/GenerationBatchView.vue'),
+    meta: { title: 'Corpus generation', requiresTeacher: true },
+  },
+  {
+    path: '/generate/:id',
+    name: 'generation-batch',
+    component: () => import('@/views/GenerationBatchView.vue'),
+    meta: { title: 'Generation batch', requiresTeacher: true },
+  },
+  {
     path: '/voices',
     name: 'voices',
     component: () => import('@/views/VoiceListView.vue'),

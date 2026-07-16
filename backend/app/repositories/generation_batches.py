@@ -18,7 +18,7 @@ from backend.app.db.models.user import User
 class GenerationBatchRepository:
     _load_options = (
         selectinload(GenerationBatch.tags),
-        selectinload(GenerationBatch.items),
+        selectinload(GenerationBatch.items).selectinload(GenerationBatchItem.audio),
         selectinload(GenerationBatch.speaker_voices),
     )
 

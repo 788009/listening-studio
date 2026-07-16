@@ -215,6 +215,29 @@ class AudioService:
         session.flush()
         return audio
 
+    def replace_topic_category_tags(
+        self,
+        session: Session,
+        audio: Audio,
+        tags: list[AudioTag],
+    ) -> Audio:
+        if any(
+            tag.type not in {AudioTagType.TOPIC, AudioTagType.CATEGORY}
+            for tag in tags
+        ):
+            raise DomainValidationError(
+                "Batch audio tags must be topics or categories",
+                details={"field": "tagIds"},
+            )
+        preserved = [
+            tag
+            for tag in audio.tags
+            if tag.type in {AudioTagType.AUTHOR, AudioTagType.SPEAKER}
+        ]
+        audio.tags = preserved + list(dict.fromkeys(tags))
+        session.flush()
+        return audio
+
     def _resolve_tags(
         self,
         session: Session,
