@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     log_dir: Path = Path("logs")
     frontend_dist_dir: Path = Path("frontend/dist")
     max_upload_bytes: PositiveInt = 50 * 1024 * 1024
+    dialogue_silence_milliseconds: int = Field(default=500, ge=0, le=10_000)
     debug_auth_enabled: bool = False
     auth_session_secret: SecretStr = SecretStr("development-only-change-before-use")
     auth_session_cookie_name: str = "listening_session"

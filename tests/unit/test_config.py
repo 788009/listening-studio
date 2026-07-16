@@ -20,6 +20,7 @@ class SettingsTest(unittest.TestCase):
             "LISTENING_LOG_DIR": "/srv/listening/logs",
             "LISTENING_FRONTEND_DIST_DIR": "/srv/listening/frontend",
             "LISTENING_MAX_UPLOAD_BYTES": "1024",
+            "LISTENING_DIALOGUE_SILENCE_MILLISECONDS": "750",
             "LISTENING_DEBUG_AUTH_ENABLED": "true",
         }
 
@@ -34,6 +35,7 @@ class SettingsTest(unittest.TestCase):
             settings.frontend_dist_dir, Path("/srv/listening/frontend")
         )
         self.assertEqual(settings.max_upload_bytes, 1024)
+        self.assertEqual(settings.dialogue_silence_milliseconds, 750)
         self.assertTrue(settings.debug_auth_enabled)
         self.assertEqual(settings.cosyvoice_model_dir, Path("/models/cosyvoice"))
 

@@ -78,9 +78,9 @@ class AudioService:
             )
         normalized_title, search_title = self._normalize_title(title)
         normalized_utterances = self._normalize_utterances(utterances)
-        if source_type is AudioSourceType.MULTI_TURN and len(normalized_utterances) < 2:
+        if source_type is AudioSourceType.MULTI_TURN and not normalized_utterances:
             raise DomainValidationError(
-                "Multi-turn audio requires at least two utterances",
+                "Multi-turn audio requires at least one utterance",
                 details={"field": "utterances"},
             )
         normalized_text = self._canonical_text(text, normalized_utterances)

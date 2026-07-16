@@ -12,6 +12,7 @@ from backend.app.api.audio_schemas import (
     AudioSynthesisRequest,
     AudioUpdateRequest,
     AudioUtteranceResponse,
+    DialogueSynthesisRequest,
 )
 from backend.app.api.media import stream_wav
 from backend.app.api.schemas import LanguageCode, ResourceId
@@ -24,6 +25,7 @@ from backend.app.db.session import get_db_session
 from backend.app.services.audio_management import AudioManagementService
 from backend.app.services.audio_synthesis import AudioSynthesisService
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audios import AudioUtteranceInput
 from backend.app.services.tag_values import select_tag_display_value
 from backend.app.services.voice_storage import VoiceStorage
 
@@ -103,6 +105,43 @@ async def create_audio(
         voice_id=payload.voice_id,
         tag_ids=payload.tag_ids,
         target_visibility=payload.visibility,
+    )
+    return AudioSynthesisAccepted(
+        audio_id=submission.audio.id,
+        job_id=submission.job.id,
+    )
+
+
+@router.post(
+    "/dialogues",
+    response_model=AudioSynthesisAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_dialogue(
+    payload: DialogueSynthesisRequest,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> AudioSynthesisAccepted:
+    settings = request.app.state.settings
+    submission = AudioSynthesisService(
+        audio_storage=AudioStorage(settings.data_dir),
+        voice_storage=VoiceStorage(settings.data_dir),
+    ).prepare_dialogue(
+        session,
+        author=user,
+        title=payload.title,
+        utterances=[
+            AudioUtteranceInput(
+                voice_id=item.voice_id,
+                speaker_display_name=item.speaker_display_name,
+                text=item.text,
+            )
+            for item in payload.utterances
+        ],
+        tag_ids=payload.tag_ids,
+        target_visibility=payload.visibility,
+        silence_milliseconds=settings.dialogue_silence_milliseconds,
     )
     return AudioSynthesisAccepted(
         audio_id=submission.audio.id,

@@ -58,6 +58,19 @@ class AudioSynthesisAccepted(TagApiModel):
     job_id: int
 
 
+class DialogueUtteranceRequest(TagApiModel):
+    voice_id: ResourceId
+    speaker_display_name: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1)
+
+
+class DialogueSynthesisRequest(TagApiModel):
+    title: Title
+    utterances: list[DialogueUtteranceRequest] = Field(min_length=1)
+    tag_ids: list[ResourceId] = Field(default_factory=list)
+    visibility: AudioVisibility = AudioVisibility.PRIVATE
+
+
 class AudioUpdateRequest(TagApiModel):
     title: Title | None = None
     tag_ids: list[ResourceId] | None = None

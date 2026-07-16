@@ -48,6 +48,12 @@ class AudioStorage:
     def temporary_audio_path(self, job_id: int) -> Path:
         return self.prepare_job_directory(job_id) / "audio.wav"
 
+    def segment_audio_path(self, job_id: int, position: int) -> Path:
+        self._validate_position(position)
+        directory = self.prepare_job_directory(job_id) / "segments"
+        directory.mkdir(parents=True, exist_ok=True)
+        return directory / f"{position}.wav"
+
     def atomic_replace(self, audio_id: int, job_id: int) -> Path:
         source = self.temporary_audio_path(job_id)
         target = self.path(audio_id)
@@ -71,6 +77,16 @@ class AudioStorage:
         path = self.temporary_audio_path(job_id)
         if path.is_symlink() or not path.is_file():
             raise ConflictError("Temporary audio file does not exist")
+        return self._inspect_path(path)
+
+    def inspect_segment(
+        self,
+        job_id: int,
+        position: int,
+    ) -> StoredAudioMetadata:
+        path = self.segment_audio_path(job_id, position)
+        if path.is_symlink() or not path.is_file():
+            raise ConflictError("Audio segment file does not exist")
         return self._inspect_path(path)
 
     @staticmethod
@@ -129,3 +145,8 @@ class AudioStorage:
     def _validate_id(value: int, resource_name: str) -> None:
         if isinstance(value, bool) or not isinstance(value, int) or value < 1:
             raise ValueError(f"{resource_name} ID must be a positive integer")
+
+    @staticmethod
+    def _validate_position(position: int) -> None:
+        if isinstance(position, bool) or not isinstance(position, int) or position < 0:
+            raise ValueError("Audio segment position must be a non-negative integer")
