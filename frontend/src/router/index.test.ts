@@ -40,4 +40,14 @@ describe('profile completion guard', () => {
 
     expect(router.currentRoute.value.name).toBe('user')
   })
+
+  it('protects voice routes from anonymous access', async () => {
+    const auth = useAuthStore()
+    auth.loaded = true
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/voice/7')
+
+    expect(router.currentRoute.value.name).toBe('library')
+  })
 })

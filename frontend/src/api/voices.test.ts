@@ -1,0 +1,75 @@
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  deleteVoice,
+  getVoice,
+  listPublicSampleAudio,
+  listVoices,
+  updateVoice,
+  voiceSamplePath,
+} from './voices'
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+describe('voice API', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('builds typed list and detail requests', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ items: [], page: 1, pageSize: 100, total: 0 }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ id: 7 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await listVoices({ language: 'zh-CN', query: 'gender:female' })
+    await getVoice(7, 'zh-CN')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(
+      '/api/voices?page=1&page_size=100&language=zh-CN&q=gender%3Afemale',
+    )
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/voices/7?language=zh-CN')
+  })
+
+  it('updates, deletes, and resolves protected sample paths', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ id: 4 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await updateVoice(4, { sampleSource: 'original' })
+    await deleteVoice(4)
+
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({ method: 'PATCH' }),
+    )
+    expect(fetchMock.mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+    expect(voiceSamplePath(4)).toBe('/media/voice/4/sample')
+    expect(() => voiceSamplePath(0)).toThrow('positive integer')
+  })
+
+  it('requests only public ready audio for sample selection', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({
+        items: [{ id: 2, title: 'Public sample' }],
+        page: 1,
+        pageSize: 100,
+        total: 1,
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(listPublicSampleAudio('en')).resolves.toHaveLength(1)
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('status=ready')
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('visibility=public')
+  })
+})

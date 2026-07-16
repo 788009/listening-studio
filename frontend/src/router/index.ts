@@ -16,6 +16,18 @@ const routes = [
     meta: { title: 'Create', requiresTeacher: true },
   },
   {
+    path: '/voices',
+    name: 'voices',
+    component: () => import('@/views/VoiceListView.vue'),
+    meta: { title: 'Voices', requiresTeacher: true },
+  },
+  {
+    path: '/voice/:id',
+    name: 'voice',
+    component: () => import('@/views/VoiceDetailView.vue'),
+    meta: { title: 'Voice', requiresTeacher: true },
+  },
+  {
     path: '/setup-profile',
     name: 'setup-profile',
     component: () => import('@/views/ProfileSetupView.vue'),

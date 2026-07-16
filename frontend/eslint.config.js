@@ -25,6 +25,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ['src/**/*.{ts,vue}'],
+    languageOptions: {
+      globals: globals.browser,
+    },
+  },
+  {
     files: ['*.config.{js,ts}', 'vite.config.ts'],
     languageOptions: {
       globals: globals.node,
