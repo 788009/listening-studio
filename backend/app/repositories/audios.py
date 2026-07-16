@@ -167,6 +167,38 @@ class AudioRepository:
         )
         return session.scalar(statement) or 0
 
+    def count_paper_item_references(self, session: Session, audio_id: int) -> int:
+        from backend.app.db.models.paper import PaperItem
+
+        statement = select(func.count()).where(PaperItem.audio_id == audio_id)
+        return session.scalar(statement) or 0
+
+    def count_paper_result_references(self, session: Session, audio_id: int) -> int:
+        from backend.app.db.models.paper import Paper
+
+        statement = select(func.count()).where(Paper.result_audio_id == audio_id)
+        return session.scalar(statement) or 0
+
+    def count_foreign_paper_item_references(
+        self,
+        session: Session,
+        *,
+        audio_id: int,
+        audio_owner_id: int,
+    ) -> int:
+        from backend.app.db.models.paper import Paper, PaperItem
+
+        statement = (
+            select(func.count())
+            .select_from(PaperItem)
+            .join(Paper, Paper.id == PaperItem.paper_id)
+            .where(
+                PaperItem.audio_id == audio_id,
+                Paper.owner_id != audio_owner_id,
+            )
+        )
+        return session.scalar(statement) or 0
+
     def delete(self, session: Session, audio: Audio) -> None:
         session.delete(audio)
         session.flush()

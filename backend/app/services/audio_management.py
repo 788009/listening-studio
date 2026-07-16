@@ -119,6 +119,17 @@ class AudioManagementService:
                         "voiceIds": self._referencing_voice_ids(session, audio.id)
                     },
                 )
+            elif paper_reference_count := (
+                self.repository.count_foreign_paper_item_references(
+                    session,
+                    audio_id=audio.id,
+                    audio_owner_id=audio.author_id,
+                )
+            ):
+                raise ConflictError(
+                    "Audio is used by another teacher's paper",
+                    details={"paperReferenceCount": paper_reference_count},
+                )
             self.audio_service.set_visibility(session, audio, visibility)
         return audio
 
@@ -156,6 +167,22 @@ class AudioManagementService:
             raise ConflictError(
                 "Audio is part of a generation batch",
                 details={"batchItemCount": batch_item_count},
+            )
+        paper_item_count = self.repository.count_paper_item_references(
+            session,
+            audio.id,
+        )
+        paper_result_count = self.repository.count_paper_result_references(
+            session,
+            audio.id,
+        )
+        if paper_item_count or paper_result_count:
+            raise ConflictError(
+                "Audio is referenced by a paper",
+                details={
+                    "paperItemCount": paper_item_count,
+                    "paperResultCount": paper_result_count,
+                },
             )
         staged = self.storage.stage_delete(audio.id)
         try:
