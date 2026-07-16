@@ -28,7 +28,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260716_0007")
+            self.assertEqual(revision, "20260716_0008")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:

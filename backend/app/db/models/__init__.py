@@ -13,6 +13,7 @@ from backend.app.db.models.audio_tag import (
     AudioTagTranslation,
     AudioTagType,
 )
+from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.user import User, UserStatus
 from backend.app.db.models.voice import (
     Voice,
@@ -36,6 +37,8 @@ __all__ = [
     "AudioTagType",
     "AudioUtterance",
     "AudioVisibility",
+    "Job",
+    "JobStatus",
     "User",
     "UserStatus",
     "Voice",

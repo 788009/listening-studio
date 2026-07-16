@@ -7,6 +7,7 @@ from loguru import logger
 from backend.app.api.auth import router as auth_router
 from backend.app.api.audios import media_router as audio_media_router
 from backend.app.api.audios import router as audios_router
+from backend.app.api.jobs import router as jobs_router
 from backend.app.api.tags import audio_router as audio_tags_router
 from backend.app.api.tags import voice_router as voice_tags_router
 from backend.app.api.users import router as users_router
@@ -66,6 +67,7 @@ def create_app(
     app.include_router(audios_router)
     app.include_router(audio_media_router)
     app.include_router(voice_media_router)
+    app.include_router(jobs_router)
     app.include_router(health_router)
     if settings.environment == "production":
         install_frontend(app, settings.frontend_dist_dir)
