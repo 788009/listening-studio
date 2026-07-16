@@ -16,7 +16,7 @@ from backend.app.db.models.audio_tag import (
 from backend.app.db.models.user import User, UserStatus
 from backend.app.db.models.voice import (
     Voice,
-    VoiceExampleMode,
+    VoiceSampleSource,
     VoiceStatus,
     VoiceVisibility,
     voice_tag_associations,
@@ -39,7 +39,7 @@ __all__ = [
     "User",
     "UserStatus",
     "Voice",
-    "VoiceExampleMode",
+    "VoiceSampleSource",
     "VoiceStatus",
     "VoiceVisibility",
     "VoiceTag",

@@ -26,10 +26,10 @@ class AudioRepository:
         )
         return list(session.scalars(statement))
 
-    def count_voice_example_references(self, session: Session, audio_id: int) -> int:
+    def count_voice_sample_references(self, session: Session, audio_id: int) -> int:
         from backend.app.db.models.voice import Voice
 
-        statement = select(func.count()).where(Voice.example_audio_id == audio_id)
+        statement = select(func.count()).where(Voice.sample_audio_id == audio_id)
         return session.scalar(statement) or 0
 
     def delete(self, session: Session, audio: Audio) -> None:

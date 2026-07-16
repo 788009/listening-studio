@@ -37,9 +37,9 @@ class VoiceVisibility(str, Enum):
     PUBLIC = "public"
 
 
-class VoiceExampleMode(str, Enum):
-    REFERENCE = "reference"
-    AUDIO = "audio"
+class VoiceSampleSource(str, Enum):
+    ORIGINAL = "original"
+    PUBLIC_AUDIO = "public_audio"
 
 
 voice_tag_associations = Table(
@@ -62,9 +62,9 @@ class Voice(Base):
     __tablename__ = "voices"
     __table_args__ = (
         CheckConstraint(
-            "(example_mode = 'reference' AND example_audio_id IS NULL) OR "
-            "(example_mode = 'audio' AND example_audio_id IS NOT NULL)",
-            name="ck_voices_example_source",
+            "(sample_source = 'original' AND sample_audio_id IS NULL) OR "
+            "(sample_source = 'public_audio' AND sample_audio_id IS NOT NULL)",
+            name="ck_voices_sample_source_consistency",
         ),
         Index("ix_voices_normalized_title", "normalized_title"),
     )
@@ -102,23 +102,23 @@ class Voice(Base):
         server_default=VoiceVisibility.PRIVATE.value,
         nullable=False,
     )
-    example_mode: Mapped[VoiceExampleMode] = mapped_column(
+    sample_source: Mapped[VoiceSampleSource] = mapped_column(
         SqlEnum(
-            VoiceExampleMode,
-            name="ck_voices_example_mode",
+            VoiceSampleSource,
+            name="ck_voices_sample_source",
             native_enum=False,
             create_constraint=True,
             length=16,
             values_callable=lambda enum: [item.value for item in enum],
         ),
-        default=VoiceExampleMode.REFERENCE,
-        server_default=VoiceExampleMode.REFERENCE.value,
+        default=VoiceSampleSource.ORIGINAL,
+        server_default=VoiceSampleSource.ORIGINAL.value,
         nullable=False,
     )
-    example_audio_id: Mapped[int | None] = mapped_column(
+    sample_audio_id: Mapped[int | None] = mapped_column(
         ForeignKey(
             "audios.id",
-            name="fk_voices_example_audio_id_audios",
+            name="fk_voices_sample_audio_id_audios",
             ondelete="RESTRICT",
         )
     )
@@ -135,8 +135,8 @@ class Voice(Base):
         nullable=False,
     )
     author: Mapped["User"] = relationship()
-    example_audio: Mapped["Audio | None"] = relationship(
-        foreign_keys=[example_audio_id]
+    sample_audio: Mapped["Audio | None"] = relationship(
+        foreign_keys=[sample_audio_id]
     )
     tags: Mapped[list["VoiceTag"]] = relationship(
         secondary=voice_tag_associations,

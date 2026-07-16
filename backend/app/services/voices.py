@@ -13,7 +13,7 @@ from backend.app.core.exceptions import (
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import (
     Voice,
-    VoiceExampleMode,
+    VoiceSampleSource,
     VoiceStatus,
     VoiceVisibility,
 )
@@ -56,13 +56,13 @@ class VoiceService:
         *,
         author: User,
         title: str,
-        example_mode: VoiceExampleMode = VoiceExampleMode.REFERENCE,
-        example_audio_id: int | None = None,
+        sample_source: VoiceSampleSource = VoiceSampleSource.ORIGINAL,
+        sample_audio_id: int | None = None,
     ) -> Voice:
         if not author.is_profile_complete or author.user_id is None:
             raise ProfileIncompleteError()
         normalized_title, search_title = self._normalize_title(title)
-        self._validate_example_source(example_mode, example_audio_id)
+        self._validate_sample_source(sample_source, sample_audio_id)
 
         author_value = normalize_english_tag_value(author.user_id)
         author_tag = self.tag_repository.get_by_normalized_value(
@@ -83,8 +83,8 @@ class VoiceService:
             author=author,
             title=normalized_title,
             normalized_title=search_title,
-            example_mode=example_mode,
-            example_audio_id=example_audio_id,
+            sample_source=sample_source,
+            sample_audio_id=sample_audio_id,
             author_tag=author_tag,
         )
         self.storage.prepare_directory(voice.id)
@@ -188,30 +188,46 @@ class VoiceService:
             )
         return value, normalized_value
 
+    def set_sample_source(
+        self,
+        session: Session,
+        voice: Voice,
+        sample_source: VoiceSampleSource,
+        sample_audio_id: int | None,
+    ) -> Voice:
+        self._validate_sample_source(sample_source, sample_audio_id)
+        voice.sample_source = sample_source
+        voice.sample_audio_id = sample_audio_id
+        session.flush()
+        return voice
+
     @staticmethod
-    def _validate_example_source(
-        example_mode: VoiceExampleMode,
-        example_audio_id: int | None,
+    def _validate_sample_source(
+        sample_source: VoiceSampleSource,
+        sample_audio_id: int | None,
     ) -> None:
-        if not isinstance(example_mode, VoiceExampleMode):
+        if not isinstance(sample_source, VoiceSampleSource):
             raise DomainValidationError(
-                "Voice example mode is invalid",
-                details={"field": "exampleMode"},
+                "Voice sample source is invalid",
+                details={"field": "sampleSource"},
             )
         has_audio_id = (
-            isinstance(example_audio_id, int)
-            and not isinstance(example_audio_id, bool)
-            and example_audio_id > 0
+            isinstance(sample_audio_id, int)
+            and not isinstance(sample_audio_id, bool)
+            and sample_audio_id > 0
         )
-        if example_mode is VoiceExampleMode.REFERENCE and example_audio_id is not None:
+        if (
+            sample_source is VoiceSampleSource.ORIGINAL
+            and sample_audio_id is not None
+        ):
             raise DomainValidationError(
-                "Reference examples cannot specify an audio ID",
-                details={"field": "exampleAudioId"},
+                "Original samples cannot specify an audio ID",
+                details={"field": "sampleAudioId"},
             )
-        if example_mode is VoiceExampleMode.AUDIO and not has_audio_id:
+        if sample_source is VoiceSampleSource.PUBLIC_AUDIO and not has_audio_id:
             raise DomainValidationError(
-                "Audio examples require a positive audio ID",
-                details={"field": "exampleAudioId"},
+                "Public audio samples require a positive audio ID",
+                details={"field": "sampleAudioId"},
             )
 
     @staticmethod

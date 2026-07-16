@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
+from backend.app.api.media import stream_wav
 from backend.app.api.schemas import LanguageCode, ResourceId
 from backend.app.api.tag_schemas import (
     TagTranslationResponse,
@@ -30,6 +32,7 @@ from backend.app.services.voice_storage import VoiceStorage
 
 
 router = APIRouter(prefix="/api/voices", tags=["voices"])
+media_router = APIRouter(prefix="/media/voice", tags=["media"])
 
 
 def _service(request: Request) -> VoiceManagementService:
@@ -75,8 +78,8 @@ def _voice_response(
         title=voice.title,
         status=voice.status,
         visibility=voice.visibility,
-        example_mode=voice.example_mode,
-        example_audio_id=voice.example_audio_id,
+        sample_source=voice.sample_source,
+        sample_audio_id=voice.sample_audio_id,
         error_summary=voice.error_summary if is_owner else None,
         tags=[_tag_response(tag, language) for tag in voice.tags],
     )
@@ -149,6 +152,8 @@ async def update_voice(
         title=payload.title,
         gender_tag_ids=payload.gender_tag_ids,
         visibility=payload.visibility,
+        sample_source=payload.sample_source,
+        sample_audio_id=payload.sample_audio_id,
     )
     return _voice_response(voice, principal, current_user.locale)
 
@@ -167,3 +172,22 @@ async def delete_voice(
         request_id=request.state.request_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@media_router.get("/{voice_id}/sample")
+async def play_voice_sample(
+    voice_id: ResourceId,
+    request: Request,
+    current_user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> StreamingResponse:
+    path = _service(request).resolve_sample_path(
+        session,
+        Principal(current_user),
+        voice_id,
+    )
+    return stream_wav(
+        request,
+        path,
+        cache_control="private, no-store",
+    )

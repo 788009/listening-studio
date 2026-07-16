@@ -102,7 +102,7 @@ class AudioManagementService:
         if visibility is not None:
             if visibility is AudioVisibility.PUBLIC:
                 self.authorization.require_publish(principal, descriptor)
-            elif self.repository.count_voice_example_references(session, audio.id):
+            elif self.repository.count_voice_sample_references(session, audio.id):
                 raise ConflictError(
                     "Audio is used as a voice example",
                     details={
@@ -167,7 +167,7 @@ class AudioManagementService:
         return list(
             session.scalars(
                 select(Voice.id)
-                .where(Voice.example_audio_id == audio_id)
+                .where(Voice.sample_audio_id == audio_id)
                 .order_by(Voice.id)
             )
         )

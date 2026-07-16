@@ -20,7 +20,7 @@ from backend.app.db.models.audio import (
 )
 from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.user import User
-from backend.app.db.models.voice import VoiceExampleMode
+from backend.app.db.models.voice import VoiceSampleSource
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
 from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT_HEADER
@@ -198,8 +198,8 @@ class AudioApiIntegrationTest(unittest.TestCase):
                 session,
                 author=user,
                 title="Uses audio",
-                example_mode=VoiceExampleMode.AUDIO,
-                example_audio_id=referenced.id,
+                sample_source=VoiceSampleSource.PUBLIC_AUDIO,
+                sample_audio_id=referenced.id,
             )
             processing = AudioService(self.storage).create_audio(
                 session,

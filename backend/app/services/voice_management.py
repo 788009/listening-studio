@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -9,7 +10,7 @@ from backend.app.core.exceptions import ConflictError, NotFoundError
 from backend.app.db.models.audio import Audio
 from backend.app.db.models.voice import (
     Voice,
-    VoiceExampleMode,
+    VoiceSampleSource,
     VoiceStatus,
     VoiceVisibility,
 )
@@ -102,6 +103,8 @@ class VoiceManagementService:
         title: str | None = None,
         gender_tag_ids: list[int] | None = None,
         visibility: VoiceVisibility | None = None,
+        sample_source: VoiceSampleSource | None = None,
+        sample_audio_id: int | None = None,
     ) -> Voice:
         voice = self.repository.get_by_id(session, voice_id)
         if voice is None:
@@ -113,12 +116,49 @@ class VoiceManagementService:
         if gender_tag_ids is not None:
             tags = self._gender_tags(session, gender_tag_ids)
             self.voice_service.replace_gender_tags(session, voice, tags)
+        if sample_source is not None:
+            self._set_sample_source(
+                session,
+                principal,
+                voice,
+                sample_source,
+                sample_audio_id,
+            )
         if visibility is not None:
             if visibility is VoiceVisibility.PUBLIC:
                 self.authorization.require_publish(principal, descriptor)
                 self._require_playable_example(session, principal, voice)
             self.voice_service.set_visibility(session, voice, visibility)
         return voice
+
+    def resolve_sample_path(
+        self,
+        session: Session,
+        principal: AuthorizationPrincipal,
+        voice_id: int,
+    ) -> Path:
+        voice = self.repository.get_by_id(session, voice_id)
+        if voice is None:
+            raise NotFoundError("Voice not found")
+        is_owner = bool(
+            principal.user is not None and principal.user.id == voice.author_id
+        )
+        if not is_owner:
+            self.authorization.require_use_for_synthesis(
+                principal,
+                self._descriptor(voice),
+            )
+        if voice.sample_source is VoiceSampleSource.ORIGINAL:
+            path = self.voice_storage.path(voice.id, VoiceAsset.REFERENCE)
+            if not path.is_file():
+                raise NotFoundError("Voice original sample not found")
+            return path
+        audio = self._require_public_audio(
+            session,
+            principal,
+            voice.sample_audio_id,
+        )
+        return self.audio_storage.path(audio.id)
 
     def delete(
         self,
@@ -176,13 +216,47 @@ class VoiceManagementService:
         principal: AuthorizationPrincipal,
         voice: Voice,
     ) -> None:
-        if voice.example_mode is VoiceExampleMode.REFERENCE:
+        if voice.sample_source is VoiceSampleSource.ORIGINAL:
             if not self.voice_storage.exists(voice.id, VoiceAsset.REFERENCE):
-                raise ConflictError("Voice reference audio is unavailable")
+                raise ConflictError("Voice original sample is unavailable")
             return
-        audio = session.get(Audio, voice.example_audio_id)
+        self._require_public_audio(session, principal, voice.sample_audio_id)
+
+    def _set_sample_source(
+        self,
+        session: Session,
+        principal: AuthorizationPrincipal,
+        voice: Voice,
+        sample_source: VoiceSampleSource,
+        sample_audio_id: int | None,
+    ) -> None:
+        if sample_source is VoiceSampleSource.ORIGINAL:
+            if not self.voice_storage.exists(voice.id, VoiceAsset.REFERENCE):
+                raise ConflictError("Voice original sample is unavailable")
+            self.voice_service.set_sample_source(
+                session,
+                voice,
+                sample_source,
+                None,
+            )
+            return
+        audio = self._require_public_audio(session, principal, sample_audio_id)
+        self.voice_service.set_sample_source(
+            session,
+            voice,
+            sample_source,
+            audio.id,
+        )
+
+    def _require_public_audio(
+        self,
+        session: Session,
+        principal: AuthorizationPrincipal,
+        audio_id: int | None,
+    ) -> Audio:
+        audio = session.get(Audio, audio_id)
         if audio is None:
-            raise ConflictError("Voice example audio is unavailable")
+            raise NotFoundError("Sample audio not found")
         descriptor = ResourceDescriptor(
             kind=ResourceKind.AUDIO,
             author_id=audio.author_id,
@@ -191,6 +265,7 @@ class VoiceManagementService:
             file_exists=self.audio_storage.exists(audio.id),
         )
         self.authorization.require_use_as_example(principal, descriptor)
+        return audio
 
     def _gender_tags(self, session: Session, tag_ids: list[int]) -> list[VoiceTag]:
         tags: list[VoiceTag] = []

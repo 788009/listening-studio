@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -14,10 +11,10 @@ from backend.app.api.audio_schemas import (
     AudioUpdateRequest,
     AudioUtteranceResponse,
 )
+from backend.app.api.media import stream_wav
 from backend.app.api.schemas import LanguageCode, ResourceId
 from backend.app.api.tag_schemas import AudioTagResponse, TagTranslationResponse
 from backend.app.core.auth import Principal, get_principal, require_completed_profile
-from backend.app.core.exceptions import ConflictError, NotFoundError
 from backend.app.db.models.audio import Audio, AudioStatus, AudioVisibility
 from backend.app.db.models.audio_tag import AudioTag
 from backend.app.db.models.user import User
@@ -174,67 +171,12 @@ async def play_audio(
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
     audio = _service(request).get_visible(session, principal, audio_id)
-    path = AudioStorage(request.app.state.settings.data_dir).path(audio.id)
-    if not path.is_file():
-        raise NotFoundError("Audio file not found")
-    size = path.stat().st_size
-    if size == 0:
-        raise ConflictError("Audio file is empty")
-    start, end, partial = _range(request.headers.get("range"), size)
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(end - start + 1),
-        "Cache-Control": (
+    return stream_wav(
+        request,
+        AudioStorage(request.app.state.settings.data_dir).path(audio.id),
+        cache_control=(
             "public, max-age=3600"
             if audio.visibility is AudioVisibility.PUBLIC
             else "private, no-store"
         ),
-    }
-    if partial:
-        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
-    return StreamingResponse(
-        _file_range(path, start, end),
-        status_code=206 if partial else 200,
-        media_type="audio/wav",
-        headers=headers,
     )
-
-
-def _range(value: str | None, size: int) -> tuple[int, int, bool]:
-    if value is None:
-        return 0, size - 1, False
-    try:
-        unit, specification = value.split("=", maxsplit=1)
-        if unit.casefold() != "bytes" or "," in specification:
-            raise ValueError
-        start_value, end_value = specification.split("-", maxsplit=1)
-        if not start_value:
-            length = int(end_value)
-            if length <= 0:
-                raise ValueError
-            start, end = max(0, size - length), size - 1
-        else:
-            start = int(start_value)
-            end = int(end_value) if end_value else size - 1
-            if start < 0 or start >= size or end < start:
-                raise ValueError
-            end = min(end, size - 1)
-        return start, end, True
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=416,
-            detail="Requested range is not satisfiable",
-            headers={"Content-Range": f"bytes */{size}"},
-        ) from None
-
-
-async def _file_range(path: Path, start: int, end: int) -> AsyncIterator[bytes]:
-    remaining = end - start + 1
-    with path.open("rb") as source:
-        source.seek(start)
-        while remaining:
-            chunk = source.read(min(64 * 1024, remaining))
-            if not chunk:
-                break
-            remaining -= len(chunk)
-            yield chunk

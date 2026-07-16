@@ -15,9 +15,19 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.auth import Principal
 from backend.app.core.config import Settings
-from backend.app.db.models.audio import AudioSourceType
+from backend.app.db.models.audio import (
+    Audio,
+    AudioSourceType,
+    AudioStatus,
+    AudioVisibility,
+)
 from backend.app.db.models.user import User
-from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
+from backend.app.db.models.voice import (
+    Voice,
+    VoiceSampleSource,
+    VoiceStatus,
+    VoiceVisibility,
+)
 from backend.app.db.models.voice_tag import VoiceTagType
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
@@ -136,6 +146,32 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             target_visibility=visibility,
             request_id="voice-api-setup",
         )
+
+    def ready_audio(
+        self,
+        session: Session,
+        author: User,
+        title: str,
+        visibility: AudioVisibility,
+    ) -> Audio:
+        service = AudioService(self.audio_storage)
+        audio = service.create_audio(
+            session,
+            author=author,
+            title=title,
+            source_type=AudioSourceType.CORPUS,
+            text="Sample text",
+        )
+        service.transition_status(session, audio, AudioStatus.PROCESSING)
+        voice_file = self.root / f"audio-voice-{audio.id}.pt"
+        voice_file.write_bytes(b"voice")
+        temporary = self.audio_storage.temporary_audio_path(audio.id)
+        FakeCosyVoiceIntegration().synthesize(voice_file, "text", temporary)
+        self.audio_storage.atomic_replace(audio.id, audio.id)
+        service.record_file_metadata(session, audio)
+        service.transition_status(session, audio, AudioStatus.READY)
+        service.set_visibility(session, audio, visibility)
+        return audio
 
     def test_list_detail_filters_search_and_permissions(self) -> None:
         self.complete_profile("first", "TeacherOne")
@@ -312,6 +348,161 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             reloaded = session.get(Voice, ready.id)
             assert reloaded is not None
             self.assertEqual(reloaded.normalized_title, "after")
+
+    def test_sample_source_switch_validation_and_playback_permissions(self) -> None:
+        self.complete_profile("first", "TeacherOne")
+        self.complete_profile("second", "TeacherTwo")
+        with self.app.state.session_factory() as session:
+            first = self.user(session, "TeacherOne")
+            selectable = self.ready_audio(
+                session,
+                first,
+                "Selectable",
+                AudioVisibility.PUBLIC,
+            )
+            private_audio = self.ready_audio(
+                session,
+                first,
+                "Private",
+                AudioVisibility.PRIVATE,
+            )
+            failed_audio = AudioService(self.audio_storage).create_audio(
+                session,
+                author=first,
+                title="Failed",
+                source_type=AudioSourceType.CORPUS,
+                text="Failed text",
+            )
+            AudioService(self.audio_storage).transition_status(
+                session,
+                failed_audio,
+                AudioStatus.PROCESSING,
+            )
+            AudioService(self.audio_storage).transition_status(
+                session,
+                failed_audio,
+                AudioStatus.FAILED,
+                error_summary="failed",
+            )
+            failed_audio.visibility = AudioVisibility.PUBLIC
+            private_voice = self.upload_voice(
+                session,
+                first,
+                "Private voice",
+                VoiceVisibility.PRIVATE,
+            )
+            public_voice = self.upload_voice(
+                session,
+                first,
+                "Public voice",
+                VoiceVisibility.PUBLIC,
+            )
+            session.commit()
+
+        anonymous_original = self.send(
+            "GET",
+            f"/media/voice/{public_voice.id}/sample",
+        )
+        owner_original = self.send(
+            "GET",
+            f"/media/voice/{private_voice.id}/sample",
+            headers=self.headers("first"),
+        )
+        teacher_original = self.send(
+            "GET",
+            f"/media/voice/{public_voice.id}/sample",
+            headers=self.headers("second"),
+        )
+        hidden_original = self.send(
+            "GET",
+            f"/media/voice/{private_voice.id}/sample",
+            headers=self.headers("second"),
+        )
+        private_rejected = self.send(
+            "PATCH",
+            f"/api/voices/{private_voice.id}",
+            headers=self.headers("first"),
+            json={
+                "sampleSource": "public_audio",
+                "sampleAudioId": private_audio.id,
+            },
+        )
+        failed_rejected = self.send(
+            "PATCH",
+            f"/api/voices/{private_voice.id}",
+            headers=self.headers("first"),
+            json={
+                "sampleSource": "public_audio",
+                "sampleAudioId": failed_audio.id,
+            },
+        )
+        missing_rejected = self.send(
+            "PATCH",
+            f"/api/voices/{private_voice.id}",
+            headers=self.headers("first"),
+            json={"sampleSource": "public_audio", "sampleAudioId": 999999},
+        )
+        selected = self.send(
+            "PATCH",
+            f"/api/voices/{private_voice.id}",
+            headers=self.headers("first"),
+            json={
+                "sampleSource": "public_audio",
+                "sampleAudioId": selectable.id,
+            },
+        )
+        selected_sample = self.send(
+            "GET",
+            f"/media/voice/{private_voice.id}/sample",
+            headers=self.headers("first"),
+        )
+        referenced_conflict = self.send(
+            "PATCH",
+            f"/api/audios/{selectable.id}",
+            headers=self.headers("first"),
+            json={"visibility": "private"},
+        )
+        restored = self.send(
+            "PATCH",
+            f"/api/voices/{private_voice.id}",
+            headers=self.headers("first"),
+            json={"sampleSource": "original"},
+        )
+        released = self.send(
+            "PATCH",
+            f"/api/audios/{selectable.id}",
+            headers=self.headers("first"),
+            json={"visibility": "private"},
+        )
+
+        self.assertEqual(anonymous_original.status_code, 401)
+        self.assertEqual(owner_original.status_code, 200)
+        self.assertEqual(teacher_original.status_code, 200)
+        self.assertEqual(hidden_original.status_code, 404)
+        self.assertEqual(private_rejected.status_code, 409)
+        self.assertEqual(failed_rejected.status_code, 409)
+        self.assertEqual(missing_rejected.status_code, 404)
+        self.assertEqual(selected.status_code, 200)
+        self.assertEqual(selected.json()["sampleSource"], "public_audio")
+        self.assertEqual(selected.json()["sampleAudioId"], selectable.id)
+        self.assertEqual(selected_sample.status_code, 200)
+        self.assertEqual(
+            selected_sample.content,
+            self.audio_storage.path(selectable.id).read_bytes(),
+        )
+        self.assertEqual(referenced_conflict.status_code, 409)
+        self.assertEqual(
+            referenced_conflict.json()["error"]["details"]["voiceIds"],
+            [private_voice.id],
+        )
+        self.assertEqual(restored.status_code, 200)
+        self.assertEqual(restored.json()["sampleSource"], "original")
+        self.assertNotIn("sampleAudioId", restored.json())
+        self.assertEqual(released.status_code, 200)
+        self.assertEqual(
+            {path.name for path in self.voice_storage.directory(private_voice.id).iterdir()},
+            {"voice.pt", "reference.wav"},
+        )
 
     def test_delete_checks_references_and_restores_on_failure(self) -> None:
         self.complete_profile("first", "TeacherOne")
