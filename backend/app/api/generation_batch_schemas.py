@@ -22,6 +22,13 @@ class GenerationBatchItemResponse(TagApiModel):
     status: GenerationBatchStatus
     audio_id: int | None = None
     error_summary: str | None = None
+    question_types: list[QuestionType] | None = None
+    attempt_count: int = Field(ge=0)
+
+
+class GenerationBatchSpeakerVoiceResponse(TagApiModel):
+    speaker: str
+    voice_id: int
 
 
 class GenerationBatchResponse(TagApiModel):
@@ -32,6 +39,7 @@ class GenerationBatchResponse(TagApiModel):
     status: GenerationBatchStatus
     tags: list[GenerationBatchTagResponse]
     items: list[GenerationBatchItemResponse]
+    speaker_voices: list[GenerationBatchSpeakerVoiceResponse]
     error_summary: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -39,6 +47,12 @@ class GenerationBatchResponse(TagApiModel):
 
 class GenerationBatchAccepted(TagApiModel):
     batch_id: int
+    job_id: int
+
+
+class GenerationBatchRetryAccepted(TagApiModel):
+    batch_id: int
+    item_id: int
     job_id: int
 
 

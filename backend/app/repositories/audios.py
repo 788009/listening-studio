@@ -155,6 +155,18 @@ class AudioRepository:
         statement = select(func.count()).where(Voice.sample_audio_id == audio_id)
         return session.scalar(statement) or 0
 
+    def count_generation_batch_references(
+        self,
+        session: Session,
+        audio_id: int,
+    ) -> int:
+        from backend.app.db.models.generation_batch import GenerationBatchItem
+
+        statement = select(func.count()).where(
+            GenerationBatchItem.audio_id == audio_id
+        )
+        return session.scalar(statement) or 0
+
     def delete(self, session: Session, audio: Audio) -> None:
         session.delete(audio)
         session.flush()

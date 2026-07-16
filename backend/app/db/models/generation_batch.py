@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from backend.app.db.models.audio_tag import AudioTag
     from backend.app.db.models.job import Job
     from backend.app.db.models.user import User
+    from backend.app.db.models.voice import Voice
 
 
 class GenerationBatchStatus(str, Enum):
@@ -114,6 +115,12 @@ class GenerationBatch(Base):
         passive_deletes=True,
         order_by="GenerationBatchItem.position",
     )
+    speaker_voices: Mapped[list["GenerationBatchSpeakerVoice"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="GenerationBatchSpeakerVoice.id",
+    )
 
 
 class GenerationBatchItem(Base):
@@ -150,6 +157,13 @@ class GenerationBatchItem(Base):
     audio_id: Mapped[int | None] = mapped_column(
         ForeignKey("audios.id", ondelete="RESTRICT")
     )
+    generated_content: Mapped[dict[str, object] | None] = mapped_column(JSON)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
     error_summary: Mapped[str | None] = mapped_column(String(1000))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -164,3 +178,28 @@ class GenerationBatchItem(Base):
     )
     batch: Mapped[GenerationBatch] = relationship(back_populates="items")
     audio: Mapped["Audio | None"] = relationship()
+
+
+class GenerationBatchSpeakerVoice(Base):
+    __tablename__ = "generation_batch_speaker_voices"
+    __table_args__ = (
+        UniqueConstraint(
+            "batch_id",
+            "normalized_speaker",
+            name="uq_generation_batch_speaker_voices_role",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("generation_batches.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    speaker: Mapped[str] = mapped_column(String(200), nullable=False)
+    normalized_speaker: Mapped[str] = mapped_column(String(200), nullable=False)
+    voice_id: Mapped[int] = mapped_column(
+        ForeignKey("voices.id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    batch: Mapped[GenerationBatch] = relationship(back_populates="speaker_voices")
+    voice: Mapped["Voice"] = relationship()

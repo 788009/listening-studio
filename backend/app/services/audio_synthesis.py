@@ -228,7 +228,10 @@ class AudioSynthesisService:
                 )
             if audio.source_type is AudioSourceType.SINGLE_SPEAKER:
                 self._synthesize_single(audio, job_id, checkpoint)
-            elif audio.source_type is AudioSourceType.MULTI_TURN:
+            elif audio.source_type in {
+                AudioSourceType.MULTI_TURN,
+                AudioSourceType.CORPUS,
+            }:
                 self._validate_silence(silence_milliseconds)
                 self._synthesize_dialogue(
                     audio,

@@ -181,12 +181,17 @@ class VoiceManagementService:
             session,
             voice.id,
         )
-        if utterance_count:
+        batch_mapping_count = self.repository.count_generation_batch_references(
+            session,
+            voice.id,
+        )
+        if utterance_count or batch_mapping_count:
             raise ConflictError(
-                "Voice is referenced by audio utterances",
+                "Voice is still in use",
                 details={
                     "activeTaskCount": 0,
                     "audioUtteranceCount": utterance_count,
+                    "batchVoiceMappingCount": batch_mapping_count,
                 },
             )
 

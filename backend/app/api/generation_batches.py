@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
@@ -10,6 +11,8 @@ from backend.app.api.generation_batch_schemas import (
     GenerationBatchItemResponse,
     GenerationBatchListResponse,
     GenerationBatchResponse,
+    GenerationBatchRetryAccepted,
+    GenerationBatchSpeakerVoiceResponse,
     GenerationBatchTagResponse,
 )
 from backend.app.api.schemas import ResourceId
@@ -21,6 +24,7 @@ from backend.app.db.session import get_db_session
 from backend.app.integrations.llm import QuestionType
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.generation_batches import GenerationBatchService
+from backend.app.services.voice_storage import VoiceStorage
 
 
 router = APIRouter(prefix="/api/generation-batches", tags=["generation-batches"])
@@ -30,6 +34,7 @@ def _service(request: Request) -> GenerationBatchService:
     settings = request.app.state.settings
     return GenerationBatchService(
         storage=CorpusStorage(settings.data_dir),
+        voice_storage=VoiceStorage(settings.data_dir),
         max_corpus_bytes=settings.max_corpus_bytes,
         max_generation_count=settings.max_batch_generation_count,
     )
@@ -57,13 +62,51 @@ def _response(batch: GenerationBatch) -> GenerationBatchResponse:
                 status=item.status,
                 audio_id=item.audio_id,
                 error_summary=item.error_summary,
+                question_types=_item_question_types(item.generated_content),
+                attempt_count=item.attempt_count,
             )
             for item in batch.items
+        ],
+        speaker_voices=[
+            GenerationBatchSpeakerVoiceResponse(
+                speaker=item.speaker,
+                voice_id=item.voice_id,
+            )
+            for item in batch.speaker_voices
         ],
         error_summary=batch.error_summary,
         created_at=batch.created_at,
         updated_at=batch.updated_at,
     )
+
+
+def _item_question_types(
+    content: dict[str, object] | None,
+) -> list[QuestionType] | None:
+    if content is None:
+        return None
+    values = content.get("question_types")
+    if not isinstance(values, list):
+        return None
+    return [QuestionType(value) for value in values]
+
+
+def _parse_speaker_voice_map(value: str | None) -> dict[str, int]:
+    if value is None:
+        return {}
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError) as exc:
+        raise DomainValidationError(
+            "Speaker voice map must be valid JSON",
+            details={"field": "speakerVoiceMap"},
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise DomainValidationError(
+            "Speaker voice map must be an object",
+            details={"field": "speakerVoiceMap"},
+        )
+    return parsed
 
 
 @router.post(
@@ -79,6 +122,10 @@ async def create_generation_batch(
     file: Annotated[UploadFile | None, File()] = None,
     encoding: Annotated[str | None, Form()] = None,
     tag_ids: Annotated[list[int] | None, Form(alias="tagIds")] = None,
+    speaker_voice_map: Annotated[
+        str | None,
+        Form(alias="speakerVoiceMap"),
+    ] = None,
     user: User = Depends(require_completed_profile),
     session: Session = Depends(get_db_session),
 ) -> GenerationBatchAccepted:
@@ -103,6 +150,7 @@ async def create_generation_batch(
             question_types=question_types,
             count=count,
             tag_ids=tag_ids or [],
+            speaker_voice_map=_parse_speaker_voice_map(speaker_voice_map),
             request_id=request.state.request_id,
         )
     else:
@@ -117,6 +165,7 @@ async def create_generation_batch(
             question_types=question_types,
             count=count,
             tag_ids=tag_ids or [],
+            speaker_voice_map=_parse_speaker_voice_map(speaker_voice_map),
             request_id=request.state.request_id,
         )
     return GenerationBatchAccepted(
@@ -163,3 +212,28 @@ async def get_generation_batch(
     session: Session = Depends(get_db_session),
 ) -> GenerationBatchResponse:
     return _response(_service(request).get_owned(session, user, batch_id))
+
+
+@router.post(
+    "/{batch_id}/items/{item_id}/retry",
+    response_model=GenerationBatchRetryAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def retry_generation_batch_item(
+    batch_id: ResourceId,
+    item_id: ResourceId,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> GenerationBatchRetryAccepted:
+    submission = _service(request).retry_item(
+        session,
+        user,
+        batch_id=batch_id,
+        item_id=item_id,
+    )
+    return GenerationBatchRetryAccepted(
+        batch_id=submission.batch.id,
+        item_id=submission.item_id,
+        job_id=submission.job.id,
+    )

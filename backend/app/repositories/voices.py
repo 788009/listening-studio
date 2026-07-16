@@ -4,6 +4,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.db.models.audio import AudioUtterance
+from backend.app.db.models.generation_batch import GenerationBatchSpeakerVoice
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceSampleSource
 from backend.app.db.models.voice_tag import VoiceTag
@@ -30,6 +31,18 @@ class VoiceRepository:
         voice_id: int,
     ) -> int:
         statement = select(func.count()).where(AudioUtterance.voice_id == voice_id)
+        return session.scalar(statement) or 0
+
+    def count_generation_batch_references(
+        self,
+        session: Session,
+        voice_id: int,
+    ) -> int:
+        statement = (
+            select(func.count()).where(
+                GenerationBatchSpeakerVoice.voice_id == voice_id
+            )
+        )
         return session.scalar(statement) or 0
 
     def delete(self, session: Session, voice: Voice) -> None:

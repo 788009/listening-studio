@@ -148,6 +148,15 @@ class AudioManagementService:
                 "Audio is used as a voice example",
                 details={"activeTaskCount": 0, "voiceIds": voice_ids},
             )
+        batch_item_count = self.repository.count_generation_batch_references(
+            session,
+            audio.id,
+        )
+        if batch_item_count:
+            raise ConflictError(
+                "Audio is part of a generation batch",
+                details={"batchItemCount": batch_item_count},
+            )
         staged = self.storage.stage_delete(audio.id)
         try:
             self.repository.delete(session, audio)

@@ -7,11 +7,18 @@ from backend.app.core.config import Settings, get_settings
 from backend.app.core.logging import configure_logging
 from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.integrations.cosyvoice import CosyVoiceAdapter
+from backend.app.integrations.llm import (
+    PlaceholderListeningContentGenerator,
+    ValidatingListeningContentGenerator,
+)
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audio_synthesis import (
     AUDIO_SYNTHESIS_JOB_TYPE,
     AudioSynthesisService,
 )
+from backend.app.services.corpus_generation import CorpusGenerationService
+from backend.app.services.corpus_storage import CorpusStorage
+from backend.app.services.generation_batches import CORPUS_GENERATION_JOB_TYPE
 from backend.app.services.job_storage import JobStorage
 from backend.app.services.voice_storage import VoiceStorage
 from backend.app.services.voice_uploads import (
@@ -19,6 +26,7 @@ from backend.app.services.voice_uploads import (
     VoiceUploadService,
 )
 from backend.app.workers.audio_synthesis import AudioSynthesisJobHandler
+from backend.app.workers.corpus_generation import CorpusGenerationJobHandler
 from backend.app.workers.jobs import JobHandler, JobWorker
 from backend.app.workers.voice_upload import VoiceUploadJobHandler
 
@@ -37,9 +45,19 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         voice_storage=voice_storage,
         integration=integration,
     )
+    corpus_service = CorpusGenerationService(
+        generator=ValidatingListeningContentGenerator(
+            PlaceholderListeningContentGenerator()
+        ),
+        corpus_storage=CorpusStorage(settings.data_dir),
+        synthesis_service=audio_service,
+        voice_storage=voice_storage,
+        silence_milliseconds=settings.dialogue_silence_milliseconds,
+    )
     return {
         VOICE_UPLOAD_JOB_TYPE: VoiceUploadJobHandler(voice_service),
         AUDIO_SYNTHESIS_JOB_TYPE: AudioSynthesisJobHandler(audio_service),
+        CORPUS_GENERATION_JOB_TYPE: CorpusGenerationJobHandler(corpus_service),
     }
 
 

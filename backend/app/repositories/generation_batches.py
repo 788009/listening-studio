@@ -9,6 +9,7 @@ from backend.app.db.models.audio_tag import AudioTag
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
+    GenerationBatchSpeakerVoice,
 )
 from backend.app.db.models.job import Job
 from backend.app.db.models.user import User
@@ -18,6 +19,7 @@ class GenerationBatchRepository:
     _load_options = (
         selectinload(GenerationBatch.tags),
         selectinload(GenerationBatch.items),
+        selectinload(GenerationBatch.speaker_voices),
     )
 
     def create(
@@ -29,6 +31,7 @@ class GenerationBatchRepository:
         question_types: list[str],
         requested_count: int,
         tags: Sequence[AudioTag],
+        speaker_voices: Sequence[tuple[str, str, int]],
     ) -> GenerationBatch:
         batch = GenerationBatch(
             owner=owner,
@@ -41,8 +44,24 @@ class GenerationBatchRepository:
         session.flush()
         for position in range(requested_count):
             session.add(GenerationBatchItem(batch=batch, position=position))
+        for speaker, normalized_speaker, voice_id in speaker_voices:
+            session.add(
+                GenerationBatchSpeakerVoice(
+                    batch=batch,
+                    speaker=speaker,
+                    normalized_speaker=normalized_speaker,
+                    voice_id=voice_id,
+                )
+            )
         session.flush()
         return batch
+
+    def get_item(
+        self,
+        session: Session,
+        item_id: int,
+    ) -> GenerationBatchItem | None:
+        return session.get(GenerationBatchItem, item_id)
 
     def get_by_id(self, session: Session, batch_id: int) -> GenerationBatch | None:
         statement = (

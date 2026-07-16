@@ -16,6 +16,7 @@ from backend.app.db.models.audio_tag import (
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
+    GenerationBatchSpeakerVoice,
     GenerationBatchStatus,
     generation_batch_tag_associations,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "JobStatus",
     "GenerationBatch",
     "GenerationBatchItem",
+    "GenerationBatchSpeakerVoice",
     "GenerationBatchStatus",
     "User",
     "UserStatus",
