@@ -13,6 +13,12 @@ from backend.app.db.models.audio_tag import (
     AudioTagTranslation,
     AudioTagType,
 )
+from backend.app.db.models.generation_batch import (
+    GenerationBatch,
+    GenerationBatchItem,
+    GenerationBatchStatus,
+    generation_batch_tag_associations,
+)
 from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.user import User, UserStatus
 from backend.app.db.models.voice import (
@@ -39,6 +45,9 @@ __all__ = [
     "AudioVisibility",
     "Job",
     "JobStatus",
+    "GenerationBatch",
+    "GenerationBatchItem",
+    "GenerationBatchStatus",
     "User",
     "UserStatus",
     "Voice",
@@ -49,5 +58,6 @@ __all__ = [
     "VoiceTagTranslation",
     "VoiceTagType",
     "audio_tag_associations",
+    "generation_batch_tag_associations",
     "voice_tag_associations",
 ]

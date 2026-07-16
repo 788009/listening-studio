@@ -5,6 +5,8 @@ from typing import Literal
 from pydantic import AliasChoices, Field, PositiveInt, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from backend.app.integrations.llm import MAX_GENERATION_COUNT
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -21,6 +23,12 @@ class Settings(BaseSettings):
     log_dir: Path = Path("logs")
     frontend_dist_dir: Path = Path("frontend/dist")
     max_upload_bytes: PositiveInt = 50 * 1024 * 1024
+    max_corpus_bytes: PositiveInt = 1 * 1024 * 1024
+    max_batch_generation_count: int = Field(
+        default=MAX_GENERATION_COUNT,
+        ge=1,
+        le=MAX_GENERATION_COUNT,
+    )
     dialogue_silence_milliseconds: int = Field(default=500, ge=0, le=10_000)
     debug_auth_enabled: bool = False
     auth_session_secret: SecretStr = SecretStr("development-only-change-before-use")

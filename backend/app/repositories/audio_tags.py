@@ -9,6 +9,9 @@ from backend.app.db.models.audio_tag import (
     AudioTagTranslation,
     AudioTagType,
 )
+from backend.app.db.models.generation_batch import (
+    generation_batch_tag_associations,
+)
 
 
 class AudioTagRepository:
@@ -99,12 +102,17 @@ class AudioTagRepository:
         return session.scalar(statement)
 
     def count_usage(self, session: Session, tag_id: int) -> int:
-        statement = (
+        audio_count = session.scalar(
             select(func.count())
             .select_from(audio_tag_associations)
             .where(audio_tag_associations.c.tag_id == tag_id)
         )
-        return session.scalar(statement) or 0
+        batch_count = session.scalar(
+            select(func.count())
+            .select_from(generation_batch_tag_associations)
+            .where(generation_batch_tag_associations.c.tag_id == tag_id)
+        )
+        return int(audio_count or 0) + int(batch_count or 0)
 
     def list_linked_audios(
         self,
