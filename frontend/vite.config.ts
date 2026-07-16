@@ -1,5 +1,5 @@
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
 
 const backendTarget = process.env.VITE_BACKEND_TARGET ?? 'http://127.0.0.1:8000'
@@ -22,5 +22,6 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     clearMocks: true,
+    exclude: [...configDefaults.exclude, 'e2e/**'],
   },
 })

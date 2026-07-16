@@ -75,11 +75,11 @@ function statusClass(status: string): string {
         <RouterLink
           v-if="detailPath(item)"
           :to="detailPath(item) ?? '/'"
-          class="break-words text-sm font-semibold hover:text-accent hover:underline"
+          class="break-all text-sm font-semibold hover:text-accent hover:underline"
         >
           {{ item.title }}
         </RouterLink>
-        <p v-else class="break-words text-sm font-semibold">{{ item.title }}</p>
+        <p v-else class="break-all text-sm font-semibold">{{ item.title }}</p>
         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
           <span :class="statusClass(item.status)" class="font-medium capitalize">
             {{ t(item.status.charAt(0).toUpperCase() + item.status.slice(1)) }}
@@ -89,7 +89,7 @@ function statusClass(status: string): string {
           </span>
           <time :datetime="item.createdAt">{{ formatDate(item.createdAt) }}</time>
         </div>
-        <p v-if="item.tags.length > 0" class="mt-2 break-words text-xs text-muted">
+        <p v-if="item.tags.length > 0" class="mt-2 break-all text-xs text-muted">
           {{ item.tags.map((tag) => `${tagLabel(tag.type)}: ${tag.value.replace(/_/g, ' ')}`).join(', ') }}
         </p>
         <p v-if="item.references.length > 0" class="mt-2 break-words text-xs text-danger">

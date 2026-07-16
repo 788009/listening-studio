@@ -33,6 +33,8 @@ logs/
 # Frontend dependencies and build output
 node_modules/
 frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
 
 # Editors and operating systems
 .idea/

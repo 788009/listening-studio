@@ -110,7 +110,7 @@ onUnmounted(creation.stopPolling)
         :aria-valuenow="creation.job?.progress ?? 0"
       >
         <div
-          class="h-full bg-accent transition-[width]"
+          class="h-full bg-accent transition-[width] motion-reduce:transition-none"
           :style="{ width: `${creation.job?.progress ?? 0}%` }"
         />
       </div>

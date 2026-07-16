@@ -9,7 +9,11 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="grid h-10 grid-cols-2 border border-line" :aria-label="t('Creation mode')">
+  <div
+    class="grid h-10 grid-cols-2 border border-line"
+    role="group"
+    :aria-label="t('Creation mode')"
+  >
     <button
       type="button"
       :aria-pressed="modelValue === 'single'"

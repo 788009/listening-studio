@@ -26,10 +26,15 @@ const classes = computed(() => ({
 </script>
 
 <template>
-  <span class="inline-flex items-center gap-2 text-sm font-medium" :class="classes">
+  <span
+    class="inline-flex items-center gap-2 text-sm font-medium"
+    :class="classes"
+    role="status"
+    aria-live="polite"
+  >
     <svg
       v-if="status === 'processing'"
-      class="h-4 w-4 animate-spin"
+      class="h-4 w-4 animate-spin motion-reduce:animate-none"
       viewBox="0 0 24 24"
       fill="none"
       aria-hidden="true"

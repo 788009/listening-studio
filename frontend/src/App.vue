@@ -36,6 +36,7 @@ const { t } = useI18n()
             {{ t('Library') }}
           </RouterLink>
           <RouterLink
+            v-if="auth.isTeacher"
             to="/create"
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"

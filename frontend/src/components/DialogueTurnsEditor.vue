@@ -118,7 +118,7 @@ function moveTurn(index: number, offset: -1 | 1): void {
             :value="turn.speaker"
             required
             maxlength="200"
-            pattern="[A-Za-z0-9_-]+(?:[ ]+[A-Za-z0-9_-]+)*"
+            pattern="[A-Za-z0-9_\-]+(?:[ ]+[A-Za-z0-9_\-]+)*"
             class="h-10 w-full min-w-0 border border-line px-3 text-sm"
             @input="updateTurn(index, { speaker: ($event.target as HTMLInputElement).value })"
           />

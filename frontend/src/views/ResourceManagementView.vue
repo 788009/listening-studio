@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 
 import {
   deleteAudio,
@@ -162,6 +162,31 @@ async function switchKind(value: ManagedResourceKind): Promise<void> {
   await Promise.all([loadTags(), loadResources()])
 }
 
+async function focusTab(index: number): Promise<void> {
+  const normalized = (index + tabs.length) % tabs.length
+  const tab = tabs[normalized]
+  if (!tab) return
+  await switchKind(tab.kind)
+  await nextTick()
+  document.getElementById(`resource-tab-${tab.kind}`)?.focus()
+}
+
+function handleTabKey(event: KeyboardEvent, index: number): void {
+  if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    void focusTab(index + 1)
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    void focusTab(index - 1)
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    void focusTab(0)
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    void focusTab(tabs.length - 1)
+  }
+}
+
 function resetFilters(): void {
   page.value = 1
   query.value = ''
@@ -283,14 +308,17 @@ onMounted(() => {
     <div class="border-b border-line" role="tablist" :aria-label="t('Resource type')">
       <div class="grid grid-cols-2 sm:grid-cols-4">
         <button
-          v-for="tab in tabs"
+          v-for="(tab, index) in tabs"
+          :id="`resource-tab-${tab.kind}`"
           :key="tab.kind"
           type="button"
           role="tab"
           :aria-selected="kind === tab.kind"
+          :tabindex="kind === tab.kind ? 0 : -1"
           class="h-11 border-b-2 px-4 text-sm font-medium"
           :class="kind === tab.kind ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'"
           @click="switchKind(tab.kind)"
+          @keydown="handleTabKey($event, index)"
         >
           {{ t(tab.label) }}
         </button>
@@ -365,14 +393,18 @@ onMounted(() => {
       <fieldset v-if="tagOptions.length > 0" class="mt-4 border-t border-line pt-4">
         <legend class="mb-2 text-sm font-medium">{{ t('Tags') }}</legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <label v-for="tag in tagOptions" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
+          <label
+            v-for="tag in tagOptions"
+            :key="tag.id"
+            class="flex min-w-0 max-w-full items-start gap-2 text-sm"
+          >
             <input
               type="checkbox"
               class="mt-0.5 h-4 w-4 shrink-0 accent-accent"
               :checked="filterTagIds.includes(tag.id)"
               @change="toggleTag('filter', tag.id)"
             />
-            <span class="break-words">{{ tag.label }}</span>
+            <span class="min-w-0 break-all">{{ tag.label }}</span>
           </label>
         </div>
       </fieldset>
