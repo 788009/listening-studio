@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AliasChoices, Field, PositiveInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -15,8 +16,10 @@ class Settings(BaseSettings):
     )
 
     database_url: str = "sqlite:///data/listening.db"
+    environment: Literal["development", "production", "test"] = "development"
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
+    frontend_dist_dir: Path = Path("frontend/dist")
     max_upload_bytes: PositiveInt = 50 * 1024 * 1024
     debug_auth_enabled: bool = False
     cosyvoice_model_dir: Path = Field(

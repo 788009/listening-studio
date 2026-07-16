@@ -9,6 +9,7 @@ from backend.app.core.errors import install_exception_handlers
 from backend.app.core.logging import configure_logging
 from backend.app.core.request_logging import RequestLoggingMiddleware
 from backend.app.db.session import create_db_engine, create_session_factory
+from backend.app.frontend import install_frontend
 from backend.app.health import router as health_router
 
 
@@ -34,5 +35,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     install_exception_handlers(app)
     app.add_middleware(RequestLoggingMiddleware)
     app.include_router(health_router)
+    if settings.environment == "production":
+        install_frontend(app, settings.frontend_dist_dir)
     logger.info("Application initialized")
     return app

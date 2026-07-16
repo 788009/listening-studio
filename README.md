@@ -32,6 +32,24 @@ Other settings use the `LISTENING_` prefix and cover the database URL, runtime
 data and log directories, upload size limit, debug authentication, and log
 rotation retention.
 
+Set `LISTENING_ENVIRONMENT=production` after building the frontend to serve
+`frontend/dist` from FastAPI. Production startup fails when the build is absent.
+
+## Frontend
+
+The frontend requires Node 24.15 and npm 11.6. Install dependencies and start
+the Vite development server from `frontend/`:
+
+```bash
+npm ci
+npm run dev
+```
+
+Vite proxies `/api`, `/auth`, `/health`, and `/media` to FastAPI on port 8000.
+Set `VITE_BACKEND_TARGET` when FastAPI uses another local address.
+Run `npm run typecheck`, `npm run lint`, `npm run test`, and `npm run build`
+before producing a release build.
+
 ## Database Migrations
 
 Apply all migrations to the configured database:
