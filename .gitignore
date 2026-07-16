@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Models and generated audio
+*.pt
+*.pth
+*.onnx
+*.safetensors
+*.wav
+*.mp3
+*.flac
+
+# Frontend dependencies and build output
+node_modules/
+frontend/dist/
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store

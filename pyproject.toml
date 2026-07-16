@@ -1,0 +1,18 @@
+[project]
+name = "english-listening-generator"
+version = "0.1.0"
+description = "Backend and frontend for generating English listening exercises"
+requires-python = ">=3.10,<3.11"
+dependencies = [
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "loguru>=0.7,<1",
+    "pydantic>=2.10,<3",
+    "sqlalchemy>=2.0,<3",
+    "uvicorn[standard]>=0.30,<1",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28,<1",
+]
