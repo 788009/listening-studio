@@ -1,5 +1,9 @@
 # English Listening Generator
 
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete production installation,
+startup, backup, restore, integration-boundary, troubleshooting, and security
+procedure.
+
 ## Environment
 
 The backend requires Python 3.10. Set up the project environment from the repository root:
@@ -25,7 +29,7 @@ Start the Web service:
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-uvicorn backend.app.main:app --reload
+.venv/bin/python -m uvicorn backend.app.main:app --reload
 ```
 
 Start the persistent job worker in a separate process:
