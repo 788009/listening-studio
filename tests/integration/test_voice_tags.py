@@ -15,7 +15,8 @@ from backend.app.db.models.voice_tag import (
     VoiceTagType,
 )
 from backend.app.db.session import create_db_engine, create_session_factory
-from backend.app.services.voice_tags import TagTranslationInput, VoiceTagService
+from backend.app.services.tag_values import TagTranslationInput
+from backend.app.services.voice_tags import VoiceTagService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]

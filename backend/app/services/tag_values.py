@@ -2,20 +2,37 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 from dataclasses import dataclass
 
-from backend.app.core.exceptions import DomainValidationError
+from pydantic import TypeAdapter, ValidationError
+
+from backend.app.api.schemas import LanguageCode
+from backend.app.core.exceptions import ConflictError, DomainValidationError
 
 
 _WHITESPACE = re.compile(r"\s+")
 _ENGLISH_VALUE = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9_-]+$")
 MAX_TAG_VALUE_LENGTH = 255
+_LANGUAGE_CODE_ADAPTER = TypeAdapter(LanguageCode)
 
 
 @dataclass(frozen=True)
 class NormalizedTagValue:
     value: str
     normalized_value: str
+
+
+@dataclass(frozen=True)
+class TagTranslationInput:
+    language: str
+    value: str
+
+
+@dataclass(frozen=True)
+class NormalizedTagTranslation:
+    language: str
+    value: NormalizedTagValue
 
 
 def _canonical_value(raw_value: object, field: str) -> str:
@@ -77,3 +94,28 @@ def normalize_translated_tag_value(raw_value: object) -> NormalizedTagValue:
         value=value,
         normalized_value=value.casefold(),
     )
+
+
+def normalize_tag_translations(
+    translations: Iterable[TagTranslationInput],
+) -> list[NormalizedTagTranslation]:
+    result: list[NormalizedTagTranslation] = []
+    languages: set[str] = set()
+    for translation in translations:
+        try:
+            language = _LANGUAGE_CODE_ADAPTER.validate_python(translation.language)
+        except ValidationError:
+            raise DomainValidationError(
+                "Translation language is invalid",
+                details={"field": "translation.language"},
+            ) from None
+        if language in languages:
+            raise ConflictError("Translation language is duplicated")
+        languages.add(language)
+        result.append(
+            NormalizedTagTranslation(
+                language=language,
+                value=normalize_translated_tag_value(translation.value),
+            )
+        )
+    return result

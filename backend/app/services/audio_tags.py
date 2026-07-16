@@ -6,8 +6,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import ConflictError, DomainValidationError
-from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
-from backend.app.repositories.voice_tags import VoiceTagRepository
+from backend.app.db.models.audio_tag import AudioTag, AudioTagType
+from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.services.tag_values import (
     TagTranslationInput,
     normalize_english_tag_value,
@@ -15,21 +15,21 @@ from backend.app.services.tag_values import (
 )
 
 
-class VoiceTagService:
-    def __init__(self, repository: VoiceTagRepository | None = None) -> None:
-        self.repository = repository or VoiceTagRepository()
+class AudioTagService:
+    def __init__(self, repository: AudioTagRepository | None = None) -> None:
+        self.repository = repository or AudioTagRepository()
 
     def create_tag(
         self,
         session: Session,
         *,
-        tag_type: VoiceTagType,
+        tag_type: AudioTagType,
         english_value: object,
         translations: Iterable[TagTranslationInput] = (),
-    ) -> VoiceTag:
-        if not isinstance(tag_type, VoiceTagType):
+    ) -> AudioTag:
+        if not isinstance(tag_type, AudioTagType):
             raise DomainValidationError(
-                "Voice tag type is invalid",
+                "Audio tag type is invalid",
                 details={"field": "type"},
             )
         english = normalize_english_tag_value(english_value)
@@ -40,7 +40,7 @@ class VoiceTagService:
             english.normalized_value,
         )
         if existing:
-            raise ConflictError("Voice tag already exists")
+            raise ConflictError("Audio tag already exists")
 
         try:
             tag = self.repository.create(
@@ -60,4 +60,4 @@ class VoiceTagService:
             return tag
         except IntegrityError as exc:
             session.rollback()
-            raise ConflictError("Voice tag or translation already exists") from exc
+            raise ConflictError("Audio tag or translation already exists") from exc
