@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createVoiceUpload,
   deleteVoice,
   getVoice,
   listPublicSampleAudio,
+  listVoiceGenderTags,
   listVoices,
   updateVoice,
   voiceSamplePath,
@@ -71,5 +73,35 @@ describe('voice API', () => {
     await expect(listPublicSampleAudio('en')).resolves.toHaveLength(1)
     expect(fetchMock.mock.calls[0]?.[0]).toContain('status=ready')
     expect(fetchMock.mock.calls[0]?.[0]).toContain('visibility=public')
+  })
+
+  it('submits voice creation as multipart data and loads gender tags', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ voiceId: 8, jobId: 13 }, 202))
+      .mockResolvedValueOnce(jsonResponse([]))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['wav'], 'reference.wav', { type: 'audio/wav' })
+
+    await expect(
+      createVoiceUpload({
+        title: 'Classroom voice',
+        file,
+        visibility: 'public',
+        genderTagId: 4,
+      }),
+    ).resolves.toEqual({ voiceId: 8, jobId: 13 })
+    await listVoiceGenderTags('zh-CN')
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(request.body).toBeInstanceOf(FormData)
+    const form = request.body as FormData
+    expect(form.get('title')).toBe('Classroom voice')
+    expect(form.get('visibility')).toBe('public')
+    expect(form.get('genderTagId')).toBe('4')
+    expect(form.get('file')).toBe(file)
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      '/api/voice-tags?type=gender&language=zh-CN',
+    )
   })
 })

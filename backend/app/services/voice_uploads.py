@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import io
+import shutil
 import wave
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -13,12 +15,15 @@ from backend.app.core.exceptions import (
     JobFailedError,
     NotFoundError,
 )
+from backend.app.db.models.job import Job
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.integrations.cosyvoice import CosyVoiceIntegration
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.repositories.voices import VoiceRepository
+from backend.app.services.job_storage import JobStorage
+from backend.app.services.jobs import JobService
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -26,6 +31,7 @@ from backend.app.services.voices import VoiceService
 DEFAULT_MIN_REFERENCE_SECONDS = 1.0
 DEFAULT_MAX_REFERENCE_SECONDS = 30.0
 SUPPORTED_REFERENCE_EXTENSION = ".wav"
+VOICE_UPLOAD_JOB_TYPE = "voice_upload"
 
 
 @dataclass(frozen=True)
@@ -35,6 +41,12 @@ class ValidatedReferenceAudio:
     sample_rate: int
     channels: int
     sample_width_bytes: int
+
+
+@dataclass(frozen=True)
+class VoiceUploadSubmission:
+    voice: Voice
+    job: Job
 
 
 class ReferenceAudioValidator:
@@ -156,9 +168,11 @@ class VoiceUploadService:
     def __init__(
         self,
         *,
-        integration: CosyVoiceIntegration,
         storage: VoiceStorage,
         max_upload_bytes: int,
+        integration: CosyVoiceIntegration | None = None,
+        job_storage: JobStorage | None = None,
+        job_service: JobService | None = None,
         voice_service: VoiceService | None = None,
         voice_repository: VoiceRepository | None = None,
         tag_repository: VoiceTagRepository | None = None,
@@ -167,6 +181,8 @@ class VoiceUploadService:
     ) -> None:
         self.integration = integration
         self.storage = storage
+        self.job_storage = job_storage
+        self.job_service = job_service or JobService()
         self.voice_service = voice_service or VoiceService(storage)
         self.voice_repository = voice_repository or VoiceRepository()
         self.tag_repository = tag_repository or VoiceTagRepository()
@@ -175,6 +191,139 @@ class VoiceUploadService:
             min_duration_seconds=min_duration_seconds,
             max_duration_seconds=max_duration_seconds,
         )
+
+    def prepare_async_upload(
+        self,
+        session: Session,
+        *,
+        author: User,
+        title: str,
+        filename: str,
+        content: bytes,
+        gender_tag_id: int | None = None,
+        target_visibility: VoiceVisibility = VoiceVisibility.PRIVATE,
+    ) -> VoiceUploadSubmission:
+        if self.job_storage is None:
+            raise RuntimeError("Job storage is required for asynchronous uploads")
+        reference = self.validator.validate(filename, content)
+        self._validate_target_visibility(target_visibility)
+        gender_tag = self._get_gender_tag(session, gender_tag_id)
+        voice: Voice | None = None
+        job: Job | None = None
+        try:
+            voice = self.voice_service.create_voice(
+                session,
+                author=author,
+                title=title,
+            )
+            if gender_tag is not None:
+                voice.tags.append(gender_tag)
+            job = self.job_service.create_job(
+                session,
+                owner=author,
+                job_type=VOICE_UPLOAD_JOB_TYPE,
+                input_summary={
+                    "voiceId": voice.id,
+                    "targetVisibility": target_visibility.value,
+                    "referenceDurationSeconds": round(
+                        reference.duration_seconds,
+                        3,
+                    ),
+                    "sampleRate": reference.sample_rate,
+                    "channels": reference.channels,
+                },
+                retryable=True,
+            )
+            self.job_storage.write_reference(job.id, reference.wav_data)
+            session.commit()
+            return VoiceUploadSubmission(voice=voice, job=job)
+        except Exception:
+            session.rollback()
+            if job is not None:
+                self.job_storage.cleanup(job.id)
+            if voice is not None:
+                self.storage.delete(voice.id)
+            raise
+
+    def process_async_upload(
+        self,
+        session: Session,
+        *,
+        voice_id: int,
+        job_id: int,
+        target_visibility: VoiceVisibility,
+        request_id: str,
+        checkpoint: Callable[[], None],
+    ) -> Voice:
+        if self.job_storage is None:
+            raise RuntimeError("Job storage is required for asynchronous uploads")
+        if self.integration is None:
+            raise RuntimeError("CosyVoice integration is required for generation")
+        voice = self.voice_repository.get_by_id(session, voice_id)
+        if voice is None:
+            raise JobFailedError("Voice record is unavailable")
+        if voice.status is VoiceStatus.READY and self.storage.exists(voice.id):
+            self.job_storage.cleanup(job_id)
+            return voice
+        if voice.status is VoiceStatus.PENDING:
+            self.voice_service.transition_status(
+                session,
+                voice,
+                VoiceStatus.PROCESSING,
+            )
+            session.commit()
+        elif voice.status is not VoiceStatus.PROCESSING:
+            raise JobFailedError("Voice cannot be generated from its current state")
+
+        reference_temporary: Path | None = None
+        model_temporary: Path | None = None
+        try:
+            checkpoint()
+            staged_reference = self.job_storage.reference_path(job_id)
+            if not staged_reference.is_file() or staged_reference.is_symlink():
+                raise JobFailedError("Staged reference audio is unavailable")
+            reference_temporary = self.storage.create_temporary_file(
+                voice.id,
+                VoiceAsset.REFERENCE,
+            )
+            shutil.copyfile(staged_reference, reference_temporary)
+            model_temporary = self.storage.create_temporary_file(
+                voice.id,
+                VoiceAsset.MODEL,
+            )
+            self.integration.extract_voice(reference_temporary, model_temporary)
+            checkpoint()
+            self.storage.atomic_replace(
+                voice.id,
+                VoiceAsset.REFERENCE,
+                reference_temporary,
+            )
+            reference_temporary = None
+            self.storage.atomic_replace(
+                voice.id,
+                VoiceAsset.MODEL,
+                model_temporary,
+            )
+            model_temporary = None
+            self.voice_service.transition_status(session, voice, VoiceStatus.READY)
+            self.voice_service.set_visibility(session, voice, target_visibility)
+            session.commit()
+            logger.bind(request_id=request_id).info(
+                "Voice upload completed voice_id={} job_id={}",
+                voice.id,
+                job_id,
+            )
+            return voice
+        except Exception as exc:
+            self._handle_failure(
+                session,
+                voice.id,
+                request_id=request_id,
+                exception=exc,
+                temporary_paths=(reference_temporary, model_temporary),
+            )
+        finally:
+            self.job_storage.cleanup(job_id)
 
     def create_from_upload(
         self,
@@ -188,6 +337,8 @@ class VoiceUploadService:
         target_visibility: VoiceVisibility = VoiceVisibility.PRIVATE,
         request_id: str,
     ) -> Voice:
+        if self.integration is None:
+            raise RuntimeError("CosyVoice integration is required for generation")
         reference = self.validator.validate(filename, content)
         self._validate_target_visibility(target_visibility)
         gender_tag = self._get_gender_tag(session, gender_tag_id)

@@ -1,6 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, Response, status
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
@@ -15,6 +27,7 @@ from backend.app.api.voice_schemas import (
     VoiceListResponse,
     VoiceResponse,
     VoiceUpdateRequest,
+    VoiceUploadAccepted,
 )
 from backend.app.core.auth import (
     Principal,
@@ -26,9 +39,11 @@ from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTag
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.job_storage import JobStorage
 from backend.app.services.tag_values import select_tag_display_value
 from backend.app.services.voice_management import VoiceManagementService
 from backend.app.services.voice_storage import VoiceStorage
+from backend.app.services.voice_uploads import VoiceUploadService
 
 
 router = APIRouter(prefix="/api/voices", tags=["voices"])
@@ -82,6 +97,42 @@ def _voice_response(
         sample_audio_id=voice.sample_audio_id,
         error_summary=voice.error_summary if is_owner else None,
         tags=[_tag_response(tag, language) for tag in voice.tags],
+    )
+
+
+@router.post(
+    "",
+    response_model=VoiceUploadAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_voice(
+    request: Request,
+    title: Annotated[str, Form(min_length=1, max_length=200)],
+    file: Annotated[UploadFile, File()],
+    gender_tag_id: Annotated[int | None, Form(alias="genderTagId")] = None,
+    visibility: Annotated[VoiceVisibility, Form()] = VoiceVisibility.PRIVATE,
+    current_user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> VoiceUploadAccepted:
+    settings = request.app.state.settings
+    content = await file.read(settings.max_upload_bytes + 1)
+    await file.close()
+    submission = VoiceUploadService(
+        storage=VoiceStorage(settings.data_dir),
+        max_upload_bytes=settings.max_upload_bytes,
+        job_storage=JobStorage(settings.data_dir),
+    ).prepare_async_upload(
+        session,
+        author=current_user,
+        title=title,
+        filename=file.filename or "",
+        content=content,
+        gender_tag_id=gender_tag_id,
+        target_visibility=visibility,
+    )
+    return VoiceUploadAccepted(
+        voice_id=submission.voice.id,
+        job_id=submission.job.id,
     )
 
 

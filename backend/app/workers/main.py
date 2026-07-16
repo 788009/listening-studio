@@ -3,14 +3,28 @@ from __future__ import annotations
 import signal
 from threading import Event
 
-from backend.app.core.config import get_settings
+from backend.app.core.config import Settings, get_settings
 from backend.app.core.logging import configure_logging
 from backend.app.db.session import create_db_engine, create_session_factory
+from backend.app.integrations.cosyvoice import CosyVoiceAdapter
+from backend.app.services.job_storage import JobStorage
+from backend.app.services.voice_storage import VoiceStorage
+from backend.app.services.voice_uploads import (
+    VOICE_UPLOAD_JOB_TYPE,
+    VoiceUploadService,
+)
 from backend.app.workers.jobs import JobHandler, JobWorker
+from backend.app.workers.voice_upload import VoiceUploadJobHandler
 
 
-def build_handlers() -> dict[str, JobHandler]:
-    return {}
+def build_handlers(settings: Settings) -> dict[str, JobHandler]:
+    service = VoiceUploadService(
+        storage=VoiceStorage(settings.data_dir),
+        max_upload_bytes=settings.max_upload_bytes,
+        integration=CosyVoiceAdapter(settings.cosyvoice_model_dir),
+        job_storage=JobStorage(settings.data_dir),
+    )
+    return {VOICE_UPLOAD_JOB_TYPE: VoiceUploadJobHandler(service)}
 
 
 def main() -> None:
@@ -28,7 +42,7 @@ def main() -> None:
     try:
         JobWorker(
             create_session_factory(engine),
-            build_handlers(),
+            build_handlers(settings),
         ).run_forever(stop_event)
     finally:
         engine.dispose()

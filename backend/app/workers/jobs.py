@@ -16,6 +16,15 @@ class JobCancelled(RuntimeError):
     pass
 
 
+class JobExecutionError(RuntimeError):
+    def __init__(self, summary: str) -> None:
+        value = summary.strip()
+        if not value or len(value) > 1000:
+            raise ValueError("Job execution error summary is invalid")
+        super().__init__(value)
+        self.summary = value
+
+
 @dataclass(frozen=True)
 class JobPayload:
     id: int
@@ -151,7 +160,12 @@ class JobWorker:
             self._cancel(payload.id)
             job_logger.info("Job cancelled job_id={}", payload.id)
         except Exception as exc:
-            self._fail(payload.id, f"Handler failed: {type(exc).__name__}")
+            summary = (
+                exc.summary
+                if isinstance(exc, JobExecutionError)
+                else f"Handler failed: {type(exc).__name__}"
+            )
+            self._fail(payload.id, summary)
             job_logger.error(
                 "Job failed job_id={} exception_type={}",
                 payload.id,

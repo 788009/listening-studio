@@ -51,6 +51,18 @@ export interface VoiceUpdate {
   sampleAudioId?: number | null
 }
 
+export interface VoiceUploadAccepted {
+  voiceId: number
+  jobId: number
+}
+
+export interface VoiceUploadInput {
+  title: string
+  file: File
+  visibility: ResourceVisibility
+  genderTagId?: number
+}
+
 export interface AudioSummary {
   id: number
   title: string
@@ -99,6 +111,27 @@ export function updateVoice(voiceId: number, update: VoiceUpdate): Promise<Voice
 
 export function deleteVoice(voiceId: number): Promise<void> {
   return apiRequest<void>(`/voices/${positiveId(voiceId)}`, { method: 'DELETE' })
+}
+
+export function createVoiceUpload(
+  input: VoiceUploadInput,
+): Promise<VoiceUploadAccepted> {
+  const form = new FormData()
+  form.set('title', input.title)
+  form.set('file', input.file)
+  form.set('visibility', input.visibility)
+  if (input.genderTagId !== undefined) {
+    form.set('genderTagId', String(input.genderTagId))
+  }
+  return apiRequest<VoiceUploadAccepted>('/voices', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export function listVoiceGenderTags(language = 'en'): Promise<VoiceTag[]> {
+  const parameters = new URLSearchParams({ type: 'gender', language })
+  return apiRequest<VoiceTag[]>(`/voice-tags?${parameters.toString()}`)
 }
 
 export function listPublicSampleAudio(language = 'en'): Promise<AudioSummary[]> {

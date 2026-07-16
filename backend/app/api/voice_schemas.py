@@ -81,3 +81,8 @@ class VoiceUpdateRequest(VoiceApiModel):
             elif not audio_id_set or self.sample_audio_id is None:
                 raise ValueError("public_audio samples require sample_audio_id")
         return self
+
+
+class VoiceUploadAccepted(VoiceApiModel):
+    voice_id: int
+    job_id: int
