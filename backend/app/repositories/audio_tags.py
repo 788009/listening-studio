@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.db.models.audio import audio_tag_associations
+from backend.app.db.models.audio import Audio, audio_tag_associations
 from backend.app.db.models.audio_tag import (
     AudioTag,
     AudioTagTranslation,
@@ -105,6 +105,21 @@ class AudioTagRepository:
             .where(audio_tag_associations.c.tag_id == tag_id)
         )
         return session.scalar(statement) or 0
+
+    def list_linked_audios(
+        self,
+        session: Session,
+        tag_ids: set[int],
+    ) -> list[tuple[int, Audio]]:
+        if not tag_ids:
+            return []
+        statement = (
+            select(audio_tag_associations.c.tag_id, Audio)
+            .join(Audio, Audio.id == audio_tag_associations.c.audio_id)
+            .where(audio_tag_associations.c.tag_id.in_(tag_ids))
+            .order_by(audio_tag_associations.c.tag_id, Audio.id)
+        )
+        return [(tag_id, audio) for tag_id, audio in session.execute(statement)]
 
     def delete(self, session: Session, tag: AudioTag) -> None:
         session.delete(tag)

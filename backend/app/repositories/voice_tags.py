@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.db.models.voice import voice_tag_associations
+from backend.app.db.models.voice import Voice, voice_tag_associations
 from backend.app.db.models.voice_tag import (
     VoiceTag,
     VoiceTagTranslation,
@@ -105,6 +105,21 @@ class VoiceTagRepository:
             .where(voice_tag_associations.c.tag_id == tag_id)
         )
         return session.scalar(statement) or 0
+
+    def list_linked_voices(
+        self,
+        session: Session,
+        tag_ids: set[int],
+    ) -> list[tuple[int, Voice]]:
+        if not tag_ids:
+            return []
+        statement = (
+            select(voice_tag_associations.c.tag_id, Voice)
+            .join(Voice, Voice.id == voice_tag_associations.c.voice_id)
+            .where(voice_tag_associations.c.tag_id.in_(tag_ids))
+            .order_by(voice_tag_associations.c.tag_id, Voice.id)
+        )
+        return [(tag_id, voice) for tag_id, voice in session.execute(statement)]
 
     def delete(self, session: Session, tag: VoiceTag) -> None:
         session.delete(tag)

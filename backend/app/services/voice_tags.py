@@ -12,11 +12,25 @@ from backend.app.core.exceptions import (
 )
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.repositories.voice_tags import VoiceTagRepository
+from backend.app.services.authorization import (
+    AuthorizationPrincipal,
+    AuthorizationService,
+    ResourceDescriptor,
+    ResourceKind,
+    ResourceStatus,
+    ResourceVisibility,
+)
+from backend.app.services.tag_autocomplete import (
+    MAX_AUTOCOMPLETE_RESULTS,
+    autocomplete_tags,
+)
+from backend.app.services.tag_parser import TagDomain
 from backend.app.services.tag_values import (
     TagTranslationInput,
     normalize_english_tag_value,
     normalize_tag_translations,
 )
+from backend.app.services.voice_storage import VoiceStorage
 
 
 class VoiceTagService:
@@ -146,3 +160,57 @@ class VoiceTagService:
                 details={"usageCount": usage_count},
             )
         self.repository.delete(session, tag)
+
+    def autocomplete(
+        self,
+        session: Session,
+        *,
+        query: object,
+        limit: int,
+        principal: AuthorizationPrincipal,
+        storage: VoiceStorage,
+    ) -> list[str]:
+        self._validate_autocomplete_limit(limit)
+        tags = self.repository.list_tags(session)
+        author_tag_ids = {
+            tag.id for tag in tags if tag.type is VoiceTagType.AUTHOR
+        }
+        visible_author_ids: set[int] = set()
+        authorization = AuthorizationService()
+        for tag_id, voice in self.repository.list_linked_voices(
+            session,
+            author_tag_ids,
+        ):
+            descriptor = ResourceDescriptor(
+                kind=ResourceKind.VOICE,
+                author_id=voice.author_id,
+                visibility=ResourceVisibility(voice.visibility.value),
+                status=ResourceStatus(voice.status.value),
+                file_exists=storage.exists(voice.id),
+            )
+            if authorization.can_view(principal, descriptor):
+                visible_author_ids.add(tag_id)
+
+        visible_tags = [
+            tag
+            for tag in tags
+            if tag.type is not VoiceTagType.AUTHOR or tag.id in visible_author_ids
+        ]
+        return autocomplete_tags(
+            visible_tags,
+            query=query,
+            domain=TagDomain.VOICE,
+            limit=limit,
+        )
+
+    @staticmethod
+    def _validate_autocomplete_limit(limit: int) -> None:
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= MAX_AUTOCOMPLETE_RESULTS
+        ):
+            raise DomainValidationError(
+                "Autocomplete limit is invalid",
+                details={"field": "limit"},
+            )

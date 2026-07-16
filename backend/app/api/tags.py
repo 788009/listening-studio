@@ -14,17 +14,23 @@ from backend.app.api.tag_schemas import (
     VoiceTagCreate,
     VoiceTagResponse,
 )
-from backend.app.core.auth import require_completed_profile
+from backend.app.core.auth import Principal, get_principal, require_completed_profile
 from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.db.models.user import User
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_tags import AudioTagService
+from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.tag_autocomplete import (
+    MAX_AUTOCOMPLETE_QUERY_LENGTH,
+    MAX_AUTOCOMPLETE_RESULTS,
+)
 from backend.app.services.tag_values import (
     TagTranslationInput,
     select_tag_display_value,
 )
 from backend.app.services.voice_tags import VoiceTagService
+from backend.app.services.voice_storage import VoiceStorage
 
 
 voice_router = APIRouter(prefix="/api/voice-tags", tags=["voice-tags"])
@@ -113,6 +119,28 @@ async def list_voice_tags(
     return [_voice_response(tag, language) for tag in tags]
 
 
+@voice_router.get("/autocomplete", response_model=list[str])
+async def autocomplete_voice_tags(
+    request: Request,
+    query: str = Query(
+        alias="q",
+        min_length=1,
+        max_length=MAX_AUTOCOMPLETE_QUERY_LENGTH,
+    ),
+    limit: int = Query(default=10, ge=1, le=MAX_AUTOCOMPLETE_RESULTS),
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_db_session),
+) -> list[str]:
+    storage = VoiceStorage(request.app.state.settings.data_dir)
+    return VoiceTagService().autocomplete(
+        session,
+        query=query,
+        limit=limit,
+        principal=principal,
+        storage=storage,
+    )
+
+
 @voice_router.get("/{tag_id}", response_model=VoiceTagResponse)
 async def get_voice_tag(
     tag_id: ResourceId,
@@ -192,6 +220,28 @@ async def list_audio_tags(
 ) -> list[AudioTagResponse]:
     tags = AudioTagService().list_tags(session, tag_type)
     return [_audio_response(tag, language) for tag in tags]
+
+
+@audio_router.get("/autocomplete", response_model=list[str])
+async def autocomplete_audio_tags(
+    request: Request,
+    query: str = Query(
+        alias="q",
+        min_length=1,
+        max_length=MAX_AUTOCOMPLETE_QUERY_LENGTH,
+    ),
+    limit: int = Query(default=10, ge=1, le=MAX_AUTOCOMPLETE_RESULTS),
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_db_session),
+) -> list[str]:
+    storage = AudioStorage(request.app.state.settings.data_dir)
+    return AudioTagService().autocomplete(
+        session,
+        query=query,
+        limit=limit,
+        principal=principal,
+        storage=storage,
+    )
 
 
 @audio_router.get("/{tag_id}", response_model=AudioTagResponse)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 import httpx
@@ -11,8 +12,13 @@ from alembic.config import Config
 from fastapi import FastAPI
 
 from backend.app.core.config import Settings
-from backend.app.db.models.audio import AudioSourceType
+from backend.app.db.models.audio import (
+    AudioSourceType,
+    AudioStatus,
+    AudioVisibility,
+)
 from backend.app.db.models.audio_tag import AudioTagType
+from backend.app.db.models.voice import VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTagType
 from backend.app.factory import create_app
 from backend.app.integrations.identity import (
@@ -24,7 +30,7 @@ from backend.app.repositories.users import UserRepository
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audios import AudioService
-from backend.app.services.voice_storage import VoiceStorage
+from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
 
@@ -114,6 +120,14 @@ class TagApiIntegrationTest(unittest.TestCase):
             headers=self.headers(),
             json={"type": tag_type, "value": value},
         )
+
+    @staticmethod
+    def write_wav(path: Path) -> None:
+        with wave.open(str(path), "wb") as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(8000)
+            audio_file.writeframes(b"\x00\x00" * 800)
 
     def test_voice_tag_create_query_and_translation_upsert(self) -> None:
         self.complete_profile()
@@ -299,6 +313,174 @@ class TagApiIntegrationTest(unittest.TestCase):
             response for response in responses if response.status_code == 409
         )
         self.assertEqual(conflict.json()["error"]["code"], "conflict")
+
+    def test_autocomplete_translation_alias_order_domain_and_limit(self) -> None:
+        self.complete_profile()
+        climate = self.send(
+            "POST",
+            "/api/audio-tags",
+            headers=self.headers(),
+            json={
+                "type": "topic",
+                "value": "Climate Change",
+                "translations": [{"language": "zh-CN", "value": "气候 变化"}],
+            },
+        )
+        self.create_audio_tag("Climate Policy", tag_type="category")
+        self.create_audio_tag("Tropical Climate")
+        self.create_voice_tag("Female Voice")
+        self.assertEqual(climate.status_code, 201)
+
+        translated = self.send("GET", "/api/audio-tags/autocomplete?q=气候")
+        abbreviated = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=t:climate",
+        )
+        ordered = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=climate&limit=2",
+        )
+        voice_alias = self.send(
+            "GET",
+            "/api/voice-tags/autocomplete?q=g:fem",
+        )
+        cross_domain = self.send(
+            "GET",
+            "/api/voice-tags/autocomplete?q=topic:climate",
+        )
+        excessive_limit = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=climate&limit=21",
+        )
+
+        self.assertEqual(translated.json(), ["topic:climate_change"])
+        self.assertEqual(
+            abbreviated.json(),
+            ["topic:climate_change", "topic:tropical_climate"],
+        )
+        self.assertEqual(
+            ordered.json(),
+            ["category:climate_policy", "topic:climate_change"],
+        )
+        self.assertEqual(voice_alias.json(), ["gender:female_voice"])
+        self.assertEqual(cross_domain.status_code, 422)
+        self.assertEqual(excessive_limit.status_code, 422)
+
+    def test_author_autocomplete_obeys_resource_visibility(self) -> None:
+        self.complete_profile("TeacherOne")
+        other_profile = self.send(
+            "POST",
+            "/api/users/me/profile",
+            headers=self.headers("other"),
+            json={"userId": "TeacherTwo", "username": "Other Teacher"},
+        )
+        self.assertEqual(other_profile.status_code, 200)
+
+        voice_storage = VoiceStorage(self.settings.data_dir)
+        audio_storage = AudioStorage(self.settings.data_dir)
+        voice_service = VoiceService(voice_storage)
+        audio_service = AudioService(audio_storage)
+        with self.app.state.session_factory() as session:
+            first = UserRepository().get_by_user_id(session, "TeacherOne")
+            second = UserRepository().get_by_user_id(session, "TeacherTwo")
+            assert first is not None and second is not None
+            voice_service.create_voice(
+                session,
+                author=first,
+                title="Private first voice",
+            )
+            first_audio = audio_service.create_audio(
+                session,
+                author=first,
+                title="Private first audio",
+                source_type=AudioSourceType.CORPUS,
+                text="Private first text",
+            )
+            second_voice = voice_service.create_voice(
+                session,
+                author=second,
+                title="Public second voice",
+            )
+            second_audio = audio_service.create_audio(
+                session,
+                author=second,
+                title="Public second audio",
+                source_type=AudioSourceType.CORPUS,
+                text="Public second text",
+            )
+
+            voice_service.transition_status(
+                session,
+                second_voice,
+                VoiceStatus.PROCESSING,
+            )
+            model_temporary = voice_storage.create_temporary_file(
+                second_voice.id,
+                VoiceAsset.MODEL,
+            )
+            model_temporary.write_bytes(b"model")
+            voice_storage.atomic_replace(
+                second_voice.id,
+                VoiceAsset.MODEL,
+                model_temporary,
+            )
+            voice_service.transition_status(
+                session,
+                second_voice,
+                VoiceStatus.READY,
+            )
+            voice_service.set_visibility(
+                session,
+                second_voice,
+                VoiceVisibility.PUBLIC,
+            )
+
+            audio_service.transition_status(
+                session,
+                second_audio,
+                AudioStatus.PROCESSING,
+            )
+            output = audio_storage.temporary_audio_path(second_audio.id)
+            self.write_wav(output)
+            audio_storage.atomic_replace(second_audio.id, second_audio.id)
+            audio_service.record_file_metadata(session, second_audio)
+            audio_service.transition_status(
+                session,
+                second_audio,
+                AudioStatus.READY,
+            )
+            audio_service.set_visibility(
+                session,
+                second_audio,
+                AudioVisibility.PUBLIC,
+            )
+            session.commit()
+            self.assertEqual(first_audio.visibility, AudioVisibility.PRIVATE)
+
+        owner_voice = self.send(
+            "GET",
+            "/api/voice-tags/autocomplete?q=a:",
+            headers=self.headers(),
+        )
+        owner_audio = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=author:",
+            headers=self.headers(),
+        )
+        anonymous_voice = self.send(
+            "GET",
+            "/api/voice-tags/autocomplete?q=author:",
+        )
+        anonymous_audio = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=author:",
+        )
+
+        expected_teacher_results = ["author:teacherone", "author:teachertwo"]
+        self.assertEqual(owner_voice.json(), expected_teacher_results)
+        self.assertEqual(owner_audio.json(), expected_teacher_results)
+        self.assertEqual(anonymous_voice.json(), [])
+        self.assertEqual(anonymous_audio.json(), ["author:teachertwo"])
 
 
 if __name__ == "__main__":
