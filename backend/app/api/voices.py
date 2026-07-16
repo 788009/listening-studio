@@ -1,0 +1,169 @@
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Query, Request, Response, status
+from sqlalchemy.orm import Session
+
+from backend.app.api.schemas import LanguageCode, ResourceId
+from backend.app.api.tag_schemas import (
+    TagTranslationResponse,
+    VoiceTagResponse,
+)
+from backend.app.api.voice_schemas import (
+    VoiceAuthorResponse,
+    VoiceListResponse,
+    VoiceResponse,
+    VoiceUpdateRequest,
+)
+from backend.app.core.auth import (
+    Principal,
+    get_principal,
+    require_completed_profile,
+)
+from backend.app.db.models.user import User
+from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
+from backend.app.db.models.voice_tag import VoiceTag
+from backend.app.db.session import get_db_session
+from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.tag_values import select_tag_display_value
+from backend.app.services.voice_management import VoiceManagementService
+from backend.app.services.voice_storage import VoiceStorage
+
+
+router = APIRouter(prefix="/api/voices", tags=["voices"])
+
+
+def _service(request: Request) -> VoiceManagementService:
+    data_dir = request.app.state.settings.data_dir
+    return VoiceManagementService(
+        VoiceStorage(data_dir),
+        AudioStorage(data_dir),
+    )
+
+
+def _tag_response(tag: VoiceTag, language: str) -> VoiceTagResponse:
+    translations = {
+        translation.language: translation.value for translation in tag.translations
+    }
+    return VoiceTagResponse(
+        id=tag.id,
+        type=tag.type,
+        english_value=tag.value,
+        display_value=select_tag_display_value(tag.value, translations, language),
+        full_tag=f"{tag.type.value}:{tag.value}",
+        translations=[
+            TagTranslationResponse(
+                language=translation.language,
+                value=translation.value,
+            )
+            for translation in tag.translations
+        ],
+    )
+
+
+def _voice_response(
+    voice: Voice,
+    principal: Principal,
+    language: str,
+) -> VoiceResponse:
+    is_owner = bool(principal.user and principal.user.id == voice.author_id)
+    return VoiceResponse(
+        id=voice.id,
+        author=VoiceAuthorResponse(
+            user_id=voice.author.user_id or "",
+            username=voice.author.username,
+        ),
+        title=voice.title,
+        status=voice.status,
+        visibility=voice.visibility,
+        example_mode=voice.example_mode,
+        example_audio_id=voice.example_audio_id,
+        error_summary=voice.error_summary if is_owner else None,
+        tags=[_tag_response(tag, language) for tag in voice.tags],
+    )
+
+
+@router.get("", response_model=VoiceListResponse, response_model_exclude_none=True)
+async def list_voices(
+    request: Request,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    language: LanguageCode = Query(default="en"),
+    author: str | None = Query(default=None, min_length=1, max_length=64),
+    voice_status: VoiceStatus | None = Query(default=None, alias="status"),
+    visibility: VoiceVisibility | None = Query(default=None),
+    query: str | None = Query(default=None, alias="q", max_length=1024),
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_db_session),
+) -> VoiceListResponse:
+    result = _service(request).list_visible(
+        session,
+        principal,
+        page=page,
+        page_size=page_size,
+        author=author,
+        status=voice_status,
+        visibility=visibility,
+        query=query,
+    )
+    return VoiceListResponse(
+        items=[_voice_response(voice, principal, language) for voice in result.items],
+        page=page,
+        page_size=page_size,
+        total=result.total,
+    )
+
+
+@router.get(
+    "/{voice_id}",
+    response_model=VoiceResponse,
+    response_model_exclude_none=True,
+)
+async def get_voice(
+    voice_id: ResourceId,
+    request: Request,
+    language: LanguageCode = Query(default="en"),
+    principal: Principal = Depends(get_principal),
+    session: Session = Depends(get_db_session),
+) -> VoiceResponse:
+    voice = _service(request).get_visible(session, principal, voice_id)
+    return _voice_response(voice, principal, language)
+
+
+@router.patch(
+    "/{voice_id}",
+    response_model=VoiceResponse,
+    response_model_exclude_none=True,
+)
+async def update_voice(
+    voice_id: ResourceId,
+    payload: VoiceUpdateRequest,
+    request: Request,
+    current_user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> VoiceResponse:
+    principal = Principal(current_user)
+    voice = _service(request).update(
+        session,
+        principal,
+        voice_id,
+        title=payload.title,
+        gender_tag_ids=payload.gender_tag_ids,
+        visibility=payload.visibility,
+    )
+    return _voice_response(voice, principal, current_user.locale)
+
+
+@router.delete("/{voice_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_voice(
+    voice_id: ResourceId,
+    request: Request,
+    current_user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> Response:
+    _service(request).delete(
+        session,
+        Principal(current_user),
+        voice_id,
+        request_id=request.state.request_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

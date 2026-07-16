@@ -18,6 +18,7 @@ from backend.app.db.models.voice import (
     VoiceVisibility,
 )
 from backend.app.db.models.voice_tag import VoiceTagType
+from backend.app.db.models.voice_tag import VoiceTag
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.repositories.voices import VoiceRepository
 from backend.app.services.authorization import (
@@ -147,6 +148,29 @@ class VoiceService:
             status=ResourceStatus(voice.status.value),
             file_exists=self.storage.exists(voice.id),
         )
+
+    def update_title(self, session: Session, voice: Voice, title: str) -> Voice:
+        normalized_title, search_title = self._normalize_title(title)
+        voice.title = normalized_title
+        voice.normalized_title = search_title
+        session.flush()
+        return voice
+
+    def replace_gender_tags(
+        self,
+        session: Session,
+        voice: Voice,
+        gender_tags: list[VoiceTag],
+    ) -> Voice:
+        if any(tag.type is not VoiceTagType.GENDER for tag in gender_tags):
+            raise DomainValidationError(
+                "Voice tags must have gender type",
+                details={"field": "genderTagIds"},
+            )
+        author_tags = [tag for tag in voice.tags if tag.type is VoiceTagType.AUTHOR]
+        voice.tags = author_tags + list(dict.fromkeys(gender_tags))
+        session.flush()
+        return voice
 
     @staticmethod
     def _normalize_title(title: str) -> tuple[str, str]:

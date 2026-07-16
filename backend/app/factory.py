@@ -8,6 +8,7 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.tags import audio_router as audio_tags_router
 from backend.app.api.tags import voice_router as voice_tags_router
 from backend.app.api.users import router as users_router
+from backend.app.api.voices import router as voices_router
 from backend.app.core.auth import AuthenticationMiddleware
 from backend.app.core.config import Settings, get_settings
 from backend.app.core.errors import install_exception_handlers
@@ -58,6 +59,7 @@ def create_app(
     app.include_router(users_router)
     app.include_router(voice_tags_router)
     app.include_router(audio_tags_router)
+    app.include_router(voices_router)
     app.include_router(health_router)
     if settings.environment == "production":
         install_frontend(app, settings.frontend_dist_dir)

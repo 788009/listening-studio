@@ -83,6 +83,32 @@ class VoiceStorage:
         elif directory.exists():
             shutil.rmtree(directory)
 
+    def stage_delete(self, voice_id: int) -> Path | None:
+        directory = self.directory(voice_id)
+        if not directory.exists() and not directory.is_symlink():
+            return None
+        staged = self.root / f".deleting-{voice_id}"
+        if staged.exists() or staged.is_symlink():
+            raise FileExistsError("Staged voice deletion already exists")
+        os.replace(directory, staged)
+        return staged
+
+    def restore_staged_delete(self, voice_id: int, staged: Path | None) -> None:
+        if staged is None or not staged.exists():
+            return
+        os.replace(staged, self.directory(voice_id))
+
+    def finalize_staged_delete(self, staged: Path | None) -> None:
+        if staged is not None:
+            self._delete_path(staged)
+
+    @staticmethod
+    def _delete_path(path: Path) -> None:
+        if path.is_symlink():
+            path.unlink()
+        elif path.exists():
+            shutil.rmtree(path)
+
     @staticmethod
     def _validate_voice_id(voice_id: int) -> None:
         if isinstance(voice_id, bool) or not isinstance(voice_id, int) or voice_id < 1:
