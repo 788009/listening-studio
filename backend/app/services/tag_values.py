@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from pydantic import TypeAdapter, ValidationError
@@ -41,8 +41,7 @@ def _canonical_value(raw_value: object, field: str) -> str:
             "Tag value is required",
             details={"field": field},
         )
-    value = unicodedata.normalize("NFKC", raw_value.strip())
-    value = _WHITESPACE.sub("_", value)
+    value = normalize_tag_whitespace(raw_value)
     if not value:
         raise DomainValidationError(
             "Tag value cannot be empty",
@@ -59,6 +58,39 @@ def _canonical_value(raw_value: object, field: str) -> str:
             details={"field": field},
         )
     return value
+
+
+def normalize_tag_whitespace(raw_value: str) -> str:
+    value = unicodedata.normalize("NFKC", raw_value.strip())
+    return _WHITESPACE.sub("_", value)
+
+
+def display_tag_value(value: str) -> str:
+    return value.replace("_", " ")
+
+
+def select_tag_display_value(
+    english_value: str,
+    translations: Mapping[str, str],
+    language: str,
+) -> str:
+    normalized_translations = {
+        _language_key(code): value for code, value in translations.items()
+    }
+    requested_language = _language_key(language)
+    candidates = [requested_language]
+    if "-" in requested_language:
+        candidates.append(requested_language.split("-", maxsplit=1)[0])
+
+    for candidate in candidates:
+        translated_value = normalized_translations.get(candidate)
+        if translated_value is not None:
+            return display_tag_value(translated_value)
+    return display_tag_value(english_value)
+
+
+def _language_key(language: str) -> str:
+    return unicodedata.normalize("NFKC", language.strip()).replace("_", "-").casefold()
 
 
 def normalize_english_tag_value(raw_value: object) -> NormalizedTagValue:
