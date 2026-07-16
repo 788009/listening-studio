@@ -84,6 +84,7 @@ def main() -> None:
         JobWorker(
             create_session_factory(engine),
             build_handlers(settings),
+            job_storage=JobStorage(settings.data_dir),
         ).run_forever(stop_event)
     finally:
         engine.dispose()

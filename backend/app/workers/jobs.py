@@ -5,10 +5,13 @@ from threading import Event
 from typing import Any, Protocol
 
 from loguru import logger
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
-from backend.app.db.models.job import JobStatus
+from backend.app.db.models.job import Job, JobStatus
 from backend.app.repositories.jobs import JobRepository
+from backend.app.services.consistency import interrupted_job_target
+from backend.app.services.job_storage import JobStorage
 from backend.app.services.jobs import JobService
 
 
@@ -107,6 +110,7 @@ class JobWorker:
         *,
         poll_interval_seconds: float = 1.0,
         repository: JobRepository | None = None,
+        job_storage: JobStorage | None = None,
     ) -> None:
         if poll_interval_seconds <= 0:
             raise ValueError("Poll interval must be positive")
@@ -117,11 +121,35 @@ class JobWorker:
         }
         self.poll_interval_seconds = poll_interval_seconds
         self.repository = repository or JobRepository()
+        self.job_storage = job_storage
 
     def recover(self) -> dict[str, int]:
         with self.session_factory() as session:
+            interrupted = {
+                job.id: (job.status, target)
+                for job in session.scalars(select(Job).order_by(Job.id))
+                if (target := interrupted_job_target(job)) is not None
+            }
             result = self.repository.recover_interrupted(session)
             session.commit()
+        for job_id, (original, target) in interrupted.items():
+            cleanup_result = "not_required"
+            if self.job_storage is not None and target in {
+                JobStatus.FAILED,
+                JobStatus.CANCELLED,
+            }:
+                directory = self.job_storage.directory(job_id)
+                existed = directory.exists() or directory.is_symlink()
+                self.job_storage.cleanup(job_id)
+                cleanup_result = "removed" if existed else "absent"
+            logger.info(
+                "Startup job recovery resource_id={} original_status={} "
+                "target_status={} result=repaired temporary_cleanup={}",
+                job_id,
+                original.value,
+                target.value,
+                cleanup_result,
+            )
         logger.info(
             "Job recovery completed retried={} failed={} cancelled={}",
             result["retried"],

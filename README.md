@@ -76,6 +76,19 @@ source .venv/bin/activate
 .venv/bin/alembic -c alembic.ini downgrade base
 ```
 
+## Consistency Scan
+
+Report database and managed-file inconsistencies without changing either:
+
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/python -m backend.app.consistency
+```
+
+Pass `--apply` to perform the repairs listed in the JSON report. Unknown and
+orphaned filesystem entries are reported but retained.
+
 ## API Conventions
 
 Errors use one stable envelope. `details` is `null` when no structured detail

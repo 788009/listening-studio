@@ -18,6 +18,7 @@ from backend.app.factory import create_app
 from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT_HEADER
 from backend.app.repositories.jobs import JobRepository
 from backend.app.repositories.users import UserRepository
+from backend.app.services.job_storage import JobStorage
 from backend.app.services.jobs import JobService
 from backend.app.workers.jobs import JobContext, JobPayload, JobResult, JobWorker
 
@@ -199,10 +200,19 @@ class JobIntegrationTest(unittest.TestCase):
             self.assertEqual(claimed.id, unsafe.id)
             session.commit()
 
+        job_storage = JobStorage(self.settings.data_dir)
+        for job_id in (retryable.id, unsafe.id):
+            directory = job_storage.directory(job_id)
+            directory.mkdir(parents=True)
+            (directory / "temporary.bin").write_bytes(b"temporary")
+        unknown_directory = job_storage.root / "9999"
+        unknown_directory.mkdir(parents=True)
+
         worker = JobWorker(
             self.app.state.session_factory,
             {},
             poll_interval_seconds=0.01,
+            job_storage=job_storage,
         )
         recovered = worker.recover()
         self.assertEqual(recovered, {"cancelled": 0, "retried": 1, "failed": 1})
@@ -216,6 +226,9 @@ class JobIntegrationTest(unittest.TestCase):
             self.assertEqual(retryable_job.progress, 0)
             self.assertEqual(unsafe_job.status, JobStatus.FAILED)
             self.assertEqual(queued_job.status, JobStatus.QUEUED)
+        self.assertTrue(job_storage.directory(retryable.id).is_dir())
+        self.assertFalse(job_storage.directory(unsafe.id).exists())
+        self.assertTrue(unknown_directory.is_dir())
 
     def test_job_api_is_owner_scoped_and_cancels_queued_work(self) -> None:
         with self.app.state.session_factory() as session:
