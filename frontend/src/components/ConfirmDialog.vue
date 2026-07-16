@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
+import { useI18n } from '@/i18n'
+
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -11,6 +13,7 @@ const props = withDefaults(
   { busy: false, confirmLabel: 'Confirm' },
 )
 const emit = defineEmits<{ close: []; confirm: [] }>()
+const { t } = useI18n()
 const titleId = useId()
 const dialog = ref<HTMLElement | null>(null)
 const cancelButton = ref<HTMLButtonElement | null>(null)
@@ -87,7 +90,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleDocumentKeyd
           class="h-9 border border-line px-3 text-sm font-medium hover:border-ink"
           @click="close"
         >
-          Cancel
+          {{ t('Cancel') }}
         </button>
         <button
           type="button"
@@ -95,7 +98,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleDocumentKeyd
           class="h-9 bg-danger px-3 text-sm font-medium text-white disabled:opacity-60"
           @click="emit('confirm')"
         >
-          {{ busy ? 'Working' : confirmLabel }}
+          {{ busy ? t('Working') : t(confirmLabel) }}
         </button>
       </div>
     </div>

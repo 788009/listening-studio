@@ -5,6 +5,7 @@ import { useRoute } from 'vue-router'
 import { apiRequest } from '@/api/client'
 import { ApiError } from '@/api/errors'
 import { useAuthStore, type CurrentUser } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 interface UserSummary {
   userId: string
@@ -23,6 +24,7 @@ interface UserSummary {
 
 const route = useRoute()
 const auth = useAuthStore()
+const { t } = useI18n()
 const profile = ref<UserSummary | null>(null)
 const loading = ref(true)
 const errorMessage = ref('')
@@ -45,7 +47,7 @@ async function loadProfile(): Promise<void> {
     locale.value = profile.value.locale
   } catch (error) {
     profile.value = null
-    errorMessage.value = error instanceof ApiError ? error.message : 'Profile unavailable'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Profile unavailable')
   } finally {
     loading.value = false
   }
@@ -62,7 +64,7 @@ async function saveProfile(): Promise<void> {
     editing.value = false
     await loadProfile()
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Profile update failed'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Profile update failed')
   }
 }
 
@@ -71,7 +73,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
 
 <template>
   <section aria-labelledby="profile-title">
-    <p v-if="loading" class="py-12 text-sm text-muted">Loading profile</p>
+    <p v-if="loading" class="py-12 text-sm text-muted">{{ t('Loading profile') }}</p>
     <p v-else-if="errorMessage && !profile" role="alert" class="py-12 text-sm text-danger">
       {{ errorMessage }}
     </p>
@@ -90,7 +92,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
           class="h-9 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
           @click="editing = true"
         >
-          Edit profile
+          {{ t('Edit profile') }}
         </button>
       </div>
 
@@ -100,7 +102,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
         @submit.prevent="saveProfile"
       >
         <div>
-          <label for="edit-username" class="mb-1 block text-sm font-medium">Display name</label>
+          <label for="edit-username" class="mb-1 block text-sm font-medium">{{ t('Display name') }}</label>
           <input
             id="edit-username"
             v-model="username"
@@ -110,18 +112,18 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
           />
         </div>
         <div>
-          <label for="edit-locale" class="mb-1 block text-sm font-medium">Language</label>
+          <label for="edit-locale" class="mb-1 block text-sm font-medium">{{ t('Language') }}</label>
           <select
             id="edit-locale"
             v-model="locale"
             class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           >
-            <option value="en">English</option>
-            <option value="zh-CN">Chinese</option>
+            <option value="en">{{ t('English') }}</option>
+            <option value="zh-CN">{{ t('Chinese') }}</option>
           </select>
         </div>
         <button type="submit" class="h-10 bg-ink px-4 text-sm font-medium text-white hover:bg-accent">
-          Save
+          {{ t('Save') }}
         </button>
         <p v-if="errorMessage" role="alert" class="text-sm text-danger sm:col-span-3">
           {{ errorMessage }}
@@ -130,11 +132,11 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
 
       <dl class="grid border-b border-line bg-surface sm:grid-cols-2">
         <div class="border-b border-line px-5 py-6 sm:border-b-0 sm:border-r">
-          <dt class="text-sm text-muted">Public voices</dt>
+          <dt class="text-sm text-muted">{{ t('Public voices') }}</dt>
           <dd class="mt-1 text-2xl font-semibold">{{ profile.statistics.publicVoiceCount }}</dd>
         </div>
         <div class="px-5 py-6">
-          <dt class="text-sm text-muted">Public audio</dt>
+          <dt class="text-sm text-muted">{{ t('Public audio count') }}</dt>
           <dd class="mt-1 text-2xl font-semibold">{{ profile.statistics.publicAudioCount }}</dd>
         </div>
       </dl>

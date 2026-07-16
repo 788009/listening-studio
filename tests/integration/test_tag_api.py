@@ -17,9 +17,7 @@ from backend.app.db.models.audio import (
     AudioStatus,
     AudioVisibility,
 )
-from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.voice import VoiceStatus, VoiceVisibility
-from backend.app.db.models.voice_tag import VoiceTagType
 from backend.app.factory import create_app
 from backend.app.integrations.identity import (
     DEBUG_ISSUER_HEADER,
@@ -174,6 +172,70 @@ class TagApiIntegrationTest(unittest.TestCase):
         self.assertEqual(updated.status_code, 200)
         self.assertEqual(updated.json()["displayValue"], "Voix Féminine")
         self.assertEqual(len(updated.json()["translations"]), 2)
+
+    def test_request_locale_priority_fallback_and_validation(self) -> None:
+        self.complete_profile()
+        created = self.send(
+            "POST",
+            "/api/audio-tags",
+            headers=self.headers(),
+            json={
+                "type": "topic",
+                "value": "Climate Change",
+                "translations": [{"language": "zh-CN", "value": "气候 变化"}],
+            },
+        )
+        fallback = self.create_audio_tag("No Translation")
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(fallback.status_code, 201)
+
+        anonymous_chinese = self.send(
+            "GET",
+            "/api/audio-tags?type=topic",
+            headers={"Accept-Language": "zh-CN, en;q=0.5"},
+        )
+        self.assertEqual(anonymous_chinese.status_code, 200)
+        values = {item["englishValue"]: item for item in anonymous_chinese.json()}
+        self.assertEqual(values["Climate_Change"]["displayValue"], "气候 变化")
+        self.assertEqual(
+            values["No_Translation"]["displayValue"],
+            "No Translation",
+        )
+        self.assertEqual(
+            values["Climate_Change"]["fullTag"],
+            "topic:Climate_Change",
+        )
+
+        updated = self.send(
+            "PATCH",
+            "/api/users/me/profile",
+            headers=self.headers(),
+            json={"locale": "zh-CN"},
+        )
+        self.assertEqual(updated.status_code, 200)
+        user_preference = self.send(
+            "GET",
+            f"/api/audio-tags/{created.json()['id']}",
+            headers={**self.headers(), "Accept-Language": "en"},
+        )
+        explicit_english = self.send(
+            "GET",
+            f"/api/audio-tags/{created.json()['id']}?language=en",
+            headers={**self.headers(), "Accept-Language": "zh-CN"},
+        )
+        unsupported = self.send("GET", "/api/audio-tags?language=fr")
+        localized_error = self.send(
+            "GET",
+            "/api/audio-tags/99999",
+            headers={"Accept-Language": "zh-CN"},
+        )
+
+        self.assertEqual(user_preference.json()["displayValue"], "气候 变化")
+        self.assertEqual(explicit_english.json()["displayValue"], "Climate Change")
+        self.assertEqual(unsupported.status_code, 422)
+        self.assertEqual(localized_error.status_code, 404)
+        self.assertEqual(localized_error.json()["error"]["code"], "not_found")
+        self.assertEqual(localized_error.json()["error"]["message"], "未找到资源")
 
     def test_domains_types_author_and_permissions_are_isolated(self) -> None:
         anonymous = self.send(

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from backend.app.core.exceptions import ProfileIncompleteError
+from backend.app.core.locales import resolve_locale
 from backend.app.db.models.user import User
 from backend.app.integrations.identity import IdentityProvider
 from backend.app.services.users import UserService
@@ -60,6 +61,9 @@ class AuthenticationMiddleware:
                     session,
                     issuer=external_identity.issuer,
                     subject=external_identity.subject,
+                    locale=resolve_locale(
+                        accept_language=request.headers.get("Accept-Language")
+                    ),
                 )
                 session.commit()
 

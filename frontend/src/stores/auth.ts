@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 
 import { apiRequest } from '@/api/client'
 import { ApiError } from '@/api/errors'
-
+import { setLocale } from '@/i18n'
 
 export interface CurrentUser {
   userId: string | null
@@ -27,6 +27,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       user.value = await apiRequest<CurrentUser>('/users/me')
+      setLocale(user.value.locale)
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         user.value = null
@@ -42,6 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
   function setCurrentUser(value: CurrentUser): void {
     user.value = value
     loaded.value = true
+    setLocale(value.locale)
   }
 
   return {

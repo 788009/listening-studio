@@ -2,15 +2,17 @@
 import { computed } from 'vue'
 
 import type { ResourceStatus } from '@/api/voices'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ status: ResourceStatus }>()
+const { t } = useI18n()
 
 const label = computed(() => {
   const labels: Record<ResourceStatus, string> = {
-    pending: 'Pending',
-    processing: 'Processing',
-    ready: 'Ready',
-    failed: 'Failed',
+    pending: t('Pending'),
+    processing: t('Processing'),
+    ready: t('Ready'),
+    failed: t('Failed'),
   }
   return labels[props.status]
 })

@@ -2,6 +2,9 @@
 import { RouterLink } from 'vue-router'
 
 import type { ManagedResource } from '@/api/resourceManagement'
+import { useI18n } from '@/i18n'
+
+const { formatDate, t } = useI18n()
 
 defineProps<{
   items: ManagedResource[]
@@ -30,20 +33,14 @@ function detailPath(item: ManagedResource): string | null {
   return null
 }
 
-function createdDate(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(date)
-}
-
 function references(item: ManagedResource): string {
   return item.references
-    .map((value) => `${value.count} ${referenceLabels[value.type] ?? value.type}`)
+    .map((value) => `${value.count} ${t(referenceLabels[value.type] ?? value.type)}`)
     .join(', ')
+}
+
+function tagLabel(type: string): string {
+  return t(type.charAt(0).toUpperCase() + type.slice(1))
 }
 
 function statusClass(status: string): string {
@@ -68,7 +65,7 @@ function statusClass(status: string): string {
           class="h-4 w-4 accent-accent"
           :checked="selectedIds.has(item.id)"
           :disabled="busy"
-          :aria-label="`Select ${item.title}`"
+          :aria-label="t('Select {title}', { title: item.title })"
           @change="emit('select', item.id)"
         />
       </div>
@@ -85,16 +82,18 @@ function statusClass(status: string): string {
         <p v-else class="break-words text-sm font-semibold">{{ item.title }}</p>
         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
           <span :class="statusClass(item.status)" class="font-medium capitalize">
-            {{ item.status.replace('_', ' ') }}
+            {{ t(item.status.charAt(0).toUpperCase() + item.status.slice(1)) }}
           </span>
-          <span v-if="item.visibility" class="capitalize">{{ item.visibility }}</span>
-          <time :datetime="item.createdAt">{{ createdDate(item.createdAt) }}</time>
+          <span v-if="item.visibility" class="capitalize">
+            {{ t(item.visibility.charAt(0).toUpperCase() + item.visibility.slice(1)) }}
+          </span>
+          <time :datetime="item.createdAt">{{ formatDate(item.createdAt) }}</time>
         </div>
         <p v-if="item.tags.length > 0" class="mt-2 break-words text-xs text-muted">
-          {{ item.tags.map((tag) => `${tag.type}: ${tag.value.replace(/_/g, ' ')}`).join(', ') }}
+          {{ item.tags.map((tag) => `${tagLabel(tag.type)}: ${tag.value.replace(/_/g, ' ')}`).join(', ') }}
         </p>
         <p v-if="item.references.length > 0" class="mt-2 break-words text-xs text-danger">
-          Referenced by {{ references(item) }}
+          {{ t('Referenced by {references}', { references: references(item) }) }}
         </p>
       </div>
 
@@ -103,13 +102,13 @@ function statusClass(status: string): string {
         type="button"
         :disabled="busy || !item.canDelete"
         class="col-span-2 inline-flex h-9 items-center justify-center gap-2 border border-line px-3 text-sm font-medium text-danger hover:border-danger disabled:text-muted disabled:opacity-60 sm:col-span-1"
-        :title="item.canDelete ? 'Delete' : 'Referenced resources cannot be deleted'"
+        :title="item.canDelete ? t('Delete') : t('Referenced resources cannot be deleted')"
         @click="emit('delete', item)"
       >
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" stroke="currentColor" stroke-width="2" />
         </svg>
-        Delete
+        {{ t('Delete') }}
       </button>
     </li>
   </ul>

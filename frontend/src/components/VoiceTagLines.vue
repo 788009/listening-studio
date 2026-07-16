@@ -2,13 +2,15 @@
 import { computed } from 'vue'
 
 import type { VoiceTag, VoiceTagType } from '@/api/voices'
+import { useI18n } from '@/i18n'
 
 const props = defineProps<{ tags: VoiceTag[] }>()
+const { t } = useI18n()
 
 const rows = computed(() => {
   const labels: Record<VoiceTagType, string> = {
-    author: 'Author',
-    gender: 'Gender',
+    author: t('Author'),
+    gender: t('Gender'),
   }
   return (['author', 'gender'] as VoiceTagType[])
     .map((type) => ({

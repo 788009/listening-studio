@@ -5,6 +5,9 @@ import {
   autocompleteAudioTags,
   type AudioTag,
 } from '@/api/audios'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: string
@@ -28,7 +31,7 @@ const currentToken = computed(() => {
 function displayValue(value: string): string {
   const tag = props.tags.find((item) => item.fullTag === value)
   if (!tag) return value.replace(/_/g, ' ')
-  const type = tag.type.charAt(0).toUpperCase() + tag.type.slice(1)
+  const type = t(tag.type.charAt(0).toUpperCase() + tag.type.slice(1))
   return `${type}: ${tag.displayValue.replace(/_/g, ' ')}`
 }
 
@@ -101,7 +104,7 @@ onBeforeUnmount(() => clearTimeout(debounceTimer))
 <template>
   <form class="flex flex-col gap-3 sm:flex-row sm:items-end" role="search" @submit.prevent="submit">
     <div class="relative min-w-0 flex-1">
-      <label for="audio-search" class="mb-1 block text-sm font-medium">Search audio</label>
+      <label for="audio-search" class="mb-1 block text-sm font-medium">{{ t('Search audio') }}</label>
       <input
         id="audio-search"
         :value="modelValue"
@@ -149,7 +152,7 @@ onBeforeUnmount(() => clearTimeout(debounceTimer))
         <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
         <path d="m16 16 4 4" stroke="currentColor" stroke-width="2" />
       </svg>
-      Search
+      {{ t('Search') }}
     </button>
   </form>
 </template>

@@ -1,3 +1,5 @@
+import { translateApiError } from '@/i18n'
+
 export interface ApiErrorContent {
   code: string
   message: string
@@ -16,7 +18,7 @@ export class ApiError extends Error {
   readonly requestId: string | null
 
   constructor(status: number, content: ApiErrorContent) {
-    super(content.message)
+    super(translateApiError(content.code, content.message))
     this.name = 'ApiError'
     this.status = status
     this.code = content.code

@@ -15,7 +15,7 @@ import {
   type QuestionType,
 } from '@/api/generationBatches'
 import { listVoices, type Voice } from '@/api/voices'
-import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 type InputMode = 'text' | 'file'
 interface SpeakerMappingDraft {
@@ -34,7 +34,7 @@ const questionOptions: { value: QuestionType; label: string }[] = [
 
 const route = useRoute()
 const router = useRouter()
-const auth = useAuthStore()
+const { locale, t } = useI18n()
 const inputMode = ref<InputMode>('text')
 const corpus = ref('')
 const corpusFile = ref<File | null>(null)
@@ -61,7 +61,6 @@ const errorMessage = ref('')
 const actionMessage = ref('')
 let pollTimer: number | undefined
 
-const locale = computed(() => auth.user?.locale ?? 'en')
 const topicTags = computed(() => tags.value.filter((tag) => tag.type === 'topic'))
 const categoryTags = computed(() => tags.value.filter((tag) => tag.type === 'category'))
 const completedCount = computed(
@@ -107,18 +106,18 @@ function speakerVoiceMap(): Record<string, number> | null {
     const voiceId = Number(mapping.voiceId)
     const key = speaker.normalize('NFKC').toLocaleLowerCase()
     if (!speaker || !Number.isInteger(voiceId) || voiceId < 1) {
-      errorMessage.value = 'Complete every speaker and voice mapping'
+      errorMessage.value = t('Complete every speaker and voice mapping')
       return null
     }
     if (normalized.has(key)) {
-      errorMessage.value = 'Speaker roles must be unique'
+      errorMessage.value = t('Speaker roles must be unique')
       return null
     }
     normalized.add(key)
     result[speaker] = voiceId
   }
   if (Object.keys(result).length === 0) {
-    errorMessage.value = 'Add at least one speaker and voice mapping'
+    errorMessage.value = t('Add at least one speaker and voice mapping')
     return null
   }
   return result
@@ -126,24 +125,24 @@ function speakerVoiceMap(): Record<string, number> | null {
 
 function validateSubmission(): Record<string, number> | null {
   if (questionTypes.value.length === 0) {
-    errorMessage.value = 'Select at least one question type'
+    errorMessage.value = t('Select at least one question type')
     return null
   }
   if (!Number.isInteger(count.value) || count.value < 1 || count.value > MAX_COUNT) {
-    errorMessage.value = `Count must be between 1 and ${MAX_COUNT}`
+    errorMessage.value = t('Count must be between 1 and {count}', { count: MAX_COUNT })
     return null
   }
   if (inputMode.value === 'text' && !corpus.value.trim()) {
-    errorMessage.value = 'Enter corpus text'
+    errorMessage.value = t('Enter corpus text')
     return null
   }
   if (inputMode.value === 'file') {
     if (!corpusFile.value) {
-      errorMessage.value = 'Choose a TXT file'
+      errorMessage.value = t('Choose a TXT file')
       return null
     }
     if (!corpusFile.value.name.toLocaleLowerCase().endsWith('.txt')) {
-      errorMessage.value = 'Corpus file must use the .txt extension'
+      errorMessage.value = t('Corpus file must use the .txt extension')
       return null
     }
   }
@@ -169,7 +168,7 @@ async function submit(): Promise<void> {
     await router.replace({ name: 'generation-batch', params: { id: accepted.batchId } })
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Batch could not be submitted'
+      error instanceof ApiError ? error.message : t('Batch could not be submitted')
   } finally {
     submitting.value = false
   }
@@ -192,7 +191,7 @@ async function loadOptions(): Promise<void> {
     }
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Generation options could not be loaded'
+      error instanceof ApiError ? error.message : t('Generation options could not be loaded')
   } finally {
     loadingOptions.value = false
   }
@@ -212,7 +211,7 @@ async function loadBatch(): Promise<void> {
     }
     schedulePoll(result.status)
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Batch could not be loaded'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Batch could not be loaded')
   } finally {
     loadingBatch.value = false
   }
@@ -237,7 +236,7 @@ async function retry(item: GenerationBatchItem): Promise<void> {
     await retryGenerationBatchItem(batch.value.id, item.id)
     await loadBatch()
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Item retry failed'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Item retry failed')
   } finally {
     retryingIds.value = retryingIds.value.filter((id) => id !== item.id)
   }
@@ -254,17 +253,17 @@ async function applyCompletedUpdates(): Promise<void> {
       bulkTagIds.value,
       bulkVisibility.value,
     )
-    actionMessage.value = `${result.updatedCount} completed audios updated`
+    actionMessage.value = t('{count} completed audios updated', { count: result.updatedCount })
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Completed audios could not be updated'
+      error instanceof ApiError ? error.message : t('Completed audios could not be updated')
   } finally {
     applying.value = false
   }
 }
 
 function statusLabel(status: GenerationBatchStatus): string {
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  return t(status.charAt(0).toUpperCase() + status.slice(1))
 }
 
 function statusClass(status: GenerationBatchStatus): string {
@@ -292,8 +291,8 @@ onUnmounted(stopPolling)
   <section aria-labelledby="batch-page-title" class="min-w-0">
     <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-        <h1 id="batch-page-title" class="break-words text-2xl font-semibold">Corpus generation</h1>
+        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+        <h1 id="batch-page-title" class="break-words text-2xl font-semibold">{{ t('Corpus generation') }}</h1>
       </div>
       <RouterLink
         v-if="batch"
@@ -303,7 +302,7 @@ onUnmounted(stopPolling)
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
         </svg>
-        New batch
+        {{ t('New batch') }}
       </RouterLink>
     </div>
 
@@ -312,16 +311,16 @@ onUnmounted(stopPolling)
     </p>
 
     <div v-if="loadingBatch" class="border-b border-line bg-surface px-5 py-12 text-sm text-muted">
-      Loading batch
+      {{ t('Loading batch') }}
     </div>
 
     <template v-else-if="batch">
       <div class="border-b border-line bg-surface px-5 py-6">
         <div class="flex min-w-0 items-start justify-between gap-5">
           <div class="min-w-0">
-            <p class="text-base font-semibold">Batch {{ batch.id }}</p>
+            <p class="text-base font-semibold">{{ t('Batch {id}', { id: batch.id }) }}</p>
             <p class="mt-1 text-sm text-muted">
-              {{ completedCount }} of {{ batch.requestedCount }} audios ready
+              {{ t('{completed} of {total} audios ready', { completed: completedCount, total: batch.requestedCount }) }}
             </p>
           </div>
           <span class="shrink-0 text-sm font-medium tabular-nums">{{ batch.progress }}%</span>
@@ -329,7 +328,7 @@ onUnmounted(stopPolling)
         <div
           class="mt-5 h-2 overflow-hidden bg-canvas"
           role="progressbar"
-          aria-label="Batch generation progress"
+          :aria-label="t('Batch generation progress')"
           aria-valuemin="0"
           aria-valuemax="100"
           :aria-valuenow="batch.progress"
@@ -345,7 +344,7 @@ onUnmounted(stopPolling)
 
       <div class="border-b border-line bg-surface">
         <div class="border-b border-line px-5 py-4">
-          <h2 class="text-base font-semibold">Generated items</h2>
+          <h2 class="text-base font-semibold">{{ t('Generated items') }}</h2>
         </div>
         <ol class="divide-y divide-line">
           <li
@@ -360,10 +359,10 @@ onUnmounted(stopPolling)
                 :to="`/audio/${item.audioId}`"
                 class="break-words text-sm font-semibold hover:text-accent hover:underline"
               >
-                {{ item.title || `Audio ${item.audioId}` }}
+                {{ item.title || t('Audio {id}', { id: item.audioId ?? '' }) }}
               </RouterLink>
               <p v-else class="break-words text-sm font-semibold">
-                {{ item.title || `Preparing item ${item.position + 1}` }}
+                {{ item.title || t('Preparing item {position}', { position: item.position + 1 }) }}
               </p>
               <p v-if="item.errorSummary" class="mt-1 break-words text-sm text-danger">
                 {{ item.errorSummary }}
@@ -384,7 +383,7 @@ onUnmounted(stopPolling)
                   <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="2" />
                   <path d="M6.1 9A7 7 0 0 1 18 7l2 5M17.9 15A7 7 0 0 1 6 17l-2-5" stroke="currentColor" stroke-width="2" />
                 </svg>
-                {{ retryingIds.includes(item.id) ? 'Retrying' : 'Retry' }}
+                {{ retryingIds.includes(item.id) ? t('Retrying') : t('Retry') }}
               </button>
             </div>
           </li>
@@ -396,7 +395,7 @@ onUnmounted(stopPolling)
         class="border-b border-line bg-surface px-5 py-6"
         @submit.prevent="applyCompletedUpdates"
       >
-        <h2 class="text-base font-semibold">Completed audios</h2>
+        <h2 class="text-base font-semibold">{{ t('Completed audios') }}</h2>
         <div class="mt-5 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div class="grid min-w-0 gap-5 sm:grid-cols-2">
             <fieldset
@@ -407,7 +406,7 @@ onUnmounted(stopPolling)
               :key="group.label"
               class="min-w-0"
             >
-              <legend class="mb-2 text-sm font-medium">{{ group.label }}</legend>
+              <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
               <div class="space-y-2">
                 <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
                   <input
@@ -418,7 +417,7 @@ onUnmounted(stopPolling)
                   />
                   <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
                 </label>
-                <p v-if="group.items.length === 0" class="text-sm text-muted">None available</p>
+                <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
               </div>
             </fieldset>
           </div>
@@ -430,7 +429,7 @@ onUnmounted(stopPolling)
                 :checked="bulkVisibility === 'public'"
                 @change="bulkVisibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'"
               />
-              <span class="text-sm font-medium">Public visibility</span>
+              <span class="text-sm font-medium">{{ t('Public visibility') }}</span>
             </label>
             <div>
               <p v-if="actionMessage" class="mb-3 text-sm text-success">{{ actionMessage }}</p>
@@ -439,7 +438,7 @@ onUnmounted(stopPolling)
                 :disabled="applying || loadingOptions"
                 class="h-10 w-full bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
               >
-                {{ applying ? 'Applying' : 'Apply to completed' }}
+                {{ applying ? t('Applying') : t('Apply to completed') }}
               </button>
             </div>
           </div>
@@ -450,7 +449,7 @@ onUnmounted(stopPolling)
     <form v-else class="min-w-0 border-b border-line bg-surface" @submit.prevent="submit">
       <div class="grid min-w-0 gap-6 border-b border-line px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0">
-          <div class="grid h-10 grid-cols-2 border border-line" aria-label="Corpus input mode">
+          <div class="grid h-10 grid-cols-2 border border-line" :aria-label="t('Corpus input mode')">
             <button
               type="button"
               :aria-pressed="inputMode === 'text'"
@@ -458,7 +457,7 @@ onUnmounted(stopPolling)
               class="text-sm font-medium"
               @click="inputMode = 'text'"
             >
-              Text
+              {{ t('Text') }}
             </button>
             <button
               type="button"
@@ -467,11 +466,11 @@ onUnmounted(stopPolling)
               class="border-l border-line text-sm font-medium"
               @click="inputMode = 'file'"
             >
-              TXT file
+              {{ t('TXT file') }}
             </button>
           </div>
           <div class="mt-4">
-            <label v-if="inputMode === 'text'" for="corpus-text" class="mb-1 block text-sm font-medium">Corpus text</label>
+            <label v-if="inputMode === 'text'" for="corpus-text" class="mb-1 block text-sm font-medium">{{ t('Corpus text') }}</label>
             <textarea
               v-if="inputMode === 'text'"
               id="corpus-text"
@@ -480,7 +479,7 @@ onUnmounted(stopPolling)
             />
             <div v-else class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
               <div class="min-w-0">
-                <label for="corpus-file" class="mb-1 block text-sm font-medium">TXT file</label>
+                <label for="corpus-file" class="mb-1 block text-sm font-medium">{{ t('TXT file') }}</label>
                 <input
                   id="corpus-file"
                   type="file"
@@ -490,7 +489,7 @@ onUnmounted(stopPolling)
                 />
               </div>
               <div>
-                <label for="corpus-encoding" class="mb-1 block text-sm font-medium">Encoding</label>
+                <label for="corpus-encoding" class="mb-1 block text-sm font-medium">{{ t('Encoding') }}</label>
                 <select id="corpus-encoding" v-model="encoding" class="h-10 w-full border border-line bg-surface px-3 text-sm">
                   <option value="utf-8">UTF-8</option>
                   <option value="utf-8-sig">UTF-8 with BOM</option>
@@ -503,7 +502,7 @@ onUnmounted(stopPolling)
           </div>
         </div>
         <div>
-          <label for="generation-count" class="mb-1 block text-sm font-medium">Audio count</label>
+          <label for="generation-count" class="mb-1 block text-sm font-medium">{{ t('Audio count') }}</label>
           <input
             id="generation-count"
             v-model.number="count"
@@ -513,7 +512,7 @@ onUnmounted(stopPolling)
             class="h-10 w-full border border-line px-3 text-sm tabular-nums"
           />
           <fieldset class="mt-5">
-            <legend class="mb-2 text-sm font-medium">Question types</legend>
+            <legend class="mb-2 text-sm font-medium">{{ t('Question types') }}</legend>
             <div class="space-y-2">
               <label v-for="option in questionOptions" :key="option.value" class="flex items-start gap-2 text-sm">
                 <input
@@ -522,7 +521,7 @@ onUnmounted(stopPolling)
                   :checked="questionTypes.includes(option.value)"
                   @change="toggleQuestionType(option.value)"
                 />
-                {{ option.label }}
+                {{ t(option.label) }}
               </label>
             </div>
           </fieldset>
@@ -531,14 +530,14 @@ onUnmounted(stopPolling)
 
       <div class="border-b border-line px-5 py-6">
         <div class="flex items-center justify-between gap-4">
-          <h2 class="text-base font-semibold">Speaker voices</h2>
+          <h2 class="text-base font-semibold">{{ t('Speaker voices') }}</h2>
           <button type="button" class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink" @click="addMapping">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" /></svg>
-            Add role
+            {{ t('Add role') }}
           </button>
         </div>
-        <div v-if="loadingOptions" class="py-10 text-sm text-muted">Loading voices</div>
-        <div v-else-if="voices.length === 0" class="py-8 text-sm text-muted">No ready voices are available</div>
+        <div v-if="loadingOptions" class="py-10 text-sm text-muted">{{ t('Loading voices') }}</div>
+        <div v-else-if="voices.length === 0" class="py-8 text-sm text-muted">{{ t('No ready voices are available') }}</div>
         <div v-else class="mt-4 space-y-3">
           <div
             v-for="mapping in mappings"
@@ -546,17 +545,17 @@ onUnmounted(stopPolling)
             class="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem]"
           >
             <div class="min-w-0">
-              <label :for="`speaker-${mapping.key}`" class="sr-only">Speaker role</label>
-              <input :id="`speaker-${mapping.key}`" v-model="mapping.speaker" type="text" maxlength="200" placeholder="Speaker role" class="h-10 w-full min-w-0 border border-line px-3 text-sm" />
+              <label :for="`speaker-${mapping.key}`" class="sr-only">{{ t('Speaker role') }}</label>
+              <input :id="`speaker-${mapping.key}`" v-model="mapping.speaker" type="text" maxlength="200" :placeholder="t('Speaker role')" class="h-10 w-full min-w-0 border border-line px-3 text-sm" />
             </div>
             <div class="min-w-0">
-              <label :for="`speaker-voice-${mapping.key}`" class="sr-only">Voice</label>
+              <label :for="`speaker-voice-${mapping.key}`" class="sr-only">{{ t('Voice') }}</label>
               <select :id="`speaker-voice-${mapping.key}`" v-model="mapping.voiceId" class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm">
-                <option value="" disabled>Select voice</option>
+                <option value="" disabled>{{ t('Select voice') }}</option>
                 <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">{{ voice.title }}</option>
               </select>
             </div>
-            <button type="button" class="flex h-10 w-10 items-center justify-center border border-line hover:border-danger hover:text-danger disabled:opacity-40" :disabled="mappings.length === 1" :aria-label="`Remove ${mapping.speaker || 'speaker'} mapping`" title="Remove mapping" @click="removeMapping(mapping.key)">
+            <button type="button" class="flex h-10 w-10 items-center justify-center border border-line hover:border-danger hover:text-danger disabled:opacity-40" :disabled="mappings.length === 1" :aria-label="t('Remove {speaker} mapping', { speaker: mapping.speaker || t('speaker') })" :title="t('Remove mapping')" @click="removeMapping(mapping.key)">
               <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2" /></svg>
             </button>
           </div>
@@ -566,13 +565,13 @@ onUnmounted(stopPolling)
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
           <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
-            <legend class="mb-2 text-sm font-medium">{{ group.label }}</legend>
+            <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
             <div class="space-y-2">
               <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
                 <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag('submission', tag.id)" />
                 <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
               </label>
-              <p v-if="group.items.length === 0" class="text-sm text-muted">None available</p>
+              <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
             </div>
           </fieldset>
         </div>
@@ -583,7 +582,7 @@ onUnmounted(stopPolling)
             class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
           >
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" /></svg>
-            {{ submitting ? 'Submitting' : 'Generate batch' }}
+            {{ submitting ? t('Submitting') : t('Generate batch') }}
           </button>
         </div>
       </div>

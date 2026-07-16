@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { Voice } from '@/api/voices'
 import type { DialogueTurnDraft } from './dialogueTurnTypes'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: DialogueTurnDraft[]
@@ -57,13 +60,13 @@ function moveTurn(index: number, offset: -1 | 1): void {
         :key="turn.key"
         class="grid min-w-0 gap-4 px-5 py-5 lg:grid-cols-[4.5rem_minmax(10rem,0.8fr)_minmax(10rem,0.7fr)_minmax(14rem,1.5fr)]"
       >
-        <div class="grid h-9 grid-cols-3" aria-label="Turn controls">
+        <div class="grid h-9 grid-cols-3" :aria-label="t('Turn controls')">
           <button
             type="button"
             class="flex h-9 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
             :disabled="index === 0"
-            title="Move turn up"
-            :aria-label="`Move turn ${index + 1} up`"
+            :title="t('Move turn up')"
+            :aria-label="t('Move turn {position} up', { position: index + 1 })"
             @click="moveTurn(index, -1)"
           >
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -74,8 +77,8 @@ function moveTurn(index: number, offset: -1 | 1): void {
             type="button"
             class="flex h-9 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
             :disabled="index === modelValue.length - 1"
-            title="Move turn down"
-            :aria-label="`Move turn ${index + 1} down`"
+            :title="t('Move turn down')"
+            :aria-label="t('Move turn {position} down', { position: index + 1 })"
             @click="moveTurn(index, 1)"
           >
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -86,8 +89,8 @@ function moveTurn(index: number, offset: -1 | 1): void {
             type="button"
             class="flex h-9 w-6 items-center justify-center text-muted hover:text-danger disabled:opacity-30"
             :disabled="modelValue.length === 1"
-            title="Delete turn"
-            :aria-label="`Delete turn ${index + 1}`"
+            :title="t('Delete turn')"
+            :aria-label="t('Delete turn {position}', { position: index + 1 })"
             @click="removeTurn(index)"
           >
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -96,7 +99,7 @@ function moveTurn(index: number, offset: -1 | 1): void {
           </button>
         </div>
         <div class="min-w-0">
-          <label :for="`turn-voice-${turn.key}`" class="mb-1 block text-sm font-medium">Voice</label>
+          <label :for="`turn-voice-${turn.key}`" class="mb-1 block text-sm font-medium">{{ t('Voice') }}</label>
           <select
             :id="`turn-voice-${turn.key}`"
             :value="turn.voiceId"
@@ -109,7 +112,7 @@ function moveTurn(index: number, offset: -1 | 1): void {
           </select>
         </div>
         <div class="min-w-0">
-          <label :for="`turn-speaker-${turn.key}`" class="mb-1 block text-sm font-medium">Speaker</label>
+          <label :for="`turn-speaker-${turn.key}`" class="mb-1 block text-sm font-medium">{{ t('Speaker') }}</label>
           <input
             :id="`turn-speaker-${turn.key}`"
             :value="turn.speaker"
@@ -121,7 +124,7 @@ function moveTurn(index: number, offset: -1 | 1): void {
           />
         </div>
         <div class="min-w-0">
-          <label :for="`turn-text-${turn.key}`" class="mb-1 block text-sm font-medium">Text</label>
+          <label :for="`turn-text-${turn.key}`" class="mb-1 block text-sm font-medium">{{ t('Text') }}</label>
           <textarea
             :id="`turn-text-${turn.key}`"
             :value="turn.text"
@@ -140,7 +143,7 @@ function moveTurn(index: number, offset: -1 | 1): void {
       <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
         <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
       </svg>
-      Add turn
+      {{ t('Add turn') }}
     </button>
   </div>
 </template>

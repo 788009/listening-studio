@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import type { Audio } from '@/api/audios'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
+import { setLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import AudioDetailView from './AudioDetailView.vue'
 import LibraryView from './LibraryView.vue'
@@ -80,6 +81,7 @@ function testRouter() {
 
 describe('audio views', () => {
   afterEach(() => {
+    setLocale('en')
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
@@ -126,6 +128,42 @@ describe('audio views', () => {
     await wrapper.get('input').trigger('keydown', { key: 'Enter' })
     const updates = wrapper.emitted('update:modelValue') ?? []
     expect(updates[updates.length - 1]?.[0]).toBe('topic:climate_change ')
+  })
+
+  it('switches fixed text and tag display without changing canonical values or IDs', async () => {
+    setLocale('zh-CN')
+    const fallbackTag = {
+      ...audio.tags[1]!,
+      id: 3,
+      englishValue: 'environment',
+      displayValue: 'environment',
+      fullTag: 'topic:environment',
+      translations: [],
+    }
+    const localizedAudio = { ...audio, tags: [...audio.tags, fallbackTag] }
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const path = String(input)
+      if (path.startsWith('/api/audio-tags')) {
+        return Promise.resolve(jsonResponse(localizedAudio.tags))
+      }
+      return Promise.resolve(
+        jsonResponse({ items: [localizedAudio], page: 1, pageSize: 20, total: 1 }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const pinia = setupAuth()
+    const router = testRouter()
+    await router.push('/')
+    const wrapper = mount(LibraryView, { global: { plugins: [pinia, router] } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('听力资源库')
+    expect(wrapper.text()).toContain('气候 变化')
+    expect(wrapper.text()).toContain('environment')
+    expect(wrapper.get('a[href="/audio/5"]').attributes('href')).toBe('/audio/5')
+    expect(document.documentElement.lang).toBe('zh-CN')
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('language=zh-CN'))).toBe(true)
+    expect(localizedAudio.tags[1]?.fullTag).toBe('topic:climate_change')
   })
 
   it('renders public detail text, speakers, tags, and playback for a student', async () => {

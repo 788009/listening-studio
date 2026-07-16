@@ -12,13 +12,13 @@ import { ApiError } from '@/api/errors'
 import CreationModeControl from '@/components/CreationModeControl.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import type { DialogueTurnDraft } from '@/components/dialogueTurnTypes'
-import { useAuthStore } from '@/stores/auth'
 import { useAudioCreationStore } from '@/stores/audioCreation'
+import { useI18n } from '@/i18n'
 
 type CreationMode = 'single' | 'dialogue'
 
 const route = useRoute()
-const auth = useAuthStore()
+const { locale, t } = useI18n()
 const creation = useAudioCreationStore()
 const mode = ref<CreationMode>('single')
 const title = ref('')
@@ -32,7 +32,6 @@ const tags = ref<AudioTag[]>([])
 const loadingOptions = ref(true)
 const formError = ref('')
 
-const locale = computed(() => auth.user?.locale ?? 'en')
 const topicTags = computed(() => tags.value.filter((tag) => tag.type === 'topic'))
 const categoryTags = computed(() =>
   tags.value.filter((tag) => tag.type === 'category'),
@@ -77,7 +76,7 @@ async function loadOptions(): Promise<void> {
     if (turns.value.length === 0) turns.value = [newTurn()]
   } catch (error) {
     formError.value =
-      error instanceof ApiError ? error.message : 'Creation options could not be loaded'
+      error instanceof ApiError ? error.message : t('Creation options could not be loaded')
   } finally {
     loadingOptions.value = false
   }
@@ -87,13 +86,13 @@ async function submit(): Promise<void> {
   formError.value = ''
   const normalizedTitle = title.value.trim()
   if (!normalizedTitle) {
-    formError.value = 'Enter a title'
+    formError.value = t('Enter a title')
     return
   }
   if (mode.value === 'single') {
     const voiceId = Number(singleVoiceId.value)
     if (!Number.isInteger(voiceId) || !singleText.value.trim()) {
-      formError.value = 'Choose a voice and enter listening text'
+      formError.value = t('Choose a voice and enter listening text')
       return
     }
     await creation.submitSingle({
@@ -120,7 +119,7 @@ async function submit(): Promise<void> {
         !turn.text,
     )
   ) {
-    formError.value = 'Complete the voice, speaker, and text for every turn'
+    formError.value = t('Complete the voice, speaker, and text for every turn')
     return
   }
   await creation.submitDialogue({
@@ -152,8 +151,8 @@ onUnmounted(creation.stopPolling)
   <section aria-labelledby="create-title" class="min-w-0">
     <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-        <h1 id="create-title" class="break-words text-2xl font-semibold">Create listening</h1>
+        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+        <h1 id="create-title" class="break-words text-2xl font-semibold">{{ t('Create listening') }}</h1>
       </div>
       <RouterLink
         to="/voices/create"
@@ -163,7 +162,7 @@ onUnmounted(creation.stopPolling)
           <path d="M12 3a5 5 0 0 0-5 5v4a5 5 0 0 0 10 0V8a5 5 0 0 0-5-5Z" stroke="currentColor" stroke-width="2" />
           <path d="M4 11v1a8 8 0 0 0 16 0v-1M12 20v2" stroke="currentColor" stroke-width="2" />
         </svg>
-        Create voice
+        {{ t('Create voice') }}
       </RouterLink>
     </div>
 
@@ -171,16 +170,16 @@ onUnmounted(creation.stopPolling)
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
           <p class="break-words text-base font-semibold">
-            {{ creation.job?.status === 'running' ? 'Generating audio' : 'Waiting for processing' }}
+            {{ creation.job?.status === 'running' ? t('Generating audio') : t('Waiting for processing') }}
           </p>
-          <p class="mt-1 text-sm text-muted">Task {{ creation.jobId }}</p>
+          <p class="mt-1 text-sm text-muted">{{ t('Task {id}', { id: creation.jobId ?? '' }) }}</p>
         </div>
         <span class="shrink-0 text-sm font-medium tabular-nums">{{ creation.job?.progress ?? 0 }}%</span>
       </div>
       <div
         class="mt-5 h-2 overflow-hidden bg-canvas"
         role="progressbar"
-        aria-label="Audio generation progress"
+        :aria-label="t('Audio generation progress')"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="creation.job?.progress ?? 0"
@@ -190,19 +189,19 @@ onUnmounted(creation.stopPolling)
     </div>
 
     <div v-else-if="creation.completed && creation.audioId" class="border-b border-line bg-surface px-5 py-9">
-      <p class="text-base font-semibold text-success">Audio is ready</p>
+      <p class="text-base font-semibold text-success">{{ t('Audio is ready') }}</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
           :to="`/audio/${creation.audioId}`"
           class="inline-flex h-10 items-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent"
         >
-          View audio
+          {{ t('View audio') }}
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
             <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
           </svg>
         </RouterLink>
         <button type="button" class="h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink" @click="startAnother">
-          Create another
+          {{ t('Create another') }}
         </button>
       </div>
     </div>
@@ -210,13 +209,13 @@ onUnmounted(creation.stopPolling)
     <form v-else class="min-w-0 border-b border-line bg-surface" @submit.prevent="submit">
       <div v-if="creation.failed" class="border-b border-line px-5 py-4">
         <p role="alert" class="break-words text-sm text-danger">
-          {{ failureMessage || 'Audio generation failed' }}
+          {{ failureMessage || t('Audio generation failed') }}
         </p>
       </div>
 
       <div class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0">
-          <label for="audio-title" class="mb-1 block text-sm font-medium">Title</label>
+          <label for="audio-title" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
           <input
             id="audio-title"
             v-model="title"
@@ -227,26 +226,26 @@ onUnmounted(creation.stopPolling)
           />
         </div>
         <div>
-          <span class="mb-1 block text-sm font-medium">Mode</span>
+          <span class="mb-1 block text-sm font-medium">{{ t('Mode') }}</span>
           <CreationModeControl v-model="mode" />
         </div>
       </div>
 
-      <div v-if="loadingOptions" class="border-b border-line px-5 py-12 text-sm text-muted">Loading options</div>
+      <div v-if="loadingOptions" class="border-b border-line px-5 py-12 text-sm text-muted">{{ t('Loading options') }}</div>
       <div v-else-if="voices.length === 0" class="border-b border-line px-5 py-10">
-        <p class="text-sm text-muted">No ready voices are available</p>
-        <RouterLink to="/voices/create" class="mt-3 inline-block text-sm font-medium text-accent underline">Create voice</RouterLink>
+        <p class="text-sm text-muted">{{ t('No ready voices are available') }}</p>
+        <RouterLink to="/voices/create" class="mt-3 inline-block text-sm font-medium text-accent underline">{{ t('Create voice') }}</RouterLink>
       </div>
 
       <div v-else-if="mode === 'single'" class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[18rem_minmax(0,1fr)]">
         <div class="min-w-0">
-          <label for="single-voice" class="mb-1 block text-sm font-medium">Voice</label>
+          <label for="single-voice" class="mb-1 block text-sm font-medium">{{ t('Voice') }}</label>
           <select id="single-voice" v-model="singleVoiceId" class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus">
             <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">{{ voice.title }}</option>
           </select>
         </div>
         <div class="min-w-0">
-          <label for="single-text" class="mb-1 block text-sm font-medium">Listening text</label>
+          <label for="single-text" class="mb-1 block text-sm font-medium">{{ t('Listening text') }}</label>
           <textarea id="single-text" v-model="singleText" required class="min-h-40 w-full min-w-0 resize-y border border-line p-3 text-sm leading-6 focus:border-accent focus:outline-none focus:shadow-focus" />
         </div>
       </div>
@@ -260,26 +259,26 @@ onUnmounted(creation.stopPolling)
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
           <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
-            <legend class="mb-2 text-sm font-medium">{{ group.label }}</legend>
+            <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
             <div class="space-y-2">
               <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
                 <input type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-accent" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag(tag.id)" />
                 <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
               </label>
-              <p v-if="group.items.length === 0" class="text-sm text-muted">None available</p>
+              <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
             </div>
           </fieldset>
         </div>
         <div class="flex flex-col justify-between gap-6">
           <label class="flex items-start gap-3">
             <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent" :checked="visibility === 'public'" @change="visibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'" />
-            <span class="text-sm font-medium">Publish when ready</span>
+            <span class="text-sm font-medium">{{ t('Publish when ready') }}</span>
           </label>
           <div>
             <p v-if="formError || creation.errorMessage" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError || creation.errorMessage }}</p>
             <button type="submit" :disabled="creation.submitting || creation.active || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
               <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" /></svg>
-              {{ creation.submitting ? 'Submitting' : creation.failed ? 'Retry generation' : 'Generate audio' }}
+              {{ creation.submitting ? t('Submitting') : creation.failed ? t('Retry generation') : t('Generate audio') }}
             </button>
           </div>
         </div>

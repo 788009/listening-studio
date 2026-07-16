@@ -5,12 +5,14 @@ import { useRouter } from 'vue-router'
 import { apiRequest } from '@/api/client'
 import { ApiError } from '@/api/errors'
 import { useAuthStore, type CurrentUser } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const auth = useAuthStore()
 const router = useRouter()
+const { locale: activeLocale, t } = useI18n()
 const userId = ref('')
 const username = ref('')
-const locale = ref('en')
+const locale = ref(activeLocale.value)
 const errorMessage = ref('')
 const submitting = ref(false)
 
@@ -30,7 +32,7 @@ async function submit(): Promise<void> {
     await router.replace(`/user/${user.userId}`)
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Profile setup failed'
+      error instanceof ApiError ? error.message : t('Profile setup failed')
   } finally {
     submitting.value = false
   }
@@ -40,13 +42,13 @@ async function submit(): Promise<void> {
 <template>
   <section class="mx-auto max-w-xl" aria-labelledby="setup-title">
     <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">Teacher account</p>
-      <h1 id="setup-title" class="text-2xl font-semibold">Set up your profile</h1>
+      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher account') }}</p>
+      <h1 id="setup-title" class="text-2xl font-semibold">{{ t('Set up your profile') }}</h1>
     </div>
 
     <form class="space-y-5 border-b border-line bg-surface py-6" @submit.prevent="submit">
       <div>
-        <label for="user-id" class="mb-1 block text-sm font-medium">User ID</label>
+        <label for="user-id" class="mb-1 block text-sm font-medium">{{ t('User ID') }}</label>
         <input
           id="user-id"
           v-model="userId"
@@ -58,7 +60,7 @@ async function submit(): Promise<void> {
         />
       </div>
       <div>
-        <label for="username" class="mb-1 block text-sm font-medium">Display name</label>
+        <label for="username" class="mb-1 block text-sm font-medium">{{ t('Display name') }}</label>
         <input
           id="username"
           v-model="username"
@@ -68,14 +70,14 @@ async function submit(): Promise<void> {
         />
       </div>
       <div>
-        <label for="locale" class="mb-1 block text-sm font-medium">Language</label>
+        <label for="locale" class="mb-1 block text-sm font-medium">{{ t('Language') }}</label>
         <select
           id="locale"
           v-model="locale"
           class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         >
-          <option value="en">English</option>
-          <option value="zh-CN">Chinese</option>
+          <option value="en">{{ t('English') }}</option>
+          <option value="zh-CN">{{ t('Chinese') }}</option>
         </select>
       </div>
 
@@ -87,7 +89,7 @@ async function submit(): Promise<void> {
         :disabled="submitting"
         class="inline-flex h-10 items-center bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {{ submitting ? 'Saving' : 'Save profile' }}
+        {{ submitting ? t('Saving') : t('Save profile') }}
       </button>
     </form>
   </section>

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from backend.app.api.media import stream_wav
-from backend.app.api.schemas import LanguageCode, ResourceId
+from backend.app.api.schemas import ResourceId
 from backend.app.api.tag_schemas import (
     TagTranslationResponse,
     VoiceTagResponse,
@@ -34,6 +34,7 @@ from backend.app.core.auth import (
     get_principal,
     require_completed_profile,
 )
+from backend.app.core.locales import get_request_locale
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTag
@@ -141,7 +142,7 @@ async def list_voices(
     request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     author: str | None = Query(default=None, min_length=1, max_length=64),
     voice_status: VoiceStatus | None = Query(default=None, alias="status"),
     visibility: VoiceVisibility | None = Query(default=None),
@@ -175,7 +176,7 @@ async def list_voices(
 async def get_voice(
     voice_id: ResourceId,
     request: Request,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     principal: Principal = Depends(get_principal),
     session: Session = Depends(get_db_session),
 ) -> VoiceResponse:

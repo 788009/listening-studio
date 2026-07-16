@@ -15,6 +15,7 @@ from backend.app.api.tag_schemas import (
     VoiceTagResponse,
 )
 from backend.app.core.auth import Principal, get_principal, require_completed_profile
+from backend.app.core.locales import get_request_locale
 from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.db.models.user import User
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
@@ -93,7 +94,7 @@ def _audio_response(tag: AudioTag, language: str) -> AudioTagResponse:
 async def create_voice_tag(
     payload: VoiceTagCreate,
     request: Request,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     _current_user: User = Depends(require_completed_profile),
     session: Session = Depends(get_db_session),
 ) -> VoiceTagResponse:
@@ -111,7 +112,7 @@ async def create_voice_tag(
 
 @voice_router.get("", response_model=list[VoiceTagResponse])
 async def list_voice_tags(
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     tag_type: VoiceTagType | None = Query(default=None, alias="type"),
     session: Session = Depends(get_db_session),
 ) -> list[VoiceTagResponse]:
@@ -144,7 +145,7 @@ async def autocomplete_voice_tags(
 @voice_router.get("/{tag_id}", response_model=VoiceTagResponse)
 async def get_voice_tag(
     tag_id: ResourceId,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     session: Session = Depends(get_db_session),
 ) -> VoiceTagResponse:
     tag = VoiceTagService().get_tag(session, tag_id)
@@ -196,7 +197,7 @@ async def delete_voice_tag(
 async def create_audio_tag(
     payload: AudioTagCreate,
     request: Request,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     _current_user: User = Depends(require_completed_profile),
     session: Session = Depends(get_db_session),
 ) -> AudioTagResponse:
@@ -214,7 +215,7 @@ async def create_audio_tag(
 
 @audio_router.get("", response_model=list[AudioTagResponse])
 async def list_audio_tags(
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     tag_type: AudioTagType | None = Query(default=None, alias="type"),
     session: Session = Depends(get_db_session),
 ) -> list[AudioTagResponse]:
@@ -247,7 +248,7 @@ async def autocomplete_audio_tags(
 @audio_router.get("/{tag_id}", response_model=AudioTagResponse)
 async def get_audio_tag(
     tag_id: ResourceId,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     session: Session = Depends(get_db_session),
 ) -> AudioTagResponse:
     tag = AudioTagService().get_tag(session, tag_id)

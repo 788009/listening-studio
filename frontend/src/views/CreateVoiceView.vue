@@ -8,10 +8,10 @@ import {
   type VoiceTag,
 } from '@/api/voices'
 import { ApiError } from '@/api/errors'
-import { useAuthStore } from '@/stores/auth'
 import { useVoiceCreationStore } from '@/stores/voiceCreation'
+import { useI18n } from '@/i18n'
 
-const auth = useAuthStore()
+const { locale, t } = useI18n()
 const creation = useVoiceCreationStore()
 const title = ref('')
 const file = ref<File | null>(null)
@@ -21,10 +21,9 @@ const genderTags = ref<VoiceTag[]>([])
 const tagsLoading = ref(true)
 const formError = ref('')
 
-const locale = computed(() => auth.user?.locale ?? 'en')
 const statusLabel = computed(() => {
-  if (creation.job?.status === 'running') return 'Generating voice model'
-  if (creation.job?.status === 'queued') return 'Waiting for processing'
+  if (creation.job?.status === 'running') return t('Generating voice model')
+  if (creation.job?.status === 'queued') return t('Waiting for processing')
   return ''
 })
 const failureMessage = computed(
@@ -37,7 +36,7 @@ async function loadGenderTags(): Promise<void> {
     genderTags.value = await listVoiceGenderTags(locale.value)
   } catch (error) {
     formError.value =
-      error instanceof ApiError ? error.message : 'Gender tags could not be loaded'
+      error instanceof ApiError ? error.message : t('Gender tags could not be loaded')
   } finally {
     tagsLoading.value = false
   }
@@ -52,11 +51,11 @@ async function submit(): Promise<void> {
   formError.value = ''
   const normalizedTitle = title.value.trim()
   if (!normalizedTitle) {
-    formError.value = 'Enter a title'
+    formError.value = t('Enter a title')
     return
   }
   if (!file.value) {
-    formError.value = 'Choose a WAV reference recording'
+    formError.value = t('Choose a WAV reference recording')
     return
   }
   const selectedGenderId = Number(genderTagId.value)
@@ -90,22 +89,22 @@ onUnmounted(creation.stopPolling)
 <template>
   <section aria-labelledby="create-title">
     <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-      <h1 id="create-title" class="text-2xl font-semibold">Create voice</h1>
+      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+      <h1 id="create-title" class="text-2xl font-semibold">{{ t('Create voice') }}</h1>
     </div>
 
     <div v-if="creation.active" class="border-b border-line bg-surface px-5 py-8">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-base font-semibold">{{ statusLabel }}</p>
-          <p class="mt-1 text-sm text-muted">Task {{ creation.jobId }}</p>
+          <p class="mt-1 text-sm text-muted">{{ t('Task {id}', { id: creation.jobId ?? '' }) }}</p>
         </div>
         <span class="text-sm font-medium tabular-nums">{{ creation.job?.progress ?? 0 }}%</span>
       </div>
       <div
         class="mt-5 h-2 overflow-hidden bg-canvas"
         role="progressbar"
-        aria-label="Voice creation progress"
+        :aria-label="t('Voice creation progress')"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="creation.job?.progress ?? 0"
@@ -115,19 +114,16 @@ onUnmounted(creation.stopPolling)
           :style="{ width: `${creation.job?.progress ?? 0}%` }"
         />
       </div>
-      <p class="mt-4 text-sm text-muted">
-        You can leave this page. Processing continues in the background.
-      </p>
     </div>
 
     <div v-else-if="creation.completed && creation.voiceId" class="border-b border-line bg-surface px-5 py-9">
-      <p class="text-base font-semibold text-success">Voice is ready</p>
+      <p class="text-base font-semibold text-success">{{ t('Voice is ready') }}</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
           :to="`/voice/${creation.voiceId}`"
           class="inline-flex h-10 items-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent"
         >
-          View voice
+          {{ t('View voice') }}
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
             <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
           </svg>
@@ -137,22 +133,22 @@ onUnmounted(creation.stopPolling)
           class="h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink"
           @click="startAnother"
         >
-          Create another
+          {{ t('Create another') }}
         </button>
       </div>
     </div>
 
     <div v-else-if="creation.failed" class="border-b border-line bg-surface px-5 py-9">
-      <p class="text-base font-semibold">Voice creation failed</p>
+      <p class="text-base font-semibold">{{ t('Voice creation failed') }}</p>
       <p role="alert" class="mt-2 text-sm text-danger">
-        {{ failureMessage || 'The task could not be completed' }}
+        {{ failureMessage || t('The task could not be completed') }}
       </p>
       <button
         type="button"
         class="mt-5 h-10 border border-line bg-surface px-4 text-sm font-medium hover:border-ink"
         @click="startAnother"
       >
-        Try again
+        {{ t('Try again') }}
       </button>
     </div>
 
@@ -163,7 +159,7 @@ onUnmounted(creation.stopPolling)
     >
       <div class="space-y-5 px-5 py-7 lg:border-r lg:border-line">
         <div>
-          <label for="voice-title" class="mb-1 block text-sm font-medium">Title</label>
+          <label for="voice-title" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
           <input
             id="voice-title"
             v-model="title"
@@ -176,7 +172,7 @@ onUnmounted(creation.stopPolling)
         </div>
 
         <div>
-          <label for="voice-file" class="mb-1 block text-sm font-medium">Reference WAV</label>
+          <label for="voice-file" class="mb-1 block text-sm font-medium">{{ t('Reference WAV') }}</label>
           <input
             id="voice-file"
             type="file"
@@ -188,14 +184,14 @@ onUnmounted(creation.stopPolling)
         </div>
 
         <div>
-          <label for="voice-gender" class="mb-1 block text-sm font-medium">Gender tag</label>
+          <label for="voice-gender" class="mb-1 block text-sm font-medium">{{ t('Gender tag') }}</label>
           <select
             id="voice-gender"
             v-model="genderTagId"
             :disabled="tagsLoading"
             class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:text-muted"
           >
-            <option value="">No gender tag</option>
+            <option value="">{{ t('No gender tag') }}</option>
             <option v-for="tag in genderTags" :key="tag.id" :value="String(tag.id)">
               {{ tag.displayValue.replace(/_/g, ' ') }}
             </option>
@@ -212,8 +208,8 @@ onUnmounted(creation.stopPolling)
             @change="visibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'"
           />
           <span>
-            <span class="block text-sm font-medium">Publish when ready</span>
-            <span class="mt-1 block text-sm text-muted">Private voices remain visible only to you.</span>
+            <span class="block text-sm font-medium">{{ t('Publish when ready') }}</span>
+            <span class="mt-1 block text-sm text-muted">{{ t('Private voices remain visible only to you.') }}</span>
           </span>
         </label>
 
@@ -230,7 +226,7 @@ onUnmounted(creation.stopPolling)
               <path d="M12 16V4m0 0L7 9m5-5 5 5" stroke="currentColor" stroke-width="2" />
               <path d="M5 14v6h14v-6" stroke="currentColor" stroke-width="2" />
             </svg>
-            {{ creation.submitting ? 'Submitting' : 'Create voice' }}
+            {{ creation.submitting ? t('Submitting') : t('Create voice') }}
           </button>
         </div>
       </div>

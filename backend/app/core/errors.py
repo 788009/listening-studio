@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from starlette.exceptions import HTTPException
 
 from backend.app.core.exceptions import DomainError, ErrorDetails
+from backend.app.core.locales import localize_error_message, request_locale
 from backend.app.core.request_logging import REQUEST_ID_HEADER
 
 
@@ -44,10 +45,15 @@ def _error_response(
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     request_id = _get_request_id(request)
+    localized_message = localize_error_message(
+        request_locale(request),
+        code,
+        message,
+    )
     payload = ErrorResponse(
         error=ErrorContent(
             code=code,
-            message=message,
+            message=localized_message,
             details=details,
             request_id=request_id,
         )

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import type { PaperSelection } from './paperSelectionTypes'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 defineProps<{
   items: PaperSelection[]
@@ -44,13 +47,13 @@ function duration(seconds: number | null): string {
           {{ item.message }}
         </p>
       </div>
-      <div class="grid h-9 grid-cols-3 justify-self-end" aria-label="Selected audio controls">
+      <div class="grid h-9 grid-cols-3 justify-self-end" :aria-label="t('Selected audio controls')">
         <button
           type="button"
           class="flex h-9 w-7 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
           :disabled="disabled || index === 0"
-          :aria-label="`Move ${item.audio.title} up`"
-          title="Move up"
+          :aria-label="t('Move {title} up', { title: item.audio.title })"
+          :title="t('Move up')"
           @click="emit('move', index, -1)"
         >
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -61,8 +64,8 @@ function duration(seconds: number | null): string {
           type="button"
           class="flex h-9 w-7 items-center justify-center text-muted hover:text-ink disabled:opacity-30"
           :disabled="disabled || index === items.length - 1"
-          :aria-label="`Move ${item.audio.title} down`"
-          title="Move down"
+          :aria-label="t('Move {title} down', { title: item.audio.title })"
+          :title="t('Move down')"
           @click="emit('move', index, 1)"
         >
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -73,8 +76,8 @@ function duration(seconds: number | null): string {
           type="button"
           class="flex h-9 w-7 items-center justify-center text-muted hover:text-danger disabled:opacity-30"
           :disabled="disabled"
-          :aria-label="`Remove ${item.audio.title}`"
-          title="Remove"
+          :aria-label="t('Remove {title}', { title: item.audio.title })"
+          :title="t('Remove')"
           @click="emit('remove', index)"
         >
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">

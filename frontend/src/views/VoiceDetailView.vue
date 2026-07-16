@@ -18,10 +18,12 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
 import VoiceTagLines from '@/components/VoiceTagLines.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { locale, t } = useI18n()
 const voice = ref<Voice | null>(null)
 const loading = ref(true)
 const saving = ref(false)
@@ -39,7 +41,6 @@ const sampleAudioLoading = ref(false)
 const sampleRevision = ref(0)
 
 const voiceId = computed(() => Number(route.params.id))
-const locale = computed(() => auth.user?.locale ?? 'en')
 const isOwner = computed(
   () =>
     voice.value !== null &&
@@ -74,7 +75,7 @@ async function loadVoice(): Promise<void> {
     resetForm(voice.value)
   } catch (error) {
     voice.value = null
-    errorMessage.value = error instanceof ApiError ? error.message : 'Voice not found'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Voice not found')
   } finally {
     loading.value = false
   }
@@ -90,7 +91,7 @@ async function beginEditing(): Promise<void> {
     sampleAudio.value = await listPublicSampleAudio(locale.value)
   } catch (error) {
     formError.value =
-      error instanceof ApiError ? error.message : 'Sample audio could not be loaded'
+      error instanceof ApiError ? error.message : t('Sample audio could not be loaded')
   } finally {
     sampleAudioLoading.value = false
   }
@@ -115,7 +116,7 @@ async function saveVoice(): Promise<void> {
     sampleRevision.value += 1
     resetForm(voice.value)
   } catch (error) {
-    formError.value = error instanceof ApiError ? error.message : 'Voice could not be saved'
+    formError.value = error instanceof ApiError ? error.message : t('Voice could not be saved')
   } finally {
     saving.value = false
   }
@@ -139,7 +140,7 @@ async function removeVoice(): Promise<void> {
     await router.push({ name: 'voices' })
   } catch (error) {
     confirmDelete.value = false
-    formError.value = error instanceof ApiError ? error.message : 'Voice could not be deleted'
+    formError.value = error instanceof ApiError ? error.message : t('Voice could not be deleted')
   } finally {
     deleting.value = false
   }
@@ -150,11 +151,11 @@ watch(() => route.params.id, loadVoice, { immediate: true })
 
 <template>
   <section aria-labelledby="voice-title">
-    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">Loading voice</p>
+    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">{{ t('Loading voice') }}</p>
     <div v-else-if="errorMessage && !voice" class="border-b border-line py-12">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
       <RouterLink to="/voices" class="mt-4 inline-block text-sm font-medium text-accent underline">
-        Back to voices
+        {{ t('Back to voices') }}
       </RouterLink>
     </div>
 
@@ -165,7 +166,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
             </svg>
-            Voices
+            {{ t('Voices') }}
           </RouterLink>
           <h1 id="voice-title" class="break-words text-2xl font-semibold">{{ voice.title }}</h1>
           <RouterLink
@@ -186,7 +187,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
               <path d="m4 16-1 5 5-1L19 9l-4-4L4 16Z" stroke="currentColor" stroke-width="2" />
               <path d="m13 7 4 4" stroke="currentColor" stroke-width="2" />
             </svg>
-            Edit
+            {{ t('Edit') }}
           </button>
           <RouterLink
             v-if="canUse"
@@ -196,7 +197,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
             </svg>
-            Use voice
+            {{ t('Use voice') }}
           </RouterLink>
         </div>
       </div>
@@ -208,7 +209,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
       <form v-if="editing" class="border-b border-line bg-surface py-6" @submit.prevent="saveVoice">
         <div class="grid gap-5 md:grid-cols-2">
           <div class="md:col-span-2">
-            <label for="voice-title-input" class="mb-1 block text-sm font-medium">Title</label>
+            <label for="voice-title-input" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
             <input
               id="voice-title-input"
               v-model="title"
@@ -218,29 +219,29 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             />
           </div>
           <div>
-            <label for="voice-visibility" class="mb-1 block text-sm font-medium">Visibility</label>
+            <label for="voice-visibility" class="mb-1 block text-sm font-medium">{{ t('Visibility') }}</label>
             <select
               id="voice-visibility"
               v-model="visibility"
               class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
             >
-              <option value="private">Private</option>
-              <option value="public" :disabled="voice.status !== 'ready'">Public</option>
+              <option value="private">{{ t('Private') }}</option>
+              <option value="public" :disabled="voice.status !== 'ready'">{{ t('Public') }}</option>
             </select>
           </div>
           <div>
-            <label for="sample-source" class="mb-1 block text-sm font-medium">Sample source</label>
+            <label for="sample-source" class="mb-1 block text-sm font-medium">{{ t('Sample source') }}</label>
             <select
               id="sample-source"
               v-model="sampleSource"
               class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
             >
-              <option value="original">Original recording</option>
-              <option value="public_audio">Public audio</option>
+              <option value="original">{{ t('Original recording') }}</option>
+              <option value="public_audio">{{ t('Public audio') }}</option>
             </select>
           </div>
           <div v-if="sampleSource === 'public_audio'" class="md:col-span-2">
-            <label for="sample-audio" class="mb-1 block text-sm font-medium">Public audio</label>
+            <label for="sample-audio" class="mb-1 block text-sm font-medium">{{ t('Public audio') }}</label>
             <select
               id="sample-audio"
               v-model="sampleAudioId"
@@ -248,7 +249,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
               :disabled="sampleAudioLoading"
               class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:bg-canvas"
             >
-              <option value="" disabled>{{ sampleAudioLoading ? 'Loading audio' : 'Select audio' }}</option>
+              <option value="" disabled>{{ sampleAudioLoading ? t('Loading audio') : t('Select audio') }}</option>
               <option v-for="audio in sampleAudio" :key="audio.id" :value="String(audio.id)">
                 {{ audio.title }} - {{ audio.author.username || audio.author.userId }}
               </option>
@@ -265,7 +266,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" stroke="currentColor" stroke-width="2" />
             </svg>
-            Delete voice
+            {{ t('Delete voice') }}
           </button>
           <div class="flex gap-2">
             <button
@@ -273,14 +274,14 @@ watch(() => route.params.id, loadVoice, { immediate: true })
               class="h-9 border border-line px-3 text-sm font-medium hover:border-ink"
               @click="editing = false"
             >
-              Cancel
+              {{ t('Cancel') }}
             </button>
             <button
               type="submit"
               :disabled="saving || sampleAudioLoading"
               class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {{ saving ? 'Saving' : 'Save' }}
+              {{ saving ? t('Saving') : t('Save') }}
             </button>
           </div>
         </div>
@@ -288,9 +289,9 @@ watch(() => route.params.id, loadVoice, { immediate: true })
 
       <div class="grid border-b border-line bg-surface md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0 border-b border-line px-4 py-6 md:border-b-0 md:border-r md:px-5">
-          <h2 class="text-sm font-semibold">Sample</h2>
+          <h2 class="text-sm font-semibold">{{ t('Sample') }}</h2>
           <p class="mt-1 text-sm text-muted">
-            {{ voice.sampleSource === 'original' ? 'Original recording' : 'Public audio' }}
+            {{ voice.sampleSource === 'original' ? t('Original recording') : t('Public audio') }}
           </p>
           <audio
             v-if="canPlaySample"
@@ -300,40 +301,40 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             preload="metadata"
             :src="voiceSamplePath(voice.id)"
           ></audio>
-          <p v-else class="mt-4 text-sm text-muted">Sample unavailable</p>
+          <p v-else class="mt-4 text-sm text-muted">{{ t('Sample unavailable') }}</p>
         </div>
         <dl class="grid grid-cols-2 md:grid-cols-1">
           <div class="border-r border-line px-4 py-5 md:border-b md:border-r-0 md:px-5">
-            <dt class="text-sm text-muted">Status</dt>
+            <dt class="text-sm text-muted">{{ t('Status') }}</dt>
             <dd class="mt-2"><ResourceStatus :status="voice.status" /></dd>
           </div>
           <div class="px-4 py-5 md:px-5">
-            <dt class="text-sm text-muted">Visibility</dt>
-            <dd class="mt-2 text-sm font-medium capitalize">{{ voice.visibility }}</dd>
+            <dt class="text-sm text-muted">{{ t('Visibility') }}</dt>
+            <dd class="mt-2 text-sm font-medium capitalize">{{ t(voice.visibility === 'public' ? 'Public' : 'Private') }}</dd>
           </div>
         </dl>
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
-        <h2 class="text-sm font-semibold">Tags</h2>
+        <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
         <VoiceTagLines :tags="voice.tags" />
       </div>
 
       <div v-if="isOwner && voice.errorSummary" class="border-b border-line py-6">
-        <h2 class="text-sm font-semibold text-danger">Generation error</h2>
+        <h2 class="text-sm font-semibold text-danger">{{ t('Generation error') }}</h2>
         <p class="mt-2 break-words text-sm text-muted">{{ voice.errorSummary }}</p>
       </div>
     </template>
 
     <ConfirmDialog
       :open="confirmDelete"
-      title="Delete voice"
+      :title="t('Delete voice')"
       :busy="deleting"
       confirm-label="Delete"
       @close="closeDeleteDialog"
       @confirm="removeVoice"
     >
-      <p>This voice and its stored files will be removed.</p>
+      <p>{{ t('This voice and its stored files will be removed.') }}</p>
     </ConfirmDialog>
   </section>
 </template>

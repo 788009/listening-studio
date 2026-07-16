@@ -15,9 +15,10 @@ from backend.app.api.audio_schemas import (
     DialogueSynthesisRequest,
 )
 from backend.app.api.media import stream_wav
-from backend.app.api.schemas import LanguageCode, ResourceId
+from backend.app.api.schemas import ResourceId
 from backend.app.api.tag_schemas import AudioTagResponse, TagTranslationResponse
 from backend.app.core.auth import Principal, get_principal, require_completed_profile
+from backend.app.core.locales import get_request_locale
 from backend.app.db.models.audio import Audio, AudioStatus, AudioVisibility
 from backend.app.db.models.audio_tag import AudioTag
 from backend.app.db.models.user import User
@@ -154,7 +155,7 @@ async def list_audios(
     request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     author: str | None = Query(default=None, min_length=1, max_length=64),
     audio_status: AudioStatus | None = Query(default=None, alias="status"),
     visibility: AudioVisibility | None = Query(default=None),
@@ -188,7 +189,7 @@ async def list_audios(
 async def get_audio(
     audio_id: ResourceId,
     request: Request,
-    language: LanguageCode = Query(default="en"),
+    language: str = Depends(get_request_locale),
     principal: Principal = Depends(get_principal),
     session: Session = Depends(get_db_session),
 ) -> AudioResponse:

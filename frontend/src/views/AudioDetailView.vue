@@ -15,10 +15,12 @@ import AudioTagLines from '@/components/AudioTagLines.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { locale, t } = useI18n()
 const audio = ref<Audio | null>(null)
 const loading = ref(true)
 const editing = ref(false)
@@ -31,7 +33,6 @@ const title = ref('')
 const visibility = ref<ResourceVisibility>('private')
 
 const audioId = computed(() => Number(route.params.id))
-const locale = computed(() => auth.user?.locale ?? 'en')
 const isOwner = computed(
   () =>
     audio.value !== null &&
@@ -58,7 +59,7 @@ async function loadAudio(): Promise<void> {
     resetForm(audio.value)
   } catch (error) {
     audio.value = null
-    errorMessage.value = error instanceof ApiError ? error.message : 'Audio not found'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Audio not found')
   } finally {
     loading.value = false
   }
@@ -83,7 +84,7 @@ async function saveAudio(): Promise<void> {
     editing.value = false
     resetForm(audio.value)
   } catch (error) {
-    formError.value = error instanceof ApiError ? error.message : 'Audio could not be saved'
+    formError.value = error instanceof ApiError ? error.message : t('Audio could not be saved')
   } finally {
     saving.value = false
   }
@@ -98,7 +99,7 @@ async function removeAudio(): Promise<void> {
     await router.push({ name: 'library' })
   } catch (error) {
     confirmDelete.value = false
-    formError.value = error instanceof ApiError ? error.message : 'Audio could not be deleted'
+    formError.value = error instanceof ApiError ? error.message : t('Audio could not be deleted')
   } finally {
     deleting.value = false
   }
@@ -109,11 +110,11 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
 <template>
   <section aria-labelledby="audio-title">
-    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">Loading audio</p>
+    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">{{ t('Loading audio') }}</p>
     <div v-else-if="errorMessage && !audio" class="border-b border-line py-12">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
       <RouterLink to="/" class="mt-4 inline-block text-sm font-medium text-accent underline">
-        Back to library
+        {{ t('Back to library') }}
       </RouterLink>
     </div>
 
@@ -124,7 +125,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
             </svg>
-            Library
+            {{ t('Library') }}
           </RouterLink>
           <h1 id="audio-title" class="break-words text-2xl font-semibold">{{ audio.title }}</h1>
           <RouterLink
@@ -144,7 +145,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <path d="m4 16-1 5 5-1L19 9l-4-4L4 16Z" stroke="currentColor" stroke-width="2" />
             <path d="m13 7 4 4" stroke="currentColor" stroke-width="2" />
           </svg>
-          Edit
+          {{ t('Edit') }}
         </button>
       </div>
 
@@ -155,7 +156,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
       <form v-if="editing" class="border-b border-line bg-surface py-6" @submit.prevent="saveAudio">
         <div class="grid gap-5 sm:grid-cols-[minmax(0,1fr)_12rem]">
           <div>
-            <label for="audio-title-input" class="mb-1 block text-sm font-medium">Title</label>
+            <label for="audio-title-input" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
             <input
               id="audio-title-input"
               v-model="title"
@@ -165,14 +166,14 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             />
           </div>
           <div>
-            <label for="audio-visibility" class="mb-1 block text-sm font-medium">Visibility</label>
+            <label for="audio-visibility" class="mb-1 block text-sm font-medium">{{ t('Visibility') }}</label>
             <select
               id="audio-visibility"
               v-model="visibility"
               class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
             >
-              <option value="private">Private</option>
-              <option value="public" :disabled="audio.status !== 'ready'">Public</option>
+              <option value="private">{{ t('Private') }}</option>
+              <option value="public" :disabled="audio.status !== 'ready'">{{ t('Public') }}</option>
             </select>
           </div>
         </div>
@@ -186,7 +187,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" stroke="currentColor" stroke-width="2" />
             </svg>
-            Delete audio
+            {{ t('Delete audio') }}
           </button>
           <div class="flex gap-2">
             <button
@@ -194,14 +195,14 @@ watch(() => route.params.id, loadAudio, { immediate: true })
               class="h-9 border border-line px-3 text-sm font-medium hover:border-ink"
               @click="editing = false"
             >
-              Cancel
+              {{ t('Cancel') }}
             </button>
             <button
               type="submit"
               :disabled="saving"
               class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-60"
             >
-              {{ saving ? 'Saving' : 'Save' }}
+              {{ saving ? t('Saving') : t('Save') }}
             </button>
           </div>
         </div>
@@ -209,7 +210,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
       <div class="grid border-b border-line bg-surface md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0 border-b border-line px-4 py-6 md:border-b-0 md:border-r md:px-5">
-          <h2 class="text-sm font-semibold">Playback</h2>
+          <h2 class="text-sm font-semibold">{{ t('Playback') }}</h2>
           <audio
             v-if="audio.status === 'ready'"
             class="mt-4 h-10 w-full max-w-xl"
@@ -217,27 +218,27 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             preload="metadata"
             :src="audioMediaPath(audio.id)"
           ></audio>
-          <p v-else class="mt-4 text-sm text-muted">Audio unavailable</p>
+          <p v-else class="mt-4 text-sm text-muted">{{ t('Audio unavailable') }}</p>
         </div>
         <dl class="grid grid-cols-2 md:grid-cols-1">
           <div class="border-r border-line px-4 py-5 md:border-b md:border-r-0 md:px-5">
-            <dt class="text-sm text-muted">Status</dt>
+            <dt class="text-sm text-muted">{{ t('Status') }}</dt>
             <dd class="mt-2"><ResourceStatus :status="audio.status" /></dd>
           </div>
           <div class="px-4 py-5 md:px-5">
-            <dt class="text-sm text-muted">Visibility</dt>
-            <dd class="mt-2 text-sm font-medium capitalize">{{ audio.visibility }}</dd>
+            <dt class="text-sm text-muted">{{ t('Visibility') }}</dt>
+            <dd class="mt-2 text-sm font-medium capitalize">{{ t(audio.visibility === 'public' ? 'Public' : 'Private') }}</dd>
           </div>
         </dl>
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
-        <h2 class="text-sm font-semibold">Tags</h2>
+        <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
         <AudioTagLines :tags="audio.tags" />
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
-        <h2 class="text-sm font-semibold">Text</h2>
+        <h2 class="text-sm font-semibold">{{ t('Text') }}</h2>
         <p class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6">{{ audio.text }}</p>
       </div>
 
@@ -245,7 +246,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
         v-if="orderedUtterances.length > 0"
         class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]"
       >
-        <h2 class="text-sm font-semibold">Speakers</h2>
+        <h2 class="text-sm font-semibold">{{ t('Speakers') }}</h2>
         <ol class="min-w-0 space-y-4">
           <li
             v-for="utterance in orderedUtterances"
@@ -259,20 +260,20 @@ watch(() => route.params.id, loadAudio, { immediate: true })
       </div>
 
       <div v-if="isOwner && audio.errorSummary" class="border-b border-line py-6">
-        <h2 class="text-sm font-semibold text-danger">Generation error</h2>
+        <h2 class="text-sm font-semibold text-danger">{{ t('Generation error') }}</h2>
         <p class="mt-2 break-words text-sm text-muted">{{ audio.errorSummary }}</p>
       </div>
     </template>
 
     <ConfirmDialog
       :open="confirmDelete"
-      title="Delete audio"
+      :title="t('Delete audio')"
       :busy="deleting"
       confirm-label="Delete"
       @close="confirmDelete = false"
       @confirm="removeAudio"
     >
-      <p>This audio and its stored file will be removed.</p>
+      <p>{{ t('This audio and its stored file will be removed.') }}</p>
     </ConfirmDialog>
   </section>
 </template>

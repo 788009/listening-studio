@@ -2,8 +2,10 @@
 import { RouterLink, RouterView } from 'vue-router'
 
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const auth = useAuthStore()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -11,7 +13,7 @@ const auth = useAuthStore()
     href="#main-content"
     class="sr-only z-50 bg-surface px-3 py-2 text-sm font-medium text-ink focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
   >
-    Skip to content
+    {{ t('Skip to content') }}
   </a>
   <div class="min-h-screen bg-canvas text-ink">
     <header class="border-b border-line bg-surface">
@@ -23,7 +25,7 @@ const auth = useAuthStore()
           <span class="text-base font-semibold">Listening Studio</span>
         </RouterLink>
         <nav
-          aria-label="Primary navigation"
+          :aria-label="t('Primary navigation')"
           class="flex min-w-0 flex-wrap items-center justify-end gap-1"
         >
           <RouterLink
@@ -31,14 +33,14 @@ const auth = useAuthStore()
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Library
+            {{ t('Library') }}
           </RouterLink>
           <RouterLink
             to="/create"
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Create
+            {{ t('Create') }}
           </RouterLink>
           <RouterLink
             v-if="auth.isTeacher"
@@ -46,7 +48,7 @@ const auth = useAuthStore()
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Batch
+            {{ t('Batch') }}
           </RouterLink>
           <RouterLink
             v-if="auth.isTeacher"
@@ -54,7 +56,7 @@ const auth = useAuthStore()
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Papers
+            {{ t('Papers') }}
           </RouterLink>
           <RouterLink
             v-if="auth.isTeacher"
@@ -62,7 +64,7 @@ const auth = useAuthStore()
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Voices
+            {{ t('Voices') }}
           </RouterLink>
           <RouterLink
             v-if="auth.isTeacher"
@@ -70,7 +72,7 @@ const auth = useAuthStore()
             class="flex h-9 items-center border-b-2 border-transparent px-3 text-sm font-medium text-muted hover:text-ink"
             active-class="border-accent text-ink"
           >
-            Manage
+            {{ t('Manage') }}
           </RouterLink>
         </nav>
       </div>

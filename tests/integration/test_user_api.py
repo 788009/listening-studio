@@ -97,6 +97,29 @@ class UserApiIntegrationTest(unittest.TestCase):
         self.assertEqual(public_route.status_code, 200)
         self.assertEqual(public_route.json()["userId"], "TeacherOne")
 
+    def test_initial_and_updated_locale_use_supported_values(self) -> None:
+        pending = self.send(
+            "GET",
+            "/api/users/me",
+            headers={
+                **self.headers("localized"),
+                "Accept-Language": "zh-CN, en;q=0.5",
+            },
+        )
+        self.assertEqual(pending.status_code, 200)
+        self.assertEqual(pending.json()["locale"], "zh-CN")
+
+        completed = self.complete_profile("localized", "LocalizedTeacher")
+        unsupported = self.send(
+            "PATCH",
+            "/api/users/me/profile",
+            headers=self.headers("localized"),
+            json={"locale": "fr"},
+        )
+        self.assertEqual(completed.status_code, 200)
+        self.assertEqual(unsupported.status_code, 422)
+        self.assertEqual(unsupported.json()["error"]["code"], "validation_error")
+
     def test_profile_update_keeps_user_route_and_identity(self) -> None:
         self.complete_profile("first", "StableRoute", username="Initial Name")
         before = self.send("GET", "/api/users/stableroute")

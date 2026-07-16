@@ -22,6 +22,9 @@ import {
 } from '@/api/voices'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ManagedResourceList from '@/components/ManagedResourceList.vue'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 interface TagOption {
   id: number
@@ -74,7 +77,7 @@ const allPageSelected = computed(
 )
 
 function statusLabel(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1).replace('_', ' ')
+  return t(value.charAt(0).toUpperCase() + value.slice(1).replace('_', ' '))
 }
 
 function toggleTag(target: 'filter' | 'bulk', tagId: number): void {
@@ -125,7 +128,7 @@ async function loadResources(): Promise<void> {
     items.value = []
     total.value = 0
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Resources could not be loaded'
+      error instanceof ApiError ? error.message : t('Resources could not be loaded')
   } finally {
     loading.value = false
   }
@@ -196,7 +199,7 @@ async function movePage(target: number): Promise<void> {
 async function applyBulkUpdate(): Promise<void> {
   if (!supportsBulk.value || selectedIds.value.size === 0 || bulkBusy.value) return
   if (!bulkVisibility.value && !applyBulkTags.value) {
-    errorMessage.value = 'Select a visibility or tag change'
+    errorMessage.value = t('Select a visibility or tag change')
     return
   }
   bulkBusy.value = true
@@ -222,7 +225,7 @@ async function applyBulkUpdate(): Promise<void> {
     await loadResources()
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Bulk update could not be completed'
+      error instanceof ApiError ? error.message : t('Bulk update could not be completed')
   } finally {
     bulkBusy.value = false
   }
@@ -246,7 +249,7 @@ async function deleteResource(): Promise<void> {
   } catch (error) {
     deleteTarget.value = null
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Resource could not be deleted'
+      error instanceof ApiError ? error.message : t('Resource could not be deleted')
   } finally {
     deleting.value = false
   }
@@ -273,11 +276,11 @@ onMounted(() => {
 <template>
   <section aria-labelledby="management-title" class="min-w-0">
     <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-      <h1 id="management-title" class="text-2xl font-semibold">Resource management</h1>
+      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+      <h1 id="management-title" class="text-2xl font-semibold">{{ t('Resource management') }}</h1>
     </div>
 
-    <div class="border-b border-line" role="tablist" aria-label="Resource type">
+    <div class="border-b border-line" role="tablist" :aria-label="t('Resource type')">
       <div class="grid grid-cols-2 sm:grid-cols-4">
         <button
           v-for="tab in tabs"
@@ -289,7 +292,7 @@ onMounted(() => {
           :class="kind === tab.kind ? 'border-accent text-ink' : 'border-transparent text-muted hover:text-ink'"
           @click="switchKind(tab.kind)"
         >
-          {{ tab.label }}
+          {{ t(tab.label) }}
         </button>
       </div>
     </div>
@@ -305,7 +308,7 @@ onMounted(() => {
     <form class="border-b border-line bg-surface px-4 py-5" @submit.prevent="applyFilters">
       <div class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1fr)_10rem_10rem_10rem_10rem]">
         <div class="min-w-0">
-          <label for="management-query" class="mb-1 block text-sm font-medium">Title</label>
+          <label for="management-query" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
           <input
             id="management-query"
             v-model="query"
@@ -315,32 +318,32 @@ onMounted(() => {
           />
         </div>
         <div>
-          <label for="management-status" class="mb-1 block text-sm font-medium">Status</label>
+          <label for="management-status" class="mb-1 block text-sm font-medium">{{ t('Status') }}</label>
           <select
             id="management-status"
             v-model="status"
             class="h-10 w-full border border-line bg-surface px-3 text-sm"
           >
-            <option value="">All</option>
+            <option value="">{{ t('All') }}</option>
             <option v-for="value in statuses[kind]" :key="value" :value="value">
               {{ statusLabel(value) }}
             </option>
           </select>
         </div>
         <div v-if="supportsVisibility">
-          <label for="management-visibility" class="mb-1 block text-sm font-medium">Visibility</label>
+          <label for="management-visibility" class="mb-1 block text-sm font-medium">{{ t('Visibility') }}</label>
           <select
             id="management-visibility"
             v-model="visibility"
             class="h-10 w-full border border-line bg-surface px-3 text-sm"
           >
-            <option value="">All</option>
-            <option value="private">Private</option>
-            <option value="public">Public</option>
+            <option value="">{{ t('All') }}</option>
+            <option value="private">{{ t('Private') }}</option>
+            <option value="public">{{ t('Public') }}</option>
           </select>
         </div>
         <div>
-          <label for="management-created-from" class="mb-1 block text-sm font-medium">Created from</label>
+          <label for="management-created-from" class="mb-1 block text-sm font-medium">{{ t('Created from') }}</label>
           <input
             id="management-created-from"
             v-model="createdFrom"
@@ -349,7 +352,7 @@ onMounted(() => {
           />
         </div>
         <div>
-          <label for="management-created-to" class="mb-1 block text-sm font-medium">Created to</label>
+          <label for="management-created-to" class="mb-1 block text-sm font-medium">{{ t('Created to') }}</label>
           <input
             id="management-created-to"
             v-model="createdTo"
@@ -360,7 +363,7 @@ onMounted(() => {
       </div>
 
       <fieldset v-if="tagOptions.length > 0" class="mt-4 border-t border-line pt-4">
-        <legend class="mb-2 text-sm font-medium">Tags</legend>
+        <legend class="mb-2 text-sm font-medium">{{ t('Tags') }}</legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
           <label v-for="tag in tagOptions" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
             <input
@@ -380,14 +383,14 @@ onMounted(() => {
           class="h-9 border border-line px-3 text-sm font-medium hover:border-ink"
           @click="clearFilters"
         >
-          Clear
+          {{ t('Clear') }}
         </button>
         <button
           type="submit"
           :disabled="loading"
           class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
         >
-          Apply filters
+          {{ t('Apply filters') }}
         </button>
       </div>
     </form>
@@ -397,32 +400,34 @@ onMounted(() => {
       class="border-b border-line bg-surface px-4 py-5"
     >
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-sm font-semibold">{{ selectedIds.size }} selected across pages</h2>
+        <h2 class="text-sm font-semibold">
+          {{ t('{count} selected across pages', { count: selectedIds.size }) }}
+        </h2>
         <button
           type="button"
           class="text-sm font-medium text-muted hover:text-ink hover:underline"
           @click="selectedIds = new Set()"
         >
-          Clear selection
+          {{ t('Clear selection') }}
         </button>
       </div>
       <div class="mt-4 grid min-w-0 gap-5 lg:grid-cols-[12rem_minmax(0,1fr)_10rem] lg:items-end">
         <div>
-          <label for="bulk-visibility" class="mb-1 block text-sm font-medium">Visibility change</label>
+          <label for="bulk-visibility" class="mb-1 block text-sm font-medium">{{ t('Visibility change') }}</label>
           <select
             id="bulk-visibility"
             v-model="bulkVisibility"
             class="h-10 w-full border border-line bg-surface px-3 text-sm"
           >
-            <option value="">No change</option>
-            <option value="private">Private</option>
-            <option value="public">Public</option>
+            <option value="">{{ t('No change') }}</option>
+            <option value="private">{{ t('Private') }}</option>
+            <option value="public">{{ t('Public') }}</option>
           </select>
         </div>
         <fieldset class="min-w-0">
           <label class="flex items-center gap-2 text-sm font-medium">
             <input v-model="applyBulkTags" type="checkbox" class="h-4 w-4 accent-accent" />
-            Replace tags
+            {{ t('Replace tags') }}
           </label>
           <div v-if="applyBulkTags" class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
             <label v-for="tag in tagOptions" :key="tag.id" class="flex items-start gap-2 text-sm">
@@ -434,7 +439,7 @@ onMounted(() => {
               />
               {{ tag.label }}
             </label>
-            <span v-if="tagOptions.length === 0" class="text-sm text-muted">No user tags</span>
+            <span v-if="tagOptions.length === 0" class="text-sm text-muted">{{ t('No user tags') }}</span>
           </div>
         </fieldset>
         <button
@@ -443,15 +448,18 @@ onMounted(() => {
           class="h-10 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
           @click="applyBulkUpdate"
         >
-          {{ bulkBusy ? 'Applying' : 'Apply changes' }}
+          {{ bulkBusy ? t('Applying') : t('Apply changes') }}
         </button>
       </div>
     </div>
 
     <div v-if="bulkResult" class="border-b border-line bg-surface px-4 py-5" aria-live="polite">
       <p class="text-sm font-medium">
-        {{ bulkResult.successCount }} succeeded, {{ bulkResult.conflictCount }} conflicts,
-        {{ bulkResult.failedCount }} failed
+        {{ t('{success} succeeded, {conflict} conflicts, {failed} failed', {
+          success: bulkResult.successCount,
+          conflict: bulkResult.conflictCount,
+          failed: bulkResult.failedCount,
+        }) }}
       </p>
       <ul class="mt-3 space-y-1 text-sm">
         <li
@@ -474,16 +482,18 @@ onMounted(() => {
             :disabled="loading"
             @change="togglePageSelection"
           />
-          Select page
+          {{ t('Select page') }}
         </label>
-        <span class="text-sm text-muted">{{ total }} resources</span>
+        <span class="text-sm text-muted">{{ t('{count} resources', { count: total }) }}</span>
       </div>
-      <span class="text-sm tabular-nums text-muted">Page {{ page }} of {{ totalPages }}</span>
+      <span class="text-sm tabular-nums text-muted">
+        {{ t('Page {page} of {total}', { page, total: totalPages }) }}
+      </span>
     </div>
 
-    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">Loading resources</p>
+    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">{{ t('Loading resources') }}</p>
     <p v-else-if="items.length === 0" class="border-b border-line py-12 text-sm text-muted">
-      No resources found
+      {{ t('No resources found') }}
     </p>
     <ManagedResourceList
       v-else
@@ -498,7 +508,7 @@ onMounted(() => {
     <nav
       v-if="!loading && totalPages > 1"
       class="flex items-center justify-between gap-4 border-b border-line py-4"
-      aria-label="Resource pages"
+      :aria-label="t('Resource pages')"
     >
       <button
         type="button"
@@ -509,7 +519,7 @@ onMounted(() => {
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
         </svg>
-        Previous
+        {{ t('Previous') }}
       </button>
       <span class="text-sm tabular-nums text-muted">{{ page }} / {{ totalPages }}</span>
       <button
@@ -518,7 +528,7 @@ onMounted(() => {
         class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium disabled:opacity-50"
         @click="movePage(page + 1)"
       >
-        Next
+        {{ t('Next') }}
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
         </svg>
@@ -527,13 +537,13 @@ onMounted(() => {
 
     <ConfirmDialog
       :open="deleteTarget !== null"
-      :title="`Delete ${deleteTarget?.title ?? 'resource'}`"
+      :title="t('Delete {title}', { title: deleteTarget?.title ?? t('Resource') })"
       :busy="deleting"
       confirm-label="Delete"
       @close="deleteTarget = null"
       @confirm="deleteResource"
     >
-      <p>The resource record and stored files will be removed.</p>
+      <p>{{ t('The resource record and stored files will be removed.') }}</p>
     </ConfirmDialog>
   </section>
 </template>

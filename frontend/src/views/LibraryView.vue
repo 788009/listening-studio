@@ -12,9 +12,9 @@ import {
 import { ApiError } from '@/api/errors'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import AudioTagLines from '@/components/AudioTagLines.vue'
-import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
-const auth = useAuthStore()
+const { locale, t } = useI18n()
 const audios = ref<Audio[]>([])
 const localizedTags = ref<AudioTag[]>([])
 const loading = ref(true)
@@ -24,7 +24,6 @@ const page = ref(1)
 const pageSize = 20
 const total = ref(0)
 
-const locale = computed(() => auth.user?.locale ?? 'en')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 const tagCatalog = computed(() => {
   const tags = new Map<number, AudioTag>()
@@ -61,7 +60,7 @@ async function loadPage(reset = false): Promise<void> {
     audios.value = []
     total.value = 0
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Audio could not be loaded'
+      error instanceof ApiError ? error.message : t('Audio could not be loaded')
   } finally {
     loading.value = false
   }
@@ -86,10 +85,10 @@ onMounted(async () => {
   <section aria-labelledby="library-title">
     <div class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div>
-        <p class="mb-1 text-sm font-medium text-accent">Public audio</p>
-        <h1 id="library-title" class="text-2xl font-semibold">Listening library</h1>
+        <p class="mb-1 text-sm font-medium text-accent">{{ t('Public audio') }}</p>
+        <h1 id="library-title" class="text-2xl font-semibold">{{ t('Listening library') }}</h1>
       </div>
-      <span class="text-sm text-muted">{{ total }} exercises</span>
+      <span class="text-sm text-muted">{{ t('{count} exercises', { count: total }) }}</span>
     </div>
 
     <div class="border-b border-line py-4">
@@ -102,7 +101,7 @@ onMounted(async () => {
     </div>
 
     <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">
-      Loading audio
+      {{ t('Loading audio') }}
     </p>
     <div v-else-if="errorMessage" class="border-b border-line py-10">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
@@ -115,11 +114,11 @@ onMounted(async () => {
           <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" stroke="currentColor" stroke-width="2" />
           <path d="M20 4v4h-4" stroke="currentColor" stroke-width="2" />
         </svg>
-        Retry
+        {{ t('Retry') }}
       </button>
     </div>
     <p v-else-if="audios.length === 0" class="border-b border-line py-12 text-sm text-muted">
-      No audio found
+      {{ t('No audio found') }}
     </p>
 
     <ul v-else class="divide-y divide-line border-b border-line bg-surface">
@@ -162,7 +161,7 @@ onMounted(async () => {
     <nav
       v-if="!loading && totalPages > 1"
       class="flex items-center justify-between gap-4 border-b border-line py-4"
-      aria-label="Audio pages"
+      :aria-label="t('Audio pages')"
     >
       <button
         type="button"
@@ -173,7 +172,7 @@ onMounted(async () => {
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
         </svg>
-        Previous
+        {{ t('Previous') }}
       </button>
       <span class="text-sm text-muted">{{ page }} / {{ totalPages }}</span>
       <button
@@ -182,7 +181,7 @@ onMounted(async () => {
         class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink disabled:opacity-50"
         @click="movePage(page + 1)"
       >
-        Next
+        {{ t('Next') }}
         <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
           <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
         </svg>

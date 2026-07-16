@@ -22,11 +22,11 @@ import {
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import PaperSelectedAudioList from '@/components/PaperSelectedAudioList.vue'
 import type { PaperSelection } from '@/components/paperSelectionTypes'
-import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const PAGE_SIZE = 10
 const router = useRouter()
-const auth = useAuthStore()
+const { locale, t } = useI18n()
 const title = ref('')
 const presets = ref<PaperPreset[]>([])
 const presetId = ref('')
@@ -46,7 +46,6 @@ const accepted = ref<PaperRenderAccepted | null>(null)
 const job = ref<Job | null>(null)
 let pollTimer: number | undefined
 
-const locale = computed(() => auth.user?.locale ?? 'en')
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const selectedPreset = computed(
   () => presets.value.find((preset) => String(preset.id) === presetId.value) ?? null,
@@ -96,7 +95,7 @@ async function loadOptions(): Promise<void> {
     }
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Paper options could not be loaded'
+      error instanceof ApiError ? error.message : t('Paper options could not be loaded')
   } finally {
     loadingOptions.value = false
   }
@@ -120,7 +119,7 @@ async function loadCandidates(reset = false): Promise<void> {
     candidates.value = []
     total.value = 0
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Audio candidates could not be loaded'
+      error instanceof ApiError ? error.message : t('Audio candidates could not be loaded')
   } finally {
     loadingCandidates.value = false
   }
@@ -157,7 +156,7 @@ async function validateSelections(): Promise<boolean> {
   const current = selected.value.map((item) => ({
     ...item,
     state: 'checking' as const,
-    message: 'Checking access and status',
+    message: t('Checking access and status'),
   }))
   selected.value = current
   const results = await Promise.all(
@@ -168,7 +167,7 @@ async function validateSelections(): Promise<boolean> {
           return {
             audio,
             state: 'changed',
-            message: `Status changed to ${statusLabel(audio.status)}`,
+            message: t('Status changed to {status}', { status: statusLabel(audio.status) }),
           }
         }
         return { audio, state: 'valid' }
@@ -178,8 +177,8 @@ async function validateSelections(): Promise<boolean> {
           audio: item.audio,
           state: 'unavailable',
           message: inaccessible
-            ? 'No longer accessible or deleted'
-            : 'Could not verify this audio',
+            ? t('No longer accessible or deleted')
+            : t('Could not verify this audio'),
         }
       }
     }),
@@ -195,19 +194,19 @@ async function submit(): Promise<void> {
   const normalizedTitle = title.value.trim()
   const normalizedPresetId = Number(presetId.value)
   if (!normalizedTitle) {
-    errorMessage.value = 'Enter a paper title'
+    errorMessage.value = t('Enter a paper title')
     return
   }
   if (!Number.isInteger(normalizedPresetId) || normalizedPresetId < 1) {
-    errorMessage.value = 'Select a paper preset'
+    errorMessage.value = t('Select a paper preset')
     return
   }
   if (selected.value.length === 0) {
-    errorMessage.value = 'Select at least one audio'
+    errorMessage.value = t('Select at least one audio')
     return
   }
   if (!(await validateSelections())) {
-    errorMessage.value = 'Remove or replace unavailable audio before rendering'
+    errorMessage.value = t('Remove or replace unavailable audio before rendering')
     return
   }
   submitting.value = true
@@ -220,7 +219,7 @@ async function submit(): Promise<void> {
     accepted.value = await renderPaper(paper.id)
     await refreshJob()
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Paper could not be submitted'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Paper could not be submitted')
   } finally {
     submitting.value = false
   }
@@ -245,7 +244,7 @@ async function refreshJob(): Promise<void> {
     }
   } catch (error) {
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Render progress could not be loaded'
+      error instanceof ApiError ? error.message : t('Render progress could not be loaded')
     schedulePoll()
   }
 }
@@ -258,7 +257,7 @@ async function cancelRendering(): Promise<void> {
     job.value = await cancelJob(accepted.value.jobId)
     stopPolling()
   } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : 'Render could not be cancelled'
+    errorMessage.value = error instanceof ApiError ? error.message : t('Render could not be cancelled')
   } finally {
     cancelling.value = false
   }
@@ -280,13 +279,13 @@ function formatMilliseconds(value: number): string {
 }
 
 function formatDuration(value: number | null): string {
-  if (value === null) return 'Pending selection'
+  if (value === null) return t('Pending selection')
   const seconds = Math.max(0, Math.round(value))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
 function statusLabel(status: JobStatus | Audio['status']): string {
-  return status.charAt(0).toUpperCase() + status.slice(1)
+  return t(status.charAt(0).toUpperCase() + status.slice(1))
 }
 
 function statusClass(status: JobStatus): string {
@@ -307,8 +306,8 @@ onUnmounted(stopPolling)
   <section aria-labelledby="paper-title" class="min-w-0">
     <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-        <h1 id="paper-title" class="break-words text-2xl font-semibold">Assemble paper</h1>
+        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+        <h1 id="paper-title" class="break-words text-2xl font-semibold">{{ t('Assemble paper') }}</h1>
       </div>
       <span v-if="!accepted" class="text-sm text-muted">
         {{ selected.length }} selected
@@ -326,15 +325,15 @@ onUnmounted(stopPolling)
     <div v-if="accepted" class="border-b border-line bg-surface px-5 py-6">
       <div class="flex min-w-0 items-start justify-between gap-5">
         <div class="min-w-0">
-          <h2 class="text-base font-semibold">Rendering {{ title.trim() }}</h2>
-          <p class="mt-1 text-sm text-muted">Output audio {{ accepted.audioId }}</p>
+          <h2 class="text-base font-semibold">{{ t('Rendering {title}', { title: title.trim() }) }}</h2>
+          <p class="mt-1 text-sm text-muted">{{ t('Output audio {id}', { id: accepted.audioId }) }}</p>
         </div>
         <span class="shrink-0 text-sm font-medium tabular-nums">{{ job?.progress ?? 0 }}%</span>
       </div>
       <div
         class="mt-5 h-2 overflow-hidden bg-canvas"
         role="progressbar"
-        aria-label="Paper rendering progress"
+        :aria-label="t('Paper rendering progress')"
         aria-valuemin="0"
         aria-valuemax="100"
         :aria-valuenow="job?.progress ?? 0"
@@ -353,7 +352,7 @@ onUnmounted(stopPolling)
           class="h-9 border border-line px-3 text-sm font-medium text-danger hover:border-danger disabled:opacity-50"
           @click="cancelRendering"
         >
-          {{ cancelling ? 'Cancelling' : 'Cancel render' }}
+          {{ cancelling ? t('Cancelling') : t('Cancel render') }}
         </button>
       </div>
       <p v-if="job?.errorSummary" class="mt-3 break-words text-sm text-danger">
@@ -364,7 +363,7 @@ onUnmounted(stopPolling)
     <template v-else>
       <div class="grid min-w-0 gap-6 border-b border-line bg-surface px-5 py-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div class="min-w-0">
-          <label for="paper-name" class="mb-1 block text-sm font-medium">Paper title</label>
+          <label for="paper-name" class="mb-1 block text-sm font-medium">{{ t('Paper title') }}</label>
           <input
             id="paper-name"
             v-model="title"
@@ -374,16 +373,16 @@ onUnmounted(stopPolling)
           />
         </div>
         <div class="min-w-0">
-          <label for="paper-preset" class="mb-1 block text-sm font-medium">Preset</label>
+          <label for="paper-preset" class="mb-1 block text-sm font-medium">{{ t('Preset') }}</label>
           <select
             id="paper-preset"
             v-model="presetId"
             :disabled="loadingOptions"
             class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:opacity-50"
           >
-            <option value="" disabled>Select preset</option>
+            <option value="" disabled>{{ t('Select preset') }}</option>
             <option v-for="preset in presets" :key="preset.id" :value="String(preset.id)">
-              {{ preset.name }}{{ preset.isBuiltin ? ' (built-in)' : '' }}
+              {{ preset.name }}{{ preset.isBuiltin ? t(' (built-in)') : '' }}
             </option>
           </select>
         </div>
@@ -392,26 +391,26 @@ onUnmounted(stopPolling)
       <dl
         v-if="selectedPreset"
         class="grid border-b border-line bg-surface sm:grid-cols-3 lg:grid-cols-5"
-        aria-label="Preset parameters"
+        :aria-label="t('Preset parameters')"
       >
         <div class="border-b border-line px-4 py-4 sm:border-r lg:border-b-0">
-          <dt class="text-xs text-muted">Intro</dt>
+          <dt class="text-xs text-muted">{{ t('Intro') }}</dt>
           <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.introSilenceMilliseconds) }}</dd>
         </div>
         <div class="border-b border-line px-4 py-4 sm:border-r lg:border-b-0">
-          <dt class="text-xs text-muted">Between items</dt>
+          <dt class="text-xs text-muted">{{ t('Between items') }}</dt>
           <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.interItemSilenceMilliseconds) }}</dd>
         </div>
         <div class="border-b border-line px-4 py-4 lg:border-b-0 lg:border-r">
-          <dt class="text-xs text-muted">Repeats</dt>
+          <dt class="text-xs text-muted">{{ t('Repeats') }}</dt>
           <dd class="mt-1 text-sm font-medium">{{ selectedPreset.repeatCount }}</dd>
         </div>
         <div class="border-b border-line px-4 py-4 sm:border-b-0 sm:border-r">
-          <dt class="text-xs text-muted">Outro</dt>
+          <dt class="text-xs text-muted">{{ t('Outro') }}</dt>
           <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.outroSilenceMilliseconds) }}</dd>
         </div>
         <div class="px-4 py-4">
-          <dt class="text-xs text-muted">Estimated length</dt>
+          <dt class="text-xs text-muted">{{ t('Estimated length') }}</dt>
           <dd class="mt-1 text-sm font-medium">{{ formatDuration(estimatedDuration) }}</dd>
         </div>
       </dl>
@@ -420,8 +419,8 @@ onUnmounted(stopPolling)
         <section aria-labelledby="candidate-title" class="min-w-0">
           <div class="mb-4 flex min-w-0 items-end justify-between gap-3">
             <div>
-              <h2 id="candidate-title" class="text-base font-semibold">Audio candidates</h2>
-              <p class="mt-1 text-sm text-muted">{{ total }} available</p>
+              <h2 id="candidate-title" class="text-base font-semibold">{{ t('Audio candidates') }}</h2>
+              <p class="mt-1 text-sm text-muted">{{ t('{count} available', { count: total }) }}</p>
             </div>
           </div>
           <AudioSearchBox
@@ -431,10 +430,10 @@ onUnmounted(stopPolling)
             @submit="loadCandidates(true)"
           />
           <p v-if="loadingCandidates" class="border-b border-line py-10 text-sm text-muted">
-            Loading candidates
+            {{ t('Loading candidates') }}
           </p>
           <p v-else-if="candidates.length === 0" class="border-b border-line py-10 text-sm text-muted">
-            No audio found
+            {{ t('No audio found') }}
           </p>
           <ul v-else class="mt-4 divide-y divide-line border-y border-line bg-surface">
             <li
@@ -463,14 +462,14 @@ onUnmounted(stopPolling)
                 <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
                   <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
                 </svg>
-                {{ selectedIds.has(audio.id) ? 'Selected' : 'Add' }}
+                {{ selectedIds.has(audio.id) ? t('Selected') : t('Add') }}
               </button>
             </li>
           </ul>
           <nav
             v-if="!loadingCandidates && totalPages > 1"
             class="flex items-center justify-between gap-3 border-b border-line py-4"
-            aria-label="Candidate pages"
+            :aria-label="t('Candidate pages')"
           >
             <button
               type="button"
@@ -481,7 +480,7 @@ onUnmounted(stopPolling)
               <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
                 <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
               </svg>
-              Previous
+              {{ t('Previous') }}
             </button>
             <span class="text-sm tabular-nums text-muted">{{ page }} / {{ totalPages }}</span>
             <button
@@ -490,7 +489,7 @@ onUnmounted(stopPolling)
               class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium disabled:opacity-45"
               @click="movePage(page + 1)"
             >
-              Next
+              {{ t('Next') }}
               <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
                 <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
               </svg>
@@ -501,8 +500,8 @@ onUnmounted(stopPolling)
         <section aria-labelledby="selected-title" class="min-w-0">
           <div class="mb-4 flex min-w-0 items-end justify-between gap-3">
             <div>
-              <h2 id="selected-title" class="text-base font-semibold">Selected order</h2>
-              <p class="mt-1 text-sm text-muted">{{ selected.length }} items</p>
+              <h2 id="selected-title" class="text-base font-semibold">{{ t('Selected order') }}</h2>
+              <p class="mt-1 text-sm text-muted">{{ t('{count} items', { count: selected.length }) }}</p>
             </div>
             <button
               v-if="selected.length > 0"
@@ -515,11 +514,11 @@ onUnmounted(stopPolling)
                 <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" stroke="currentColor" stroke-width="2" />
                 <path d="M20 4v4h-4" stroke="currentColor" stroke-width="2" />
               </svg>
-              {{ validating ? 'Checking' : 'Check' }}
+              {{ validating ? t('Checking') : t('Check') }}
             </button>
           </div>
           <p v-if="selected.length === 0" class="border-y border-line bg-surface px-4 py-10 text-sm text-muted">
-            No audio selected
+            {{ t('No audio selected') }}
           </p>
           <PaperSelectedAudioList
             v-else
@@ -529,20 +528,20 @@ onUnmounted(stopPolling)
             @remove="removeAudio"
           />
           <p v-if="invalidSelection" class="mt-3 text-sm text-danger">
-            Unavailable items cannot be rendered.
+            {{ t('Unavailable items cannot be rendered.') }}
           </p>
         </section>
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-surface px-5 py-5">
-        <p class="text-sm text-muted">Output visibility: Private</p>
+        <p class="text-sm text-muted">{{ t('Output visibility: Private') }}</p>
         <button
           type="button"
           :disabled="submitting || validating || loadingOptions"
           class="h-10 bg-ink px-5 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
           @click="submit"
         >
-          {{ submitting || validating ? 'Checking and submitting' : 'Render paper' }}
+          {{ submitting || validating ? t('Checking and submitting') : t('Render paper') }}
         </button>
       </div>
     </template>

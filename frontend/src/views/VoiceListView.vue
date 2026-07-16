@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { listVoices, type Voice } from '@/api/voices'
@@ -7,17 +7,21 @@ import { ApiError } from '@/api/errors'
 import ResourceStatus from '@/components/ResourceStatus.vue'
 import VoiceTagLines from '@/components/VoiceTagLines.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from '@/i18n'
 
 const auth = useAuthStore()
+const { locale, t } = useI18n()
 const voices = ref<Voice[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
 const search = ref('')
 
-const locale = computed(() => auth.user?.locale ?? 'en')
-
 function isOwner(voice: Voice): boolean {
   return voice.author.userId.toLowerCase() === auth.user?.userId?.toLowerCase()
+}
+
+function statusLabel(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
 async function loadVoices(): Promise<void> {
@@ -32,7 +36,7 @@ async function loadVoices(): Promise<void> {
   } catch (error) {
     voices.value = []
     errorMessage.value =
-      error instanceof ApiError ? error.message : 'Voices could not be loaded'
+      error instanceof ApiError ? error.message : t('Voices could not be loaded')
   } finally {
     loading.value = false
   }
@@ -45,11 +49,11 @@ onMounted(loadVoices)
   <section aria-labelledby="voices-title">
     <div class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
       <div>
-        <p class="mb-1 text-sm font-medium text-accent">Teacher workspace</p>
-        <h1 id="voices-title" class="text-2xl font-semibold">Voices</h1>
+        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
+        <h1 id="voices-title" class="text-2xl font-semibold">{{ t('Voices') }}</h1>
       </div>
       <div class="flex items-center gap-4">
-        <span class="text-sm text-muted">{{ voices.length }} available</span>
+        <span class="text-sm text-muted">{{ t('{count} available', { count: voices.length }) }}</span>
         <RouterLink
           to="/voices/create"
           class="inline-flex h-9 items-center gap-2 bg-ink px-3 text-sm font-medium text-white hover:bg-accent"
@@ -57,7 +61,7 @@ onMounted(loadVoices)
           <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
             <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
           </svg>
-          New voice
+          {{ t('New voice') }}
         </RouterLink>
       </div>
     </div>
@@ -68,7 +72,7 @@ onMounted(loadVoices)
       @submit.prevent="loadVoices"
     >
       <div class="min-w-0 flex-1">
-        <label for="voice-search" class="mb-1 block text-sm font-medium">Search voices</label>
+        <label for="voice-search" class="mb-1 block text-sm font-medium">{{ t('Search voices') }}</label>
         <input
           id="voice-search"
           v-model="search"
@@ -85,12 +89,12 @@ onMounted(loadVoices)
           <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
           <path d="m16 16 4 4" stroke="currentColor" stroke-width="2" />
         </svg>
-        Search
+        {{ t('Search') }}
       </button>
     </form>
 
     <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">
-      Loading voices
+      {{ t('Loading voices') }}
     </p>
     <div v-else-if="errorMessage" class="border-b border-line py-10">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
@@ -103,11 +107,11 @@ onMounted(loadVoices)
           <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" stroke="currentColor" stroke-width="2" />
           <path d="M20 4v4h-4" stroke="currentColor" stroke-width="2" />
         </svg>
-        Retry
+        {{ t('Retry') }}
       </button>
     </div>
     <p v-else-if="voices.length === 0" class="border-b border-line py-12 text-sm text-muted">
-      No voices found
+      {{ t('No voices found') }}
     </p>
 
     <ul v-else class="divide-y divide-line border-b border-line bg-surface">
@@ -119,7 +123,7 @@ onMounted(loadVoices)
           <div class="min-w-0">
             <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
               <h2 class="min-w-0 break-words text-base font-semibold">{{ voice.title }}</h2>
-              <span v-if="isOwner(voice)" class="text-xs font-medium text-accent">Yours</span>
+              <span v-if="isOwner(voice)" class="text-xs font-medium text-accent">{{ t('Yours') }}</span>
             </div>
             <p class="mt-1 break-words text-sm text-muted">
               {{ voice.author.username || voice.author.userId }}
@@ -128,7 +132,7 @@ onMounted(loadVoices)
           <VoiceTagLines :tags="voice.tags" />
           <div class="flex min-w-0 flex-row items-center gap-4 sm:flex-col sm:items-start sm:gap-2">
             <ResourceStatus :status="voice.status" />
-            <span class="text-sm capitalize text-muted">{{ voice.visibility }}</span>
+            <span class="text-sm capitalize text-muted">{{ t(statusLabel(voice.visibility)) }}</span>
           </div>
           <svg
             viewBox="0 0 24 24"

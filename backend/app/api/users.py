@@ -7,7 +7,6 @@ from loguru import logger
 from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.orm import Session
 
-from backend.app.api.schemas import LanguageCode
 from backend.app.core.auth import (
     Principal,
     get_principal,
@@ -15,6 +14,7 @@ from backend.app.core.auth import (
     require_teacher,
 )
 from backend.app.core.exceptions import NotFoundError
+from backend.app.core.locales import SupportedLocale
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.repositories.users import UserRepository
@@ -40,12 +40,12 @@ class ApiModel(BaseModel):
 class CompleteProfileRequest(ApiModel):
     user_id: str
     username: str | None = None
-    locale: LanguageCode | None = None
+    locale: SupportedLocale | None = None
 
 
 class UpdateProfileRequest(ApiModel):
     username: str | None = None
-    locale: LanguageCode | None = None
+    locale: SupportedLocale | None = None
 
     @model_validator(mode="after")
     def require_update(self) -> UpdateProfileRequest:

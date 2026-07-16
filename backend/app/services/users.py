@@ -2,18 +2,16 @@ from __future__ import annotations
 
 import re
 
-from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.api.schemas import LanguageCode
+from backend.app.core.locales import normalize_supported_locale
 from backend.app.core.exceptions import ConflictError, DomainValidationError
 from backend.app.db.models.user import User, UserStatus
 from backend.app.repositories.users import UserRepository
 
 
 _USER_ID_PATTERN = re.compile(r"^[A-Za-z0-9]{1,64}$")
-_LANGUAGE_CODE_ADAPTER = TypeAdapter(LanguageCode)
 
 
 class UserService:
@@ -121,9 +119,11 @@ class UserService:
     @staticmethod
     def _validate_locale(locale: str) -> str:
         try:
-            return _LANGUAGE_CODE_ADAPTER.validate_python(locale)
-        except ValidationError:
+            normalized = normalize_supported_locale(locale)
+        except ValueError:
             raise DomainValidationError(
                 "Locale is invalid",
                 details={"field": "locale"},
             ) from None
+        assert isinstance(normalized, str)
+        return normalized
