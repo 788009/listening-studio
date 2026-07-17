@@ -7,4 +7,4 @@ cosyvoice_dir = os.path.join(current_dir, 'CosyVoice')
 sys.path.append(cosyvoice_dir)
 
 # 现在可以正常导入
-from CosyVoice.modules import *
+from voice.modules import *
