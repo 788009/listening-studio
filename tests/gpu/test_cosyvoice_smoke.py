@@ -26,7 +26,11 @@ from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.voice import Voice, VoiceStatus
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import CosyVoiceAdapter
-from backend.app.integrations.identity import ExternalIdentity
+from backend.app.integrations.identity import (
+    ExternalIdentity,
+    IdentityProviderCapabilities,
+    LoginMethod,
+)
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audio_synthesis import (
     AUDIO_SYNTHESIS_JOB_TYPE,
@@ -57,6 +61,13 @@ class GpuTestIdentityProvider:
             issuer="https://gpu-acceptance.test",
             subject=subject,
         )
+
+    def capabilities(self) -> IdentityProviderCapabilities:
+        return IdentityProviderCapabilities(login_method=LoginMethod.NONE)
+
+    async def end_session(self, request: Request) -> str | None:
+        del request
+        return None
 
 
 class FailureInjectingIntegration:

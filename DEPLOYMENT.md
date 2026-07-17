@@ -189,6 +189,14 @@ repositories, foreign keys, or disk paths. The immutable `issuer + subject`
 pair remains the account identity, while `userId` and `username` retain their
 existing application roles.
 
+The adapter must also implement `capabilities()` and `end_session(request)`.
+Return the `redirect` login method and a backend-controlled login URL from
+`capabilities()`; the existing frontend will navigate to that URL instead of
+showing the debug form. `end_session()` may return the provider's validated
+post-logout URL, which the frontend follows after the local cookies are cleared.
+OIDC authorization and callback endpoints remain backend-owned and must not
+send tokens through frontend code.
+
 Terminate the OIDC session through the provider and the application session
 together. Preserve secure, HTTP-only, same-site cookies and the existing CSRF
 check for cookie-authenticated state-changing requests.

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 
+import AuthControls from '@/components/AuthControls.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/i18n'
 
@@ -76,6 +77,7 @@ const { t } = useI18n()
             {{ t('Manage') }}
           </RouterLink>
         </nav>
+        <AuthControls />
       </div>
     </header>
 

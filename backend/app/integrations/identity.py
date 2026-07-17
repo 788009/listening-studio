@@ -7,6 +7,7 @@ import hmac
 import json
 import time
 from dataclasses import dataclass
+from enum import Enum
 from typing import Protocol
 
 from fastapi import Request
@@ -24,8 +25,27 @@ class ExternalIdentity:
     subject: str
 
 
+class LoginMethod(str, Enum):
+    NONE = "none"
+    DEBUG = "debug"
+    REDIRECT = "redirect"
+
+
+@dataclass(frozen=True)
+class IdentityProviderCapabilities:
+    login_method: LoginMethod
+    login_url: str | None = None
+
+
 class IdentityProvider(Protocol):
     async def authenticate(self, request: Request) -> ExternalIdentity | None:
+        pass
+
+    def capabilities(self) -> IdentityProviderCapabilities:
+        pass
+
+    async def end_session(self, request: Request) -> str | None:
+        """End the provider session and return an optional browser redirect URL."""
         pass
 
 
@@ -60,11 +80,27 @@ class PlaceholderIdentityProvider:
         token = request.cookies.get(self.cookie_name)
         return self.verify_session(token) if token else None
 
+    def capabilities(self) -> IdentityProviderCapabilities:
+        return IdentityProviderCapabilities(
+            login_method=LoginMethod.DEBUG if self.enabled else LoginMethod.NONE
+        )
+
+    async def end_session(self, request: Request) -> str | None:
+        del request
+        return None
+
     def identity_from_headers(self, request: Request) -> ExternalIdentity | None:
         issuer = request.headers.get(DEBUG_ISSUER_HEADER)
         subject = request.headers.get(DEBUG_SUBJECT_HEADER)
         if issuer is None or subject is None:
             return None
+        return self.identity_from_values(issuer, subject)
+
+    def identity_from_values(
+        self,
+        issuer: object,
+        subject: object,
+    ) -> ExternalIdentity | None:
         return self._validated_identity(issuer, subject)
 
     def issue_session(

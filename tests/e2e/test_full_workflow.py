@@ -34,7 +34,11 @@ from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTagType
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
-from backend.app.integrations.identity import ExternalIdentity
+from backend.app.integrations.identity import (
+    ExternalIdentity,
+    IdentityProviderCapabilities,
+    LoginMethod,
+)
 from backend.app.integrations.llm import (
     GeneratedDialogueTurn,
     GeneratedListeningContent,
@@ -84,6 +88,13 @@ class FakeOidcIdentityProvider:
             issuer="https://fake-oidc.example",
             subject=subject,
         )
+
+    def capabilities(self) -> IdentityProviderCapabilities:
+        return IdentityProviderCapabilities(login_method=LoginMethod.NONE)
+
+    async def end_session(self, request: Request) -> str | None:
+        del request
+        return None
 
 
 class FakeListeningContentGenerator:

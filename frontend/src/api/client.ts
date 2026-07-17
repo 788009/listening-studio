@@ -21,6 +21,13 @@ function apiPath(path: string): string {
   return `${API_PREFIX}${path.startsWith('/') ? path : `/${path}`}`
 }
 
+function applicationPath(path: string): string {
+  if (/^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//')) {
+    throw new TypeError('Application paths must be relative')
+  }
+  return path.startsWith('/') ? path : `/${path}`
+}
+
 async function responseBody(response: Response): Promise<unknown> {
   const contentType = response.headers.get('content-type') ?? ''
   if (!contentType.includes('application/json')) {
@@ -33,7 +40,10 @@ async function responseBody(response: Response): Promise<unknown> {
   }
 }
 
-export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function applicationRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
@@ -45,7 +55,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     if (csrfToken) headers.set(CSRF_HEADER_NAME, csrfToken)
   }
 
-  const response = await fetch(apiPath(path), {
+  const response = await fetch(applicationPath(path), {
     ...init,
     headers,
     credentials: 'include',
@@ -69,4 +79,9 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     throw new ApiError(response.status, fallback)
   }
   return body as T
+}
+
+
+export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  return applicationRequest<T>(apiPath(path), init)
 }

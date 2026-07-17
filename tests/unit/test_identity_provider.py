@@ -6,6 +6,7 @@ from pathlib import Path
 from backend.app.core.config import Settings
 from backend.app.integrations.identity import (
     ExternalIdentity,
+    LoginMethod,
     PlaceholderIdentityProvider,
 )
 
@@ -42,6 +43,20 @@ class PlaceholderIdentityProviderTest(unittest.TestCase):
 
         self.assertIsNone(provider.verify_session(tampered_token, now=101))
         self.assertIsNone(provider.verify_session("invalid", now=101))
+
+    def test_capabilities_follow_debug_auth_setting(self) -> None:
+        enabled = self.provider().capabilities()
+        disabled_settings = Settings(
+            _env_file=None,
+            debug_auth_enabled=False,
+            auth_session_secret="test-session-secret-with-32-characters",
+            cosyvoice_model_dir=Path("/models/cosyvoice"),
+        )
+        disabled = PlaceholderIdentityProvider(disabled_settings).capabilities()
+
+        self.assertEqual(enabled.login_method, LoginMethod.DEBUG)
+        self.assertEqual(disabled.login_method, LoginMethod.NONE)
+        self.assertIsNone(enabled.login_url)
 
 
 if __name__ == "__main__":

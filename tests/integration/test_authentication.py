@@ -9,7 +9,7 @@ from typing import Annotated
 import httpx
 from alembic import command
 from alembic.config import Config
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from starlette.types import ASGIApp
 
 from backend.app.core.auth import require_completed_profile, require_teacher
@@ -20,6 +20,8 @@ from backend.app.integrations.identity import (
     DEBUG_ISSUER_HEADER,
     DEBUG_SUBJECT_HEADER,
     ExternalIdentity,
+    IdentityProviderCapabilities,
+    LoginMethod,
     PlaceholderIdentityProvider,
 )
 from backend.app.repositories.users import UserRepository
@@ -27,6 +29,22 @@ from backend.app.services.users import UserService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class RedirectIdentityProvider:
+    async def authenticate(self, request: Request) -> ExternalIdentity | None:
+        del request
+        return None
+
+    def capabilities(self) -> IdentityProviderCapabilities:
+        return IdentityProviderCapabilities(
+            login_method=LoginMethod.REDIRECT,
+            login_url="/auth/oidc/login",
+        )
+
+    async def end_session(self, request: Request) -> str | None:
+        del request
+        return "https://issuer.example/logout"
 
 
 class AuthenticationIntegrationTest(unittest.TestCase):
@@ -141,7 +159,10 @@ class AuthenticationIntegrationTest(unittest.TestCase):
             ) as client:
                 login = await client.post(
                     "/auth/debug/session",
-                    headers=self.debug_headers("session-teacher"),
+                    json={
+                        "issuer": "https://issuer.example",
+                        "subject": "session-teacher",
+                    },
                 )
                 protected = await client.get("/test/teacher")
                 return login, protected
@@ -154,6 +175,40 @@ class AuthenticationIntegrationTest(unittest.TestCase):
         self.assertIn("HttpOnly", login.headers["set-cookie"])
         self.assertEqual(protected.status_code, 200)
         self.assertEqual(protected.json()["id"], 1)
+
+    def test_authentication_capabilities_and_provider_logout_boundary(self) -> None:
+        debug_app = create_app(self.settings(debug_auth_enabled=True))
+        disabled_app = create_app(self.settings(debug_auth_enabled=False))
+        redirect_app = create_app(
+            self.settings(debug_auth_enabled=False),
+            identity_provider=RedirectIdentityProvider(),
+        )
+
+        debug = asyncio.run(self.request(debug_app, "GET", "/auth/capabilities"))
+        disabled = asyncio.run(
+            self.request(disabled_app, "GET", "/auth/capabilities")
+        )
+        redirect = asyncio.run(
+            self.request(redirect_app, "GET", "/auth/capabilities")
+        )
+        logout = asyncio.run(
+            self.request(redirect_app, "DELETE", "/auth/session")
+        )
+
+        self.assertEqual(debug.json(), {"loginMethod": "debug", "loginUrl": None})
+        self.assertEqual(disabled.json(), {"loginMethod": "none", "loginUrl": None})
+        self.assertEqual(
+            redirect.json(),
+            {"loginMethod": "redirect", "loginUrl": "/auth/oidc/login"},
+        )
+        self.assertEqual(
+            logout.json(),
+            {"redirectUrl": "https://issuer.example/logout"},
+        )
+
+        debug_app.state.db_engine.dispose()
+        disabled_app.state.db_engine.dispose()
+        redirect_app.state.db_engine.dispose()
 
     def test_spoofed_database_and_user_ids_do_not_select_identity(self) -> None:
         app = create_app(self.settings(debug_auth_enabled=True))

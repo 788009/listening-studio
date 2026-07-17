@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { apiRequest } from './client'
+import { apiRequest, applicationRequest } from './client'
 import { ApiError } from './errors'
 
 
@@ -56,6 +56,21 @@ describe('apiRequest', () => {
   it('rejects absolute request URLs', async () => {
     await expect(apiRequest('https://example.com/api')).rejects.toThrow(
       'API paths must be relative',
+    )
+  })
+
+  it('supports non-API application routes without allowing absolute URLs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await applicationRequest('/auth/session', { method: 'DELETE' })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/auth/session',
+      expect.objectContaining({ method: 'DELETE', credentials: 'include' }),
+    )
+    await expect(applicationRequest('https://example.com/auth')).rejects.toThrow(
+      'Application paths must be relative',
     )
   })
 

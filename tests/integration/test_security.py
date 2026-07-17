@@ -99,15 +99,18 @@ class SecurityIntegrationTest(unittest.TestCase):
                     "/auth/session",
                     headers={CSRF_HEADER_NAME: csrf},
                 )
-                return login, missing, forged, accepted, logout
+                after_logout = await client.get("/api/users/me")
+                return login, missing, forged, accepted, logout, after_logout
 
-        login, missing, forged, accepted, logout = asyncio.run(scenario())
+        login, missing, forged, accepted, logout, after_logout = asyncio.run(scenario())
         self.assertEqual(login.status_code, 204)
         self.assertEqual(missing.status_code, 403)
         self.assertEqual(missing.json()["error"]["code"], "csrf_failed")
         self.assertEqual(forged.status_code, 403)
         self.assertEqual(accepted.status_code, 200)
-        self.assertEqual(logout.status_code, 204)
+        self.assertEqual(logout.status_code, 200)
+        self.assertEqual(logout.json(), {"redirectUrl": None})
+        self.assertEqual(after_logout.status_code, 401)
 
     def test_security_headers_and_production_cookie_attributes(self) -> None:
         async def request(app, path: str, **kwargs: object) -> httpx.Response:

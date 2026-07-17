@@ -70,6 +70,17 @@ When `LISTENING_DEBUG_AUTH_ENABLED=true`, development requests can provide
 `LISTENING_AUTH_SESSION_SECRET` of at least 32 characters. Debug headers and
 placeholder session cookies are ignored when debug authentication is disabled.
 
+The frontend displays a development sign-in control when debug authentication
+is enabled. Enter a stable issuer and subject to reuse a test teacher; change the
+subject to exercise first-login profile setup with a new teacher. The form posts
+the identity as structured JSON to the same debug session endpoint. Signing out
+clears both the application session and CSRF cookies.
+
+`GET /auth/capabilities` tells the frontend whether login is unavailable, uses
+the debug form, or should redirect to a provider login URL. This keeps debug
+identity fields out of normal business API calls and allows a real OIDC adapter
+to replace the login mechanism without changing the account UI.
+
 ## Frontend
 
 The frontend requires Node 24.15 and npm 11.6. Install dependencies and start
