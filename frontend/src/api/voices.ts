@@ -134,6 +134,13 @@ export function listVoiceGenderTags(language = 'en'): Promise<VoiceTag[]> {
   return apiRequest<VoiceTag[]>(`/voice-tags?${parameters.toString()}`)
 }
 
+export function createVoiceGenderTag(value: string): Promise<VoiceTag> {
+  return apiRequest<VoiceTag>('/voice-tags', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'gender', value, translations: [] }),
+  })
+}
+
 export function listPublicSampleAudio(language = 'en'): Promise<AudioSummary[]> {
   const parameters = new URLSearchParams({
     page: '1',

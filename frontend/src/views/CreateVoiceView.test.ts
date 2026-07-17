@@ -34,8 +34,20 @@ describe('create voice view', () => {
   })
 
   it('submits the form and links to the completed voice', async () => {
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
+      if (path === '/api/voice-tags' && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 4,
+            type: 'gender',
+            displayValue: 'female',
+            englishValue: 'female',
+            fullTag: 'gender:female',
+            translations: [],
+          }, 201),
+        )
+      }
       if (path.startsWith('/api/voice-tags')) return Promise.resolve(jsonResponse([]))
       if (path === '/api/voices') {
         return Promise.resolve(jsonResponse({ voiceId: 8, jobId: 13 }, 202))
@@ -63,6 +75,9 @@ describe('create voice view', () => {
     const wrapper = await mountView()
     await flushPromises()
     await wrapper.get('#voice-title').setValue('Classroom voice')
+    await wrapper.get('#voice-new-gender').setValue('female')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add tag')?.trigger('click')
+    await flushPromises()
     const fileInput = wrapper.get('#voice-file')
     Object.defineProperty(fileInput.element, 'files', {
       configurable: true,
@@ -75,6 +90,8 @@ describe('create voice view', () => {
     expect(wrapper.text()).toContain('Voice is ready')
     expect(wrapper.get('a[href="/voice/8"]').attributes('href')).toBe('/voice/8')
     expect(fetchMock.mock.calls.filter(([path]) => path === '/api/voices')).toHaveLength(1)
+    const uploadRequest = fetchMock.mock.calls.find(([path]) => path === '/api/voices')?.[1]
+    expect((uploadRequest?.body as FormData).get('genderTagId')).toBe('4')
     wrapper.unmount()
   })
 

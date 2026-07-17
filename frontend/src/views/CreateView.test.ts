@@ -86,6 +86,19 @@ describe('direct creation view', () => {
     let submittedBody: unknown
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
+      if (path === '/api/audio-tags' && init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as { type: 'topic' | 'category'; value: string }
+        return Promise.resolve(
+          jsonResponse({
+            id: body.type === 'topic' ? 5 : 6,
+            type: body.type,
+            displayValue: body.value,
+            englishValue: body.value,
+            fullTag: `${body.type}:${body.value}`,
+            translations: [],
+          }, 201),
+        )
+      }
       const options = optionsResponse(path)
       if (options) return Promise.resolve(options)
       if (path === '/api/audios') {
@@ -118,6 +131,13 @@ describe('direct creation view', () => {
     const longText = 'Listening text '.repeat(200)
     await wrapper.get('#audio-title').setValue('Single practice')
     await wrapper.get('#single-text').setValue(longText)
+    await wrapper.get('#new-topic-tag').setValue('test_topic')
+    await wrapper.get('#new-category-tag').setValue('test_category')
+    const addTagButtons = wrapper.findAll('button').filter((button) => button.text() === 'Add tag')
+    await addTagButtons[0]?.trigger('click')
+    await flushPromises()
+    await addTagButtons[1]?.trigger('click')
+    await flushPromises()
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
@@ -127,6 +147,7 @@ describe('direct creation view', () => {
     expect(wrapper.text()).toContain('Audio is ready')
     expect(wrapper.get('a[href="/audio/8"]').attributes('href')).toBe('/audio/8')
     expect((submittedBody as { text: string }).text).toBe(longText.trim())
+    expect((submittedBody as { tagIds: number[] }).tagIds).toEqual([5, 6])
     wrapper.unmount()
   })
 

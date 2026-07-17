@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createVoiceGenderTag,
   createVoiceUpload,
   deleteVoice,
   getVoice,
@@ -103,5 +104,22 @@ describe('voice API', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       '/api/voice-tags?type=gender&language=zh-CN',
     )
+  })
+
+  it('creates a gender tag with a typed payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ id: 4, type: 'gender', englishValue: 'female' }, 201),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createVoiceGenderTag('female')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/voice-tags')
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(request.body))).toEqual({
+      type: 'gender',
+      value: 'female',
+      translations: [],
+    })
   })
 })

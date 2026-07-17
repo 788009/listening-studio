@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
+  createAudioTag,
   listAudioCreationTags,
   type AudioTag,
   type ResourceVisibility,
@@ -16,6 +17,7 @@ import { useAudioCreationStore } from '@/stores/audioCreation'
 import { useI18n } from '@/i18n'
 
 type CreationMode = 'single' | 'dialogue'
+type CreationTagType = 'topic' | 'category'
 
 const route = useRoute()
 const { locale, t } = useI18n()
@@ -29,6 +31,11 @@ const visibility = ref<ResourceVisibility>('private')
 const selectedTagIds = ref<number[]>([])
 const voices = ref<Voice[]>([])
 const tags = ref<AudioTag[]>([])
+const newTagValues = ref<Record<CreationTagType, string>>({
+  topic: '',
+  category: '',
+})
+const creatingTagType = ref<CreationTagType | null>(null)
 const loadingOptions = ref(true)
 const formError = ref('')
 
@@ -36,6 +43,20 @@ const topicTags = computed(() => tags.value.filter((tag) => tag.type === 'topic'
 const categoryTags = computed(() =>
   tags.value.filter((tag) => tag.type === 'category'),
 )
+const tagGroups = computed(() => [
+  {
+    label: 'Topics',
+    newLabel: 'New topic tag',
+    type: 'topic' as const,
+    items: topicTags.value,
+  },
+  {
+    label: 'Categories',
+    newLabel: 'New category tag',
+    type: 'category' as const,
+    items: categoryTags.value,
+  },
+])
 const failureMessage = computed(
   () => creation.job?.errorSummary || creation.errorMessage,
 )
@@ -54,6 +75,24 @@ function toggleTag(tagId: number): void {
   selectedTagIds.value = selectedTagIds.value.includes(tagId)
     ? selectedTagIds.value.filter((id) => id !== tagId)
     : [...selectedTagIds.value, tagId]
+}
+
+async function addTag(type: CreationTagType): Promise<void> {
+  const value = newTagValues.value[type].trim()
+  if (!value || creatingTagType.value !== null) return
+  creatingTagType.value = type
+  formError.value = ''
+  try {
+    const tag = await createAudioTag(type, value)
+    tags.value = [...tags.value, tag]
+    selectedTagIds.value = [...selectedTagIds.value, tag.id]
+    newTagValues.value[type] = ''
+  } catch (error) {
+    formError.value =
+      error instanceof ApiError ? error.message : t('Tag could not be created')
+  } finally {
+    creatingTagType.value = null
+  }
 }
 
 async function loadOptions(): Promise<void> {
@@ -136,6 +175,7 @@ function startAnother(): void {
   singleText.value = ''
   turns.value = [newTurn()]
   selectedTagIds.value = []
+  newTagValues.value = { topic: '', category: '' }
   visibility.value = 'private'
   formError.value = ''
 }
@@ -258,7 +298,7 @@ onUnmounted(creation.stopPolling)
 
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
-          <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
+          <fieldset v-for="group in tagGroups" :key="group.type" class="min-w-0">
             <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
             <div class="space-y-2">
               <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
@@ -266,6 +306,26 @@ onUnmounted(creation.stopPolling)
                 <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
               </label>
               <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
+            </div>
+            <div class="mt-3 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+              <label :for="`new-${group.type}-tag`" class="sr-only">{{ t(group.newLabel) }}</label>
+              <input
+                :id="`new-${group.type}-tag`"
+                v-model="newTagValues[group.type]"
+                type="text"
+                maxlength="255"
+                :placeholder="t(group.newLabel)"
+                class="h-9 min-w-0 border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+                @keydown.enter.prevent="addTag(group.type)"
+              />
+              <button
+                type="button"
+                :disabled="creatingTagType !== null || !newTagValues[group.type].trim()"
+                class="h-9 border border-line bg-surface px-3 text-sm font-medium hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
+                @click="addTag(group.type)"
+              >
+                {{ t('Add tag') }}
+              </button>
             </div>
           </fieldset>
         </div>

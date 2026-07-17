@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   audioMediaPath,
   autocompleteAudioTags,
+  createAudioTag,
   createDialogueAudio,
   createSingleAudio,
   deleteAudio,
@@ -114,5 +115,22 @@ describe('audio API', () => {
     await expect(listAudioCreationTags('zh-CN')).resolves.toHaveLength(2)
     expect(fetchMock.mock.calls[0]?.[0]).toContain('type=topic')
     expect(fetchMock.mock.calls[1]?.[0]).toContain('type=category')
+  })
+
+  it('creates a topic or category tag with a typed payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ id: 3, type: 'topic', englishValue: 'test' }, 201),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createAudioTag('topic', 'test')
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audio-tags')
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(JSON.parse(String(request.body))).toEqual({
+      type: 'topic',
+      value: 'test',
+      translations: [],
+    })
   })
 })

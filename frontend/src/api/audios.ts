@@ -160,6 +160,16 @@ export async function listAudioCreationTags(language = 'en'): Promise<AudioTag[]
   return [...topics, ...categories]
 }
 
+export function createAudioTag(
+  type: Extract<AudioTagType, 'topic' | 'category'>,
+  value: string,
+): Promise<AudioTag> {
+  return apiRequest<AudioTag>('/audio-tags', {
+    method: 'POST',
+    body: JSON.stringify({ type, value, translations: [] }),
+  })
+}
+
 export function autocompleteAudioTags(query: string): Promise<string[]> {
   const parameters = new URLSearchParams({ q: query, limit: '10' })
   return apiRequest<string[]>(`/audio-tags/autocomplete?${parameters.toString()}`)

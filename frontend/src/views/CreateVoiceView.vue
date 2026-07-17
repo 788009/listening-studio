@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import {
+  createVoiceGenderTag,
   listVoiceGenderTags,
   type ResourceVisibility,
   type VoiceTag,
@@ -18,7 +19,9 @@ const file = ref<File | null>(null)
 const genderTagId = ref('')
 const visibility = ref<ResourceVisibility>('private')
 const genderTags = ref<VoiceTag[]>([])
+const newGenderTag = ref('')
 const tagsLoading = ref(true)
+const tagCreating = ref(false)
 const formError = ref('')
 
 const statusLabel = computed(() => {
@@ -39,6 +42,24 @@ async function loadGenderTags(): Promise<void> {
       error instanceof ApiError ? error.message : t('Gender tags could not be loaded')
   } finally {
     tagsLoading.value = false
+  }
+}
+
+async function addGenderTag(): Promise<void> {
+  const value = newGenderTag.value.trim()
+  if (!value || tagCreating.value) return
+  tagCreating.value = true
+  formError.value = ''
+  try {
+    const tag = await createVoiceGenderTag(value)
+    genderTags.value = [...genderTags.value, tag]
+    genderTagId.value = String(tag.id)
+    newGenderTag.value = ''
+  } catch (error) {
+    formError.value =
+      error instanceof ApiError ? error.message : t('Tag could not be created')
+  } finally {
+    tagCreating.value = false
   }
 }
 
@@ -75,6 +96,7 @@ function startAnother(): void {
   title.value = ''
   file.value = null
   genderTagId.value = ''
+  newGenderTag.value = ''
   visibility.value = 'private'
   formError.value = ''
 }
@@ -196,6 +218,26 @@ onUnmounted(creation.stopPolling)
               {{ tag.displayValue.replace(/_/g, ' ') }}
             </option>
           </select>
+          <div class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
+            <label for="voice-new-gender" class="sr-only">{{ t('New gender tag') }}</label>
+            <input
+              id="voice-new-gender"
+              v-model="newGenderTag"
+              type="text"
+              maxlength="255"
+              :placeholder="t('New gender tag')"
+              class="h-9 min-w-0 border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+              @keydown.enter.prevent="addGenderTag"
+            />
+            <button
+              type="button"
+              :disabled="tagCreating || !newGenderTag.trim()"
+              class="h-9 border border-line bg-surface px-3 text-sm font-medium hover:border-ink disabled:cursor-not-allowed disabled:opacity-50"
+              @click="addGenderTag"
+            >
+              {{ t('Add tag') }}
+            </button>
+          </div>
         </div>
       </div>
 
