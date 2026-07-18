@@ -11,11 +11,24 @@ from alembic.config import Config
 from fastapi import FastAPI
 
 from backend.app.core.config import Settings
+from backend.app.db.models.audio import (
+    Audio,
+    AudioSourceType,
+    AudioStatus,
+    AudioVisibility,
+)
+from backend.app.db.models.voice import (
+    Voice,
+    VoiceSampleSource,
+    VoiceStatus,
+    VoiceVisibility,
+)
 from backend.app.factory import create_app
 from backend.app.integrations.identity import (
     DEBUG_ISSUER_HEADER,
     DEBUG_SUBJECT_HEADER,
 )
+from backend.app.repositories.users import UserRepository
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -158,19 +171,109 @@ class UserApiIntegrationTest(unittest.TestCase):
         self.assertEqual(before.json()["userId"], after.json()["userId"])
         self.assertEqual(after.json()["username"], "Updated Name")
 
-    def test_private_statistics_are_returned_only_to_same_user(self) -> None:
+    def test_resource_statistics_and_private_access(self) -> None:
         self.complete_profile("first", "StatsTeacher")
+        self.complete_profile("second", "OtherTeacher")
+        with self.app.state.session_factory() as session:
+            user = UserRepository().get_by_user_id(session, "StatsTeacher")
+            other_user = UserRepository().get_by_user_id(session, "OtherTeacher")
+            assert user is not None
+            assert other_user is not None
+            session.add_all(
+                [
+                    Voice(
+                        author=user,
+                        title="Public voice",
+                        normalized_title="public voice",
+                        status=VoiceStatus.READY,
+                        visibility=VoiceVisibility.PUBLIC,
+                        sample_source=VoiceSampleSource.ORIGINAL,
+                    ),
+                    Voice(
+                        author=user,
+                        title="Private voice",
+                        normalized_title="private voice",
+                        status=VoiceStatus.PENDING,
+                        visibility=VoiceVisibility.PRIVATE,
+                        sample_source=VoiceSampleSource.ORIGINAL,
+                    ),
+                    Voice(
+                        author=user,
+                        title="Unavailable public voice",
+                        normalized_title="unavailable public voice",
+                        status=VoiceStatus.PROCESSING,
+                        visibility=VoiceVisibility.PUBLIC,
+                        sample_source=VoiceSampleSource.ORIGINAL,
+                    ),
+                    Voice(
+                        author=other_user,
+                        title="Other public voice",
+                        normalized_title="other public voice",
+                        status=VoiceStatus.READY,
+                        visibility=VoiceVisibility.PUBLIC,
+                        sample_source=VoiceSampleSource.ORIGINAL,
+                    ),
+                    Audio(
+                        author=user,
+                        title="Public audio",
+                        normalized_title="public audio",
+                        text="Public audio text",
+                        source_type=AudioSourceType.SINGLE_SPEAKER,
+                        status=AudioStatus.READY,
+                        visibility=AudioVisibility.PUBLIC,
+                    ),
+                    Audio(
+                        author=user,
+                        title="Private audio",
+                        normalized_title="private audio",
+                        text="Private audio text",
+                        source_type=AudioSourceType.SINGLE_SPEAKER,
+                        status=AudioStatus.FAILED,
+                        visibility=AudioVisibility.PRIVATE,
+                    ),
+                    Audio(
+                        author=user,
+                        title="Unavailable public audio",
+                        normalized_title="unavailable public audio",
+                        text="Unavailable public audio text",
+                        source_type=AudioSourceType.SINGLE_SPEAKER,
+                        status=AudioStatus.FAILED,
+                        visibility=AudioVisibility.PUBLIC,
+                    ),
+                    Audio(
+                        author=other_user,
+                        title="Other public audio",
+                        normalized_title="other public audio",
+                        text="Other public audio text",
+                        source_type=AudioSourceType.SINGLE_SPEAKER,
+                        status=AudioStatus.READY,
+                        visibility=AudioVisibility.PUBLIC,
+                    ),
+                ]
+            )
+            session.commit()
+
         anonymous = self.send("GET", "/api/users/StatsTeacher")
         owner = self.send(
             "GET",
             "/api/users/StatsTeacher",
             headers=self.headers("first"),
         )
+        other_user = self.send(
+            "GET",
+            "/api/users/StatsTeacher",
+            headers=self.headers("second"),
+        )
 
+        self.assertEqual(
+            anonymous.json()["statistics"],
+            {"publicVoiceCount": 1, "publicAudioCount": 1},
+        )
         self.assertNotIn("privateStatistics", anonymous.json())
+        self.assertNotIn("privateStatistics", other_user.json())
         self.assertEqual(
             owner.json()["privateStatistics"],
-            {"privateVoiceCount": 0, "privateAudioCount": 0},
+            {"privateVoiceCount": 1, "privateAudioCount": 1},
         )
 
     def test_pending_teacher_update_has_specialized_error(self) -> None:

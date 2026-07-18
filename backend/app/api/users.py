@@ -162,16 +162,28 @@ async def get_user_summary(
     principal: Principal = Depends(get_principal),
     session: Session = Depends(get_db_session),
 ) -> UserSummaryResponse:
-    user = UserRepository().get_by_user_id(session, user_id)
+    repository = UserRepository()
+    user = repository.get_by_user_id(session, user_id)
     if user is None or user.user_id is None:
         raise NotFoundError("User not found")
 
     is_current_user = bool(principal.user and principal.user.id == user.id)
+    resource_statistics = repository.resource_statistics(session, user.id)
     return UserSummaryResponse(
         user_id=user.user_id,
         username=user.username,
         locale=user.locale,
         created_at=user.created_at,
-        statistics=PublicStatistics(),
-        private_statistics=PrivateStatistics() if is_current_user else None,
+        statistics=PublicStatistics(
+            public_voice_count=resource_statistics.public_voice_count,
+            public_audio_count=resource_statistics.public_audio_count,
+        ),
+        private_statistics=(
+            PrivateStatistics(
+                private_voice_count=resource_statistics.private_voice_count,
+                private_audio_count=resource_statistics.private_audio_count,
+            )
+            if is_current_user
+            else None
+        ),
     )

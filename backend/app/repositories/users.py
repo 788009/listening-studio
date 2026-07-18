@@ -1,9 +1,21 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from dataclasses import dataclass
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from backend.app.db.models.audio import Audio, AudioStatus, AudioVisibility
 from backend.app.db.models.user import User, UserStatus
+from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
+
+
+@dataclass(frozen=True)
+class UserResourceStatistics:
+    public_voice_count: int
+    public_audio_count: int
+    private_voice_count: int
+    private_audio_count: int
 
 
 class UserRepository:
@@ -34,6 +46,52 @@ class UserRepository:
 
     def get_by_user_id(self, session: Session, user_id: str) -> User | None:
         return self.get_by_normalized_user_id(session, user_id.lower())
+
+    def resource_statistics(
+        self,
+        session: Session,
+        user_id: int,
+    ) -> UserResourceStatistics:
+        public_voice_count = session.scalar(
+            select(func.count())
+            .select_from(Voice)
+            .where(
+                Voice.author_id == user_id,
+                Voice.visibility == VoiceVisibility.PUBLIC,
+                Voice.status == VoiceStatus.READY,
+            )
+        )
+        public_audio_count = session.scalar(
+            select(func.count())
+            .select_from(Audio)
+            .where(
+                Audio.author_id == user_id,
+                Audio.visibility == AudioVisibility.PUBLIC,
+                Audio.status == AudioStatus.READY,
+            )
+        )
+        private_voice_count = session.scalar(
+            select(func.count())
+            .select_from(Voice)
+            .where(
+                Voice.author_id == user_id,
+                Voice.visibility == VoiceVisibility.PRIVATE,
+            )
+        )
+        private_audio_count = session.scalar(
+            select(func.count())
+            .select_from(Audio)
+            .where(
+                Audio.author_id == user_id,
+                Audio.visibility == AudioVisibility.PRIVATE,
+            )
+        )
+        return UserResourceStatistics(
+            public_voice_count=int(public_voice_count or 0),
+            public_audio_count=int(public_audio_count or 0),
+            private_voice_count=int(private_voice_count or 0),
+            private_audio_count=int(private_audio_count or 0),
+        )
 
     def create_pending(
         self,
