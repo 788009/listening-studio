@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import {
   audioMediaPath,
@@ -15,11 +15,12 @@ import AudioTagLines from '@/components/AudioTagLines.vue'
 import { useI18n } from '@/i18n'
 
 const { locale, t } = useI18n()
+const route = useRoute()
 const audios = ref<Audio[]>([])
 const localizedTags = ref<AudioTag[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
-const query = ref('')
+const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const page = ref(1)
 const pageSize = 20
 const total = ref(0)

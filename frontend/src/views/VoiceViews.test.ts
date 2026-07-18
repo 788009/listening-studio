@@ -57,12 +57,10 @@ describe('voice views', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('renders the responsive voice list with localized tag lines', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        jsonResponse({ items: [voice], page: 1, pageSize: 100, total: 1 }),
-      ),
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ items: [voice], page: 1, pageSize: 100, total: 1 }),
     )
+    vi.stubGlobal('fetch', fetchMock)
     const pinia = setupAuth()
     const router = createRouter({
       history: createMemoryHistory(),
@@ -72,13 +70,18 @@ describe('voice views', () => {
         { path: '/voice/:id', component: VoiceDetailView },
       ],
     })
-    await router.push('/voices')
+    await router.push('/voices?q=gender%3Afemale_voice')
     const wrapper = mount(VoiceListView, { global: { plugins: [pinia, router] } })
     await flushPromises()
 
     expect(wrapper.text()).toContain('Clear English')
     expect(wrapper.text()).not.toContain('Author')
     expect(wrapper.text()).toContain('female voice')
+    expect(wrapper.get('#voice-search').element).toHaveProperty(
+      'value',
+      'gender:female_voice',
+    )
+    expect(fetchMock.mock.calls[0]?.[0]).toContain('q=gender%3Afemale_voice')
     expect(wrapper.get('a[href="/voice/7"]').attributes('href')).toBe('/voice/7')
   })
 
@@ -139,6 +142,15 @@ describe('voice views', () => {
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
     expect(wrapper.text()).toContain('Author')
+    const tagSearchLinks = wrapper
+      .findAll('a')
+      .filter((link) => link.attributes('href')?.includes('/voices?q='))
+    expect(tagSearchLinks).toHaveLength(2)
+    expect(
+      tagSearchLinks.map((link) =>
+        decodeURIComponent(link.attributes('href') ?? ''),
+      ),
+    ).toContain('/voices?q=gender:female_voice')
     const useVoiceLink = wrapper.get('a[href="/create?voice=7"]')
     expect(useVoiceLink.text()).toBe('Use voice')
     await wrapper.get('button').trigger('click')

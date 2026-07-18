@@ -100,7 +100,7 @@ describe('audio views', () => {
     )
     const pinia = setupAuth()
     const router = testRouter()
-    await router.push('/')
+    await router.push('/?q=topic%3Aclimate_change')
     const wrapper = mount(LibraryView, { global: { plugins: [pinia, router] } })
     await flushPromises()
 
@@ -108,6 +108,15 @@ describe('audio views', () => {
     expect(wrapper.text()).not.toContain('Author')
     expect(wrapper.text()).toContain('Speakers')
     expect(wrapper.text()).toContain('Teacher, Student')
+    expect(wrapper.get('input[role="combobox"]').element).toHaveProperty(
+      'value',
+      'topic:climate_change',
+    )
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('q=topic%3Aclimate_change'),
+      ),
+    ).toBe(true)
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.find('button').text()).toContain('Search')
     expect(wrapper.text()).not.toContain('Delete audio')
@@ -183,6 +192,15 @@ describe('audio views', () => {
     expect(wrapper.text()).toContain('Author')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('气候 变化')
+    const tagSearchLinks = wrapper
+      .findAll('a')
+      .filter((link) => link.attributes('href')?.includes('?q='))
+    expect(tagSearchLinks).toHaveLength(2)
+    expect(
+      tagSearchLinks.map((link) =>
+        decodeURIComponent(link.attributes('href') ?? ''),
+      ),
+    ).toContain('/?q=topic:climate_change')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
   })

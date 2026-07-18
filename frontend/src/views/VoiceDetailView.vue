@@ -385,7 +385,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
-        <VoiceTagLines :tags="voice.tags" />
+        <VoiceTagLines :tags="voice.tags" search-path="/voices" />
       </div>
 
       <div v-if="isOwner && voice.errorSummary" class="border-b border-line py-6">

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { RouterLink } from 'vue-router'
 
 import type { AudioTag, AudioTagType } from '@/api/audios'
 import { useI18n } from '@/i18n'
@@ -8,8 +9,9 @@ const props = withDefaults(
   defineProps<{
     tags: AudioTag[]
     includeAuthor?: boolean
+    searchPath?: string
   }>(),
-  { includeAuthor: true },
+  { includeAuthor: true, searchPath: undefined },
 )
 const { t } = useI18n()
 
@@ -42,7 +44,17 @@ const rows = computed(() => {
     >
       <dt class="text-muted">{{ row.label }}</dt>
       <dd class="min-w-0 break-words text-ink">
-        {{ row.values.map((tag) => tag.displayValue.replace(/_/g, ' ')).join(', ') }}
+        <template v-for="(tag, index) in row.values" :key="tag.id">
+          <RouterLink
+            v-if="searchPath"
+            :to="{ path: searchPath, query: { q: tag.fullTag } }"
+            class="hover:text-accent hover:underline"
+          >
+            {{ tag.displayValue.replace(/_/g, ' ') }}
+          </RouterLink>
+          <span v-else>{{ tag.displayValue.replace(/_/g, ' ') }}</span>
+          <span v-if="index < row.values.length - 1">, </span>
+        </template>
       </dd>
     </div>
   </dl>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
@@ -10,11 +10,12 @@ import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/i18n'
 
 const auth = useAuthStore()
+const route = useRoute()
 const { locale, t } = useI18n()
 const voices = ref<Voice[]>([])
 const loading = ref(true)
 const errorMessage = ref('')
-const search = ref('')
+const search = ref(typeof route.query.q === 'string' ? route.query.q : '')
 
 function isOwner(voice: Voice): boolean {
   return voice.author.userId.toLowerCase() === auth.user?.userId?.toLowerCase()
