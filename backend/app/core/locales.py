@@ -14,6 +14,8 @@ _ZH_ERROR_MESSAGES = {
     "not_found": "未找到资源",
     "profile_incomplete": "请先完成个人资料设置",
     "conflict": "资源当前状态不允许此操作",
+    "user_id_taken": "该用户 ID 已被占用，请选择其他 ID",
+    "user_id_immutable": "用户 ID 已经设置，不能再次修改",
     "validation_error": "请求参数无效",
     "job_failed": "任务执行失败",
     "internal_error": "服务器内部错误",

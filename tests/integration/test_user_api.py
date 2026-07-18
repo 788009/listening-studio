@@ -85,7 +85,16 @@ class UserApiIntegrationTest(unittest.TestCase):
     def test_profile_setup_validation_uniqueness_and_immutability(self) -> None:
         invalid = self.complete_profile("first", "invalid-id")
         created = self.complete_profile("first", "TeacherOne")
-        duplicate = self.complete_profile("second", "teacherone")
+        duplicate = self.send(
+            "POST",
+            "/api/users/me/profile",
+            headers={**self.headers("second"), "Accept-Language": "zh-CN"},
+            json={
+                "userId": "teacherone",
+                "username": "Teacher",
+                "locale": "zh-CN",
+            },
+        )
         changed = self.complete_profile("first", "AnotherId")
         public_route = self.send("GET", "/api/users/teacherone")
 
@@ -93,7 +102,19 @@ class UserApiIntegrationTest(unittest.TestCase):
         self.assertEqual(created.status_code, 200)
         self.assertEqual(created.json()["userId"], "TeacherOne")
         self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(duplicate.json()["error"]["code"], "user_id_taken")
+        self.assertEqual(duplicate.json()["error"]["details"], {"field": "userId"})
+        self.assertEqual(
+            duplicate.json()["error"]["message"],
+            "该用户 ID 已被占用，请选择其他 ID",
+        )
         self.assertEqual(changed.status_code, 409)
+        self.assertEqual(changed.json()["error"]["code"], "user_id_immutable")
+        self.assertEqual(changed.json()["error"]["details"], {"field": "userId"})
+        self.assertEqual(
+            changed.json()["error"]["message"],
+            "User ID has already been set and cannot be changed.",
+        )
         self.assertEqual(public_route.status_code, 200)
         self.assertEqual(public_route.json()["userId"], "TeacherOne")
 

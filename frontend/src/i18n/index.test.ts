@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { formatDate, matchLocale, setLocale, translate } from './index'
+import {
+  formatDate,
+  matchLocale,
+  setLocale,
+  translate,
+  translateApiError,
+} from './index'
 
 describe('i18n', () => {
   afterEach(() => setLocale('en'))
@@ -19,5 +25,16 @@ describe('i18n', () => {
     expect(translate('{count} exercises', { count: 3 })).toBe('3 个练习')
     expect(formatDate('2026-01-10T00:00:00Z')).toContain('2026')
     expect(document.documentElement.lang).toBe('zh-CN')
+  })
+
+  it('distinguishes user ID conflict reasons', () => {
+    setLocale('zh-CN')
+
+    expect(translateApiError('user_id_taken', 'fallback')).toBe(
+      '该用户 ID 已被占用，请选择其他 ID',
+    )
+    expect(translateApiError('user_id_immutable', 'fallback')).toBe(
+      '用户 ID 已经设置，不能再次修改',
+    )
   })
 })

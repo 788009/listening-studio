@@ -46,6 +46,16 @@ class ConflictError(DomainError):
     default_message = "Resource state conflicts with this operation"
 
 
+class UserIdTakenError(ConflictError):
+    code = "user_id_taken"
+    default_message = "This user ID is already in use. Choose another ID."
+
+
+class UserIdImmutableError(ConflictError):
+    code = "user_id_immutable"
+    default_message = "User ID has already been set and cannot be changed."
+
+
 class DomainValidationError(DomainError):
     code = "validation_error"
     status_code = 422

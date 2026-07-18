@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { apiRequest } from '@/api/client'
@@ -14,10 +14,16 @@ const userId = ref('')
 const username = ref('')
 const locale = ref(activeLocale.value)
 const errorMessage = ref('')
+const userIdError = ref('')
 const submitting = ref(false)
+
+watch(userId, () => {
+  userIdError.value = ''
+})
 
 async function submit(): Promise<void> {
   errorMessage.value = ''
+  userIdError.value = ''
   submitting.value = true
   try {
     const user = await apiRequest<CurrentUser>('/users/me/profile', {
@@ -31,8 +37,15 @@ async function submit(): Promise<void> {
     auth.setCurrentUser(user)
     await router.replace(`/user/${user.userId}`)
   } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Profile setup failed')
+    if (
+      error instanceof ApiError &&
+      (error.code === 'user_id_taken' || error.code === 'user_id_immutable')
+    ) {
+      userIdError.value = error.message
+    } else {
+      errorMessage.value =
+        error instanceof ApiError ? error.message : t('Profile setup failed')
+    }
   } finally {
     submitting.value = false
   }
@@ -56,8 +69,13 @@ async function submit(): Promise<void> {
           maxlength="64"
           pattern="[A-Za-z0-9]+"
           autocomplete="username"
+          :aria-invalid="Boolean(userIdError)"
+          :aria-describedby="userIdError ? 'user-id-error' : undefined"
           class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         />
+        <p v-if="userIdError" id="user-id-error" role="alert" class="mt-1 text-sm text-danger">
+          {{ userIdError }}
+        </p>
       </div>
       <div>
         <label for="username" class="mb-1 block text-sm font-medium">{{ t('Display name') }}</label>

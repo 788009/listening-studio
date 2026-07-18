@@ -5,8 +5,13 @@ import re
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from backend.app.core.exceptions import (
+    ConflictError,
+    DomainValidationError,
+    UserIdImmutableError,
+    UserIdTakenError,
+)
 from backend.app.core.locales import normalize_supported_locale
-from backend.app.core.exceptions import ConflictError, DomainValidationError
 from backend.app.db.models.user import User, UserStatus
 from backend.app.repositories.users import UserRepository
 
@@ -68,7 +73,7 @@ class UserService:
 
     def set_user_id(self, session: Session, user: User, user_id: str) -> User:
         if user.user_id is not None:
-            raise ConflictError("User ID cannot be changed")
+            raise UserIdImmutableError(details={"field": "userId"})
         if not _USER_ID_PATTERN.fullmatch(user_id):
             raise DomainValidationError(
                 "User ID must contain only ASCII letters and numbers",
@@ -80,7 +85,7 @@ class UserService:
             session, normalized_user_id
         )
         if existing and existing.id != user.id:
-            raise ConflictError("User ID is already in use")
+            raise UserIdTakenError(details={"field": "userId"})
 
         user.user_id = user_id
         user.normalized_user_id = normalized_user_id
@@ -89,7 +94,7 @@ class UserService:
             session.flush()
         except IntegrityError as exc:
             session.rollback()
-            raise ConflictError("User ID is already in use") from exc
+            raise UserIdTakenError(details={"field": "userId"}) from exc
         return user
 
     def update_username(self, session: Session, user: User, username: str) -> User:

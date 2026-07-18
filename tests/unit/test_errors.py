@@ -24,6 +24,8 @@ from backend.app.core.exceptions import (
     JobFailedError,
     NotFoundError,
     ProfileIncompleteError,
+    UserIdImmutableError,
+    UserIdTakenError,
 )
 from backend.app.factory import create_app
 
@@ -71,6 +73,8 @@ class ErrorHandlingTest(unittest.TestCase):
             (ForbiddenError, 403, "forbidden"),
             (ProfileIncompleteError, 403, "profile_incomplete"),
             (ConflictError, 409, "conflict"),
+            (UserIdTakenError, 409, "user_id_taken"),
+            (UserIdImmutableError, 409, "user_id_immutable"),
             (DomainValidationError, 422, "validation_error"),
             (JobFailedError, 500, "job_failed"),
         ]
