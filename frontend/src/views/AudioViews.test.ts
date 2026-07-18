@@ -105,6 +105,7 @@ describe('audio views', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Climate briefing')
+    expect(wrapper.text()).not.toContain('Author')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.find('button').text()).toContain('Search')
     expect(wrapper.text()).not.toContain('Delete audio')
@@ -177,6 +178,7 @@ describe('audio views', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('A readable listening transcript.')
+    expect(wrapper.text()).toContain('Author')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('气候 变化')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')

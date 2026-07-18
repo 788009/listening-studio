@@ -145,8 +145,8 @@ onMounted(async () => {
           >
             {{ audio.author.username || audio.author.userId }}
           </RouterLink>
-          <div class="mt-4">
-            <AudioTagLines :tags="audio.tags" />
+          <div v-if="audio.tags.some((tag) => tag.type !== 'author')" class="mt-4">
+            <AudioTagLines :tags="audio.tags" :include-author="false" />
           </div>
         </div>
         <audio

@@ -77,6 +77,7 @@ describe('voice views', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Clear English')
+    expect(wrapper.text()).not.toContain('Author')
     expect(wrapper.text()).toContain('female voice')
     expect(wrapper.get('a[href="/voice/7"]').attributes('href')).toBe('/voice/7')
   })
@@ -137,6 +138,7 @@ describe('voice views', () => {
     await flushPromises()
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
+    expect(wrapper.text()).toContain('Author')
     const useVoiceLink = wrapper.get('a[href="/create?voice=7"]')
     expect(useVoiceLink.text()).toBe('Use voice')
     await wrapper.get('button').trigger('click')

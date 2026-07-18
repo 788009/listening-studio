@@ -4,7 +4,13 @@ import { computed } from 'vue'
 import type { AudioTag, AudioTagType } from '@/api/audios'
 import { useI18n } from '@/i18n'
 
-const props = defineProps<{ tags: AudioTag[] }>()
+const props = withDefaults(
+  defineProps<{
+    tags: AudioTag[]
+    includeAuthor?: boolean
+  }>(),
+  { includeAuthor: true },
+)
 const { t } = useI18n()
 
 const rows = computed(() => {
@@ -14,7 +20,10 @@ const rows = computed(() => {
     topic: t('Topic'),
     category: t('Category'),
   }
-  return (['author', 'speaker', 'topic', 'category'] as AudioTagType[])
+  const types: AudioTagType[] = props.includeAuthor
+    ? ['author', 'speaker', 'topic', 'category']
+    : ['speaker', 'topic', 'category']
+  return types
     .map((type) => ({
       type,
       label: labels[type],

@@ -129,7 +129,7 @@ onMounted(loadVoices)
               {{ voice.author.username || voice.author.userId }}
             </p>
           </div>
-          <VoiceTagLines :tags="voice.tags" />
+          <VoiceTagLines :tags="voice.tags" :include-author="false" />
           <div class="flex min-w-0 flex-row items-center gap-4 sm:flex-col sm:items-start sm:gap-2">
             <ResourceStatus :status="voice.status" />
             <span class="text-sm capitalize text-muted">{{ t(statusLabel(voice.visibility)) }}</span>

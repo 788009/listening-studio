@@ -4,7 +4,13 @@ import { computed } from 'vue'
 import type { VoiceTag, VoiceTagType } from '@/api/voices'
 import { useI18n } from '@/i18n'
 
-const props = defineProps<{ tags: VoiceTag[] }>()
+const props = withDefaults(
+  defineProps<{
+    tags: VoiceTag[]
+    includeAuthor?: boolean
+  }>(),
+  { includeAuthor: true },
+)
 const { t } = useI18n()
 
 const rows = computed(() => {
@@ -12,7 +18,10 @@ const rows = computed(() => {
     author: t('Author'),
     gender: t('Gender'),
   }
-  return (['author', 'gender'] as VoiceTagType[])
+  const types: VoiceTagType[] = props.includeAuthor
+    ? ['author', 'gender']
+    : ['gender']
+  return types
     .map((type) => ({
       type,
       label: labels[type],
