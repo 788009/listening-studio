@@ -46,7 +46,7 @@ const tagDialogType = ref<EditableAudioTagType | null>(null)
 const tagDialogInitialEnglishValue = ref('')
 const tagDialogError = ref('')
 
-type EditableAudioTagType = Exclude<AudioTagType, 'author'>
+type EditableAudioTagType = Extract<AudioTagType, 'topic' | 'category'>
 
 const audioId = computed(() => Number(route.params.id))
 const isOwner = computed(
@@ -58,7 +58,6 @@ const orderedUtterances = computed(() =>
   [...(audio.value?.utterances ?? [])].sort((left, right) => left.position - right.position),
 )
 const tagGroups = computed(() => [
-  { label: 'Speakers', type: 'speaker' as const },
   { label: 'Topics', type: 'topic' as const },
   { label: 'Categories', type: 'category' as const },
 ])
@@ -67,7 +66,7 @@ function resetForm(current: Audio): void {
   title.value = current.title
   visibility.value = current.visibility
   selectedTagIds.value = current.tags
-    .filter((tag) => tag.type !== 'author')
+    .filter((tag) => tag.type === 'topic' || tag.type === 'category')
     .map((tag) => tag.id)
 }
 
@@ -254,7 +253,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
               <option value="public" :disabled="audio.status !== 'ready'">{{ t('Public') }}</option>
             </select>
           </div>
-          <div class="grid min-w-0 gap-5 sm:col-span-2 md:grid-cols-3">
+          <div class="grid min-w-0 gap-5 sm:col-span-2 md:grid-cols-2">
             <ResourceTagPicker
               v-for="group in tagGroups"
               :key="group.type"

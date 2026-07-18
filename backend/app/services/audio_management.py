@@ -104,7 +104,7 @@ class AudioManagementService:
         if title is not None:
             self.audio_service.update_title(session, audio, title)
         if tag_ids is not None:
-            self.audio_service.replace_user_tags(
+            self.audio_service.replace_topic_category_tags(
                 session,
                 audio,
                 self._tags(session, tag_ids),
@@ -204,7 +204,10 @@ class AudioManagementService:
         tags: list[AudioTag] = []
         for tag_id in dict.fromkeys(tag_ids):
             tag = self.tag_repository.get_by_id(session, tag_id)
-            if tag is None or tag.type is AudioTagType.AUTHOR:
+            if tag is None or tag.type not in {
+                AudioTagType.TOPIC,
+                AudioTagType.CATEGORY,
+            }:
                 raise NotFoundError("Audio tag not found")
             tags.append(tag)
         return tags

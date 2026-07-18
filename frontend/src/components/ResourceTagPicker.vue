@@ -3,7 +3,7 @@ import { computed, ref, useId } from 'vue'
 
 import { useI18n } from '@/i18n'
 
-export type EditableTagType = 'gender' | 'speaker' | 'topic' | 'category'
+export type EditableTagType = 'gender' | 'topic' | 'category'
 
 interface SelectableTag {
   id: number

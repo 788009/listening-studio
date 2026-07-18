@@ -208,7 +208,7 @@ describe('audio views', () => {
     wrapper.unmount()
   })
 
-  it('edits speaker, topic, and category tags while preserving the author tag', async () => {
+  it('edits topic and category tags without exposing speaker tags', async () => {
     const speakerTag = {
       id: 3,
       type: 'speaker' as const,
@@ -217,6 +217,7 @@ describe('audio views', () => {
       fullTag: 'speaker:host',
       translations: [],
     }
+    const editableAudio = { ...audio, tags: [...audio.tags, speakerTag] }
     const categoryTag = {
       id: 4,
       type: 'category' as const,
@@ -228,7 +229,7 @@ describe('audio views', () => {
     let updateBody: { tagIds?: number[] } | undefined
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
-      if (path.startsWith('/api/audios/5?')) return Promise.resolve(jsonResponse(audio))
+      if (path.startsWith('/api/audios/5?')) return Promise.resolve(jsonResponse(editableAudio))
       if (path.startsWith('/api/audio-tags?')) {
         return Promise.resolve(jsonResponse([...audio.tags, speakerTag, categoryTag]))
       }
@@ -251,28 +252,16 @@ describe('audio views', () => {
 
     await wrapper.findAll('button').find((button) => button.text() === 'Edit')?.trigger('click')
     await flushPromises()
-    expect(wrapper.findAll('input[placeholder="Search tags"]')).toHaveLength(3)
-
-    const createButtons = wrapper.findAll('button').filter((button) => button.text() === 'Create tag')
-    await createButtons[0]?.trigger('click')
-    expect(wrapper.get('[role="dialog"]').text()).toContain('Create Speaker tag')
-    await wrapper
-      .get('[role="dialog"]')
-      .findAll('button')
-      .find((button) => button.text() === 'Cancel')
-      ?.trigger('click')
-    await flushPromises()
+    expect(wrapper.findAll('input[placeholder="Search tags"]')).toHaveLength(2)
 
     await wrapper.get('button[title="Remove tag"]').trigger('click')
     const searchInputs = wrapper.findAll('input[placeholder="Search tags"]')
-    await searchInputs[0]?.setValue('host')
-    await wrapper.get('[role="option"]').trigger('click')
-    await searchInputs[2]?.setValue('practice')
+    await searchInputs[1]?.setValue('practice')
     await wrapper.get('[role="option"]').trigger('click')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(updateBody?.tagIds).toEqual([3, 4])
+    expect(updateBody?.tagIds).toEqual([4])
     expect(wrapper.text()).toContain('host')
     expect(wrapper.text()).toContain('practice')
   })

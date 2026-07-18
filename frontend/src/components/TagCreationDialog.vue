@@ -4,7 +4,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TagTranslation } from '@/api/voices'
 import { supportedLocales, useI18n } from '@/i18n'
 
-type EditableTagType = 'gender' | 'speaker' | 'topic' | 'category'
+type EditableTagType = 'gender' | 'topic' | 'category'
 
 const props = defineProps<{
   open: boolean
@@ -30,7 +30,6 @@ const normalizedEnglishValue = computed(() => normalizeTagValue(englishValue.val
 const typeLabel = computed(() => {
   const labels: Record<EditableTagType, string> = {
     gender: 'Gender',
-    speaker: 'Speaker',
     topic: 'Topic',
     category: 'Category',
   }

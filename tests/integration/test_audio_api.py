@@ -191,12 +191,18 @@ class AudioApiIntegrationTest(unittest.TestCase):
                 tag_type=AudioTagType.TOPIC,
                 english_value="Climate",
             )
+            speaker = AudioTagService().create_user_tag(
+                session,
+                tag_type=AudioTagType.SPEAKER,
+                english_value="Host",
+            )
             referenced = self.ready_audio(
                 session, user, "Referenced", AudioVisibility.PUBLIC
             )
             deletable = self.ready_audio(
                 session, user, "Deletable", AudioVisibility.PRIVATE
             )
+            deletable.tags.append(speaker)
             voice = VoiceService(VoiceStorage(self.settings.data_dir)).create_voice(
                 session,
                 author=user,
@@ -222,6 +228,12 @@ class AudioApiIntegrationTest(unittest.TestCase):
             headers=self.headers(),
             json={"title": "Ａfter", "tagIds": [topic.id]},
         )
+        speaker_update = self.send(
+            "PATCH",
+            f"/api/audios/{deletable.id}",
+            headers=self.headers(),
+            json={"tagIds": [speaker.id]},
+        )
         make_private = self.send(
             "PATCH",
             f"/api/audios/{referenced.id}",
@@ -242,8 +254,9 @@ class AudioApiIntegrationTest(unittest.TestCase):
         self.assertEqual(updated.json()["title"], "After")
         self.assertEqual(
             {tag["type"] for tag in updated.json()["tags"]},
-            {"author", "topic"},
+            {"author", "speaker", "topic"},
         )
+        self.assertEqual(speaker_update.status_code, 404)
         self.assertEqual(make_private.status_code, 409)
         self.assertEqual(make_private.json()["error"]["details"]["voiceIds"], [
             voice.id

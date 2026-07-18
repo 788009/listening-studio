@@ -25,7 +25,7 @@ export interface AudioTag {
 }
 
 export interface AudioTagCreationInput {
-  type: Exclude<AudioTagType, 'author'>
+  type: Extract<AudioTagType, 'topic' | 'category'>
   englishValue: string
   translations: TagTranslation[]
 }
