@@ -220,15 +220,9 @@ watch(() => route.params.id, loadAudio, { immediate: true })
           ></audio>
           <p v-else class="mt-4 text-sm text-muted">{{ t('Audio unavailable') }}</p>
         </div>
-        <dl class="grid grid-cols-2 md:grid-cols-1">
-          <div class="border-r border-line px-4 py-5 md:border-b md:border-r-0 md:px-5">
-            <dt class="text-sm text-muted">{{ t('Status') }}</dt>
-            <dd class="mt-2"><ResourceStatus :status="audio.status" /></dd>
-          </div>
-          <div class="px-4 py-5 md:px-5">
-            <dt class="text-sm text-muted">{{ t('Visibility') }}</dt>
-            <dd class="mt-2 text-sm font-medium capitalize">{{ t(audio.visibility === 'public' ? 'Public' : 'Private') }}</dd>
-          </div>
+        <dl class="px-4 py-5 md:px-5">
+          <dt class="text-sm text-muted">{{ t('Status') }}</dt>
+          <dd class="mt-2"><ResourceStatus :status="audio.status" /></dd>
         </dl>
       </div>
 

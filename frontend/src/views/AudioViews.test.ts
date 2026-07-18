@@ -195,6 +195,8 @@ describe('audio views', () => {
     await flushPromises()
 
     await wrapper.get('button').trigger('click')
+    expect(wrapper.find('#audio-visibility').exists()).toBe(true)
+    expect(wrapper.findAll('dt').map((item) => item.text())).not.toContain('Visibility')
     const deleteButton = wrapper.findAll('button').find((button) =>
       button.text().includes('Delete audio'),
     )

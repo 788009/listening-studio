@@ -141,6 +141,8 @@ describe('voice views', () => {
     expect(useVoiceLink.text()).toBe('Use voice')
     await wrapper.get('button').trigger('click')
     await flushPromises()
+    expect(wrapper.find('#voice-visibility').exists()).toBe(true)
+    expect(wrapper.findAll('dt').map((item) => item.text())).not.toContain('Visibility')
     const deleteButton = wrapper.findAll('button').find((button) =>
       button.text().includes('Delete voice'),
     )
