@@ -41,6 +41,20 @@ function formatDuration(seconds: number | null): string {
   return `${minutes}:${String(rounded % 60).padStart(2, '0')}`
 }
 
+function speakerNames(audio: Audio): string[] {
+  const utteranceNames = audio.utterances.map((utterance) => utterance.speakerDisplayName)
+  const names = utteranceNames.length > 0
+    ? utteranceNames
+    : audio.tags
+        .filter((tag) => tag.type === 'speaker')
+        .map((tag) => tag.displayValue.replace(/_/g, ' '))
+  return [...new Set(names)]
+}
+
+function contentTags(audio: Audio): AudioTag[] {
+  return audio.tags.filter((tag) => tag.type !== 'author' && tag.type !== 'speaker')
+}
+
 async function loadPage(reset = false): Promise<void> {
   if (reset) page.value = 1
   loading.value = true
@@ -145,8 +159,24 @@ onMounted(async () => {
           >
             {{ audio.author.username || audio.author.userId }}
           </RouterLink>
-          <div v-if="audio.tags.some((tag) => tag.type !== 'author')" class="mt-4">
-            <AudioTagLines :tags="audio.tags" :include-author="false" />
+          <div
+            v-if="speakerNames(audio).length > 0 || contentTags(audio).length > 0"
+            class="mt-4 space-y-2"
+          >
+            <div
+              v-if="speakerNames(audio).length > 0"
+              class="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-2 text-sm"
+            >
+              <span class="text-muted">{{ t('Speakers') }}</span>
+              <span class="min-w-0 break-words text-ink">
+                {{ speakerNames(audio).join(', ') }}
+              </span>
+            </div>
+            <AudioTagLines
+              v-if="contentTags(audio).length > 0"
+              :tags="contentTags(audio)"
+              :include-author="false"
+            />
           </div>
         </div>
         <audio

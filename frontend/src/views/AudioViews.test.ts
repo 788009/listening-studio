@@ -106,6 +106,8 @@ describe('audio views', () => {
 
     expect(wrapper.text()).toContain('Climate briefing')
     expect(wrapper.text()).not.toContain('Author')
+    expect(wrapper.text()).toContain('Speakers')
+    expect(wrapper.text()).toContain('Teacher, Student')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.find('button').text()).toContain('Search')
     expect(wrapper.text()).not.toContain('Delete audio')
