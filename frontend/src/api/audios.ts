@@ -31,7 +31,7 @@ export interface AudioTagCreationInput {
 }
 
 export interface AudioUtterance {
-  voiceId: number
+  voiceId?: number | null
   speakerDisplayName: string
   text: string
   position: number

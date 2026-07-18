@@ -28,7 +28,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260716_0011")
+            self.assertEqual(revision, "20260718_0012")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -107,6 +107,78 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine.dispose()
 
         self.assertEqual(restored, [("reference", None), ("audio", 1)])
+
+    def test_voice_deletion_migration_preserves_utterance_name(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "voice-history.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260716_0011")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'subject', 'active', 'TeacherOne', "
+                        "'teacherone')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO voices "
+                        "(author_id, title, normalized_title, sample_source) "
+                        "VALUES (1, 'Current', 'current', 'original')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audios "
+                        "(author_id, title, normalized_title, text, source_type) "
+                        "VALUES (1, 'Audio', 'audio', 'Text', 'single_speaker')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_utterances "
+                        "(audio_id, voice_id, speaker_display_name, text, position) "
+                        "VALUES (1, 1, 'Historical', 'Text', 0)"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.begin() as connection:
+                connection.execute(text("DELETE FROM voices WHERE id = 1"))
+                history = connection.execute(
+                    text(
+                        "SELECT voice_id, speaker_display_name "
+                        "FROM audio_utterances"
+                    )
+                ).one()
+                voice_id_column = next(
+                    column
+                    for column in inspect(connection).get_columns("audio_utterances")
+                    if column["name"] == "voice_id"
+                )
+            self.assertEqual(history, (None, "Current"))
+            self.assertTrue(voice_id_column["nullable"])
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "deleted-voice utterance history",
+            ):
+                command.downgrade(config, "20260716_0011")
+            with engine.connect() as connection:
+                preserved_history = connection.execute(
+                    text(
+                        "SELECT voice_id, speaker_display_name "
+                        "FROM audio_utterances"
+                    )
+                ).one()
+            engine.dispose()
+
+        self.assertEqual(preserved_history, (None, "Current"))
 
 
 if __name__ == "__main__":

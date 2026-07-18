@@ -361,9 +361,11 @@ class ResourceManagementService:
             "active_task": int(
                 voice.status in {VoiceStatus.PENDING, VoiceStatus.PROCESSING}
             ),
-            "audio_utterance": self.voice_repository.count_audio_utterance_references(
-                session,
-                voice.id,
+            "active_audio_utterance": (
+                self.voice_repository.count_active_audio_utterance_references(
+                    session,
+                    voice.id,
+                )
             ),
             "generation_batch": self.voice_repository.count_generation_batch_references(
                 session,

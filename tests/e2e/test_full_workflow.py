@@ -560,7 +560,7 @@ class FullWorkflowTest(unittest.TestCase):
         )
         self.assert_status(delete_voice, 409, "delete used voice conflict")
         self.assertGreater(
-            delete_voice.json()["error"]["details"]["audioUtteranceCount"],
+            delete_voice.json()["error"]["details"]["batchVoiceMappingCount"],
             0,
         )
 
@@ -718,7 +718,7 @@ class FullWorkflowTest(unittest.TestCase):
                 f"job {job_id} completion log is missing",
             )
         self.assertIn("paperItemCount", delete_audio.text)
-        self.assertIn("audioUtteranceCount", delete_voice.text)
+        self.assertIn("batchVoiceMappingCount", delete_voice.text)
         self.assertIn("teacher-subject", self.oidc.authenticated_subjects)
 
 

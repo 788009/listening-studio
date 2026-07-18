@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.db.models.audio import AudioUtterance
+from backend.app.db.models.audio import Audio, AudioStatus, AudioUtterance
 from backend.app.db.models.generation_batch import GenerationBatchSpeakerVoice
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceSampleSource
@@ -25,12 +25,53 @@ class VoiceRepository:
         )
         return list(session.scalars(statement))
 
-    def count_audio_utterance_references(
+    def synchronize_utterance_speaker_names(
+        self,
+        session: Session,
+        *,
+        voice_id: int,
+        previous_title: str,
+        title: str,
+    ) -> int:
+        if previous_title == title:
+            return 0
+        statement = (
+            select(AudioUtterance)
+            .options(
+                selectinload(AudioUtterance.audio).selectinload(Audio.utterances)
+            )
+            .where(
+                AudioUtterance.voice_id == voice_id,
+                AudioUtterance.speaker_display_name == previous_title,
+            )
+        )
+        utterances = list(session.scalars(statement))
+        affected_audios = {item.audio_id: item.audio for item in utterances}
+        for utterance in utterances:
+            utterance.speaker_display_name = title
+        for audio in affected_audios.values():
+            if len(audio.utterances) > 1:
+                audio.text = "\n".join(
+                    f"{item.speaker_display_name}: {item.text}"
+                    for item in audio.utterances
+                )
+        session.flush()
+        return len(utterances)
+
+    def count_active_audio_utterance_references(
         self,
         session: Session,
         voice_id: int,
     ) -> int:
-        statement = select(func.count()).where(AudioUtterance.voice_id == voice_id)
+        statement = (
+            select(func.count())
+            .select_from(AudioUtterance)
+            .join(Audio, Audio.id == AudioUtterance.audio_id)
+            .where(
+                AudioUtterance.voice_id == voice_id,
+                Audio.status.in_({AudioStatus.PENDING, AudioStatus.PROCESSING}),
+            )
+        )
         return session.scalar(statement) or 0
 
     def count_generation_batch_references(

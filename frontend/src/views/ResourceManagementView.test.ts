@@ -29,7 +29,7 @@ const referencedVoice: ManagedResource = {
   ...voice,
   id: 3,
   title: 'Referenced voice',
-  references: [{ type: 'audio_utterance', count: 2 }],
+  references: [{ type: 'generation_batch', count: 2 }],
   canDelete: false,
 }
 
@@ -180,7 +180,7 @@ describe('resource management view', () => {
     expect(wrapper.text()).toContain('1 succeeded, 1 conflicts, 1 failed')
     expect(wrapper.text()).toContain('2: Only ready resources can be public')
     expect(wrapper.text()).toContain('2 selected across pages')
-    expect(wrapper.text()).toContain('Referenced by 2 audio utterance')
+    expect(wrapper.text()).toContain('Referenced by 2 generation batch')
     expect(
       wrapper.get('button[title="Referenced resources cannot be deleted"]').attributes('disabled'),
     ).toBeDefined()

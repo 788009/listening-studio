@@ -17,7 +17,7 @@ class AudioAuthorResponse(TagApiModel):
 
 
 class AudioUtteranceResponse(TagApiModel):
-    voice_id: int
+    voice_id: int | None
     speaker_display_name: str
     text: str
     position: int

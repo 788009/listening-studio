@@ -19,7 +19,7 @@ const emit = defineEmits<{
 
 const referenceLabels: Record<string, string> = {
   active_task: 'active task',
-  audio_utterance: 'audio utterance',
+  active_audio_utterance: 'active audio task',
   generation_batch: 'generation batch',
   voice_sample: 'voice sample',
   paper_item: 'paper item',

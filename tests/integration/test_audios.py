@@ -8,7 +8,6 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import ConflictError, DomainValidationError
@@ -156,9 +155,18 @@ class AudioIntegrationTest(unittest.TestCase):
 
             referenced_voice = session.get(Voice, first_voice_id)
             session.delete(referenced_voice)
-            with self.assertRaises(IntegrityError):
-                session.flush()
-            session.rollback()
+            session.commit()
+            session.expire_all()
+            audio = session.get(Audio, audio_id)
+            assert audio is not None
+            self.assertEqual(
+                [utterance.voice_id for utterance in audio.utterances],
+                [second_voice.id, None],
+            )
+            self.assertEqual(
+                [utterance.speaker_display_name for utterance in audio.utterances],
+                ["Bob", "Alice"],
+            )
 
         with self.session_factory() as session:
             audio = session.get(Audio, audio_id)

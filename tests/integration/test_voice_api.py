@@ -504,7 +504,7 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             {"voice.pt", "reference.wav"},
         )
 
-    def test_delete_checks_references_and_restores_on_failure(self) -> None:
+    def test_rename_propagates_and_delete_preserves_speaker_name(self) -> None:
         self.complete_profile("first", "TeacherOne")
         with self.app.state.session_factory() as session:
             first = self.user(session, "TeacherOne")
@@ -520,24 +520,81 @@ class VoiceApiIntegrationTest(unittest.TestCase):
                 "Referenced",
                 VoiceVisibility.PRIVATE,
             )
+            active_reference = self.upload_voice(
+                session,
+                first,
+                "Active reference",
+                VoiceVisibility.PRIVATE,
+            )
             compensation = self.upload_voice(
                 session,
                 first,
                 "Restore on failure",
                 VoiceVisibility.PRIVATE,
             )
-            AudioService(self.audio_storage).create_audio(
+            audio = AudioService(self.audio_storage).create_audio(
                 session,
                 author=first,
                 title="Uses voice",
                 source_type=AudioSourceType.SINGLE_SPEAKER,
-                utterances=[AudioUtteranceInput(referenced.id, "Speaker", "Text")],
+                utterances=[
+                    AudioUtteranceInput(
+                        referenced.id,
+                        referenced.title,
+                        "Text",
+                    )
+                ],
+            )
+            AudioService(self.audio_storage).transition_status(
+                session,
+                audio,
+                AudioStatus.PROCESSING,
+            )
+            AudioService(self.audio_storage).transition_status(
+                session,
+                audio,
+                AudioStatus.FAILED,
+                error_summary="Historical fixture",
+            )
+            AudioService(self.audio_storage).create_audio(
+                session,
+                author=first,
+                title="Active generation",
+                source_type=AudioSourceType.SINGLE_SPEAKER,
+                utterances=[
+                    AudioUtteranceInput(
+                        active_reference.id,
+                        active_reference.title,
+                        "Text",
+                    )
+                ],
             )
             session.commit()
 
-        conflict = self.send(
+        renamed = self.send(
+            "PATCH",
+            f"/api/voices/{referenced.id}",
+            headers=self.headers("first"),
+            json={"title": "Renamed"},
+        )
+        renamed_audio = self.send(
+            "GET",
+            f"/api/audios/{audio.id}",
+            headers=self.headers("first"),
+        )
+        referenced_deleted = self.send(
             "DELETE",
             f"/api/voices/{referenced.id}",
+            headers=self.headers("first"),
+        )
+        active_delete = self.send(
+            "DELETE",
+            f"/api/voices/{active_reference.id}",
+            headers=self.headers("first"),
+        )
+        historical_audio = self.send(
+            "GET",
+            f"/api/audios/{audio.id}",
             headers=self.headers("first"),
         )
         deleted = self.send(
@@ -545,16 +602,37 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             f"/api/voices/{deletable.id}",
             headers=self.headers("first"),
         )
-        self.assertEqual(conflict.status_code, 409)
+        self.assertEqual(renamed.status_code, 200)
         self.assertEqual(
-            conflict.json()["error"]["details"]["audioUtteranceCount"],
+            renamed_audio.json()["utterances"][0],
+            {
+                "voiceId": referenced.id,
+                "speakerDisplayName": "Renamed",
+                "text": "Text",
+                "position": 0,
+            },
+        )
+        self.assertEqual(referenced_deleted.status_code, 204)
+        self.assertEqual(active_delete.status_code, 409)
+        self.assertEqual(
+            active_delete.json()["error"]["details"][
+                "activeAudioUtteranceCount"
+            ],
             1,
+        )
+        self.assertEqual(
+            historical_audio.json()["utterances"][0],
+            {
+                "speakerDisplayName": "Renamed",
+                "text": "Text",
+                "position": 0,
+            },
         )
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(self.voice_storage.directory(deletable.id).exists())
         with self.app.state.session_factory() as session:
             self.assertIsNone(session.get(Voice, deletable.id))
-            self.assertIsNotNone(session.get(Voice, referenced.id))
+            self.assertIsNone(session.get(Voice, referenced.id))
 
         class FailingRepository(VoiceRepository):
             def delete(self, session: Session, voice: Voice) -> None:

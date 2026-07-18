@@ -112,7 +112,14 @@ class VoiceManagementService:
         descriptor = self._descriptor(voice)
         self.authorization.require_edit(principal, descriptor)
         if title is not None:
+            previous_title = voice.title
             self.voice_service.update_title(session, voice, title)
+            self.repository.synchronize_utterance_speaker_names(
+                session,
+                voice_id=voice.id,
+                previous_title=previous_title,
+                title=voice.title,
+            )
         if gender_tag_ids is not None:
             tags = self._gender_tags(session, gender_tag_ids)
             self.voice_service.replace_gender_tags(session, voice, tags)
@@ -175,22 +182,24 @@ class VoiceManagementService:
         if voice.status in {VoiceStatus.PENDING, VoiceStatus.PROCESSING}:
             raise ConflictError(
                 "Voice has an active generation task",
-                details={"activeTaskCount": 1, "audioUtteranceCount": 0},
+                details={"activeTaskCount": 1, "batchVoiceMappingCount": 0},
             )
-        utterance_count = self.repository.count_audio_utterance_references(
-            session,
-            voice.id,
+        active_audio_count = (
+            self.repository.count_active_audio_utterance_references(
+                session,
+                voice.id,
+            )
         )
         batch_mapping_count = self.repository.count_generation_batch_references(
             session,
             voice.id,
         )
-        if utterance_count or batch_mapping_count:
+        if active_audio_count or batch_mapping_count:
             raise ConflictError(
                 "Voice is still in use",
                 details={
                     "activeTaskCount": 0,
-                    "audioUtteranceCount": utterance_count,
+                    "activeAudioUtteranceCount": active_audio_count,
                     "batchVoiceMappingCount": batch_mapping_count,
                 },
             )

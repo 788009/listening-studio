@@ -160,9 +160,13 @@ class AudioUtterance(Base):
         ForeignKey("audios.id", ondelete="CASCADE"),
         nullable=False,
     )
-    voice_id: Mapped[int] = mapped_column(
-        ForeignKey("voices.id", ondelete="RESTRICT"),
-        nullable=False,
+    voice_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "voices.id",
+            name="fk_audio_utterances_voice_id_voices",
+            ondelete="SET NULL",
+        ),
+        nullable=True,
     )
     speaker_display_name: Mapped[str] = mapped_column(String(200), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
