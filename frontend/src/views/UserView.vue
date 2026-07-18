@@ -130,8 +130,14 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
         </p>
       </form>
 
-      <dl class="grid border-b border-line bg-surface sm:grid-cols-2">
-        <div class="border-b border-line px-5 py-6 sm:border-b-0 sm:border-r">
+      <dl
+        class="grid border-b border-line bg-surface"
+        :class="{ 'sm:grid-cols-2': auth.isTeacher }"
+      >
+        <div
+          v-if="auth.isTeacher"
+          class="border-b border-line px-5 py-6 sm:border-b-0 sm:border-r"
+        >
           <dt class="text-sm text-muted">{{ t('Public voices') }}</dt>
           <dd class="mt-1 text-2xl font-semibold">{{ profile.statistics.publicVoiceCount }}</dd>
         </div>
