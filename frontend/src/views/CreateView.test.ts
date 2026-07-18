@@ -80,6 +80,25 @@ describe('direct creation view', () => {
     vi.unstubAllGlobals()
   })
 
+  it('opens in single-speaker mode with the requested voice selected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const response = optionsResponse(String(input))
+        if (response) return Promise.resolve(response)
+        throw new Error(`Unexpected request: ${String(input)}`)
+      }),
+    )
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Single')
+    expect(wrapper.get('#single-voice').element).toHaveProperty('value', '2')
+    expect(wrapper.find('#turn-voice-1').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('creates, polls, and links to a completed single-speaker audio', async () => {
     vi.useFakeTimers()
     let jobReads = 0

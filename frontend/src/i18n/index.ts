@@ -135,7 +135,7 @@ const zhCN: Record<string, string> = {
   'Voice could not be deleted': '无法删除音色',
   'Loading voice': '正在加载音色',
   'Back to voices': '返回音色列表',
-  'Use voice': '使用此音色',
+  'Use voice': '使用',
   'Sample source': '示例来源',
   'Original recording': '原始录音',
   'Select audio': '选择音频',

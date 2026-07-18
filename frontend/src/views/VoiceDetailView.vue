@@ -48,9 +48,8 @@ const isOwner = computed(
 )
 const canUse = computed(
   () =>
-    !isOwner.value &&
     voice.value?.status === 'ready' &&
-    voice.value.visibility === 'public',
+    (isOwner.value || voice.value.visibility === 'public'),
 )
 const canPlaySample = computed(
   () => isOwner.value || (voice.value?.status === 'ready' && voice.value.visibility === 'public'),

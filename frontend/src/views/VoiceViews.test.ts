@@ -137,6 +137,8 @@ describe('voice views', () => {
     await flushPromises()
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
+    const useVoiceLink = wrapper.get('a[href="/create?voice=7"]')
+    expect(useVoiceLink.text()).toBe('Use voice')
     await wrapper.get('button').trigger('click')
     await flushPromises()
     const deleteButton = wrapper.findAll('button').find((button) =>
