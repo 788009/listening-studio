@@ -24,6 +24,12 @@ export interface AudioTag {
   translations: TagTranslation[]
 }
 
+export interface AudioTagCreationInput {
+  type: Extract<AudioTagType, 'topic' | 'category'>
+  englishValue: string
+  translations: TagTranslation[]
+}
+
 export interface AudioUtterance {
   voiceId: number
   speakerDisplayName: string
@@ -160,13 +166,14 @@ export async function listAudioCreationTags(language = 'en'): Promise<AudioTag[]
   return [...topics, ...categories]
 }
 
-export function createAudioTag(
-  type: Extract<AudioTagType, 'topic' | 'category'>,
-  value: string,
-): Promise<AudioTag> {
+export function createAudioTag(input: AudioTagCreationInput): Promise<AudioTag> {
   return apiRequest<AudioTag>('/audio-tags', {
     method: 'POST',
-    body: JSON.stringify({ type, value, translations: [] }),
+    body: JSON.stringify({
+      type: input.type,
+      value: input.englishValue,
+      translations: input.translations,
+    }),
   })
 }
 

@@ -96,6 +96,7 @@ describe('direct creation view', () => {
     expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Single')
     expect(wrapper.get('#single-voice').element).toHaveProperty('value', '2')
     expect(wrapper.find('#turn-voice-1').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('climate change')
     wrapper.unmount()
   })
 
@@ -103,13 +104,19 @@ describe('direct creation view', () => {
     vi.useFakeTimers()
     let jobReads = 0
     let submittedBody: unknown
+    let createdTagBody: unknown
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
       if (path === '/api/audio-tags' && init?.method === 'POST') {
-        const body = JSON.parse(String(init.body)) as { type: 'topic' | 'category'; value: string }
+        const body = JSON.parse(String(init.body)) as {
+          type: 'topic' | 'category'
+          value: string
+          translations: { language: string; value: string }[]
+        }
+        createdTagBody = body
         return Promise.resolve(
           jsonResponse({
-            id: body.type === 'topic' ? 5 : 6,
+            id: 6,
             type: body.type,
             displayValue: body.value,
             englishValue: body.value,
@@ -150,13 +157,29 @@ describe('direct creation view', () => {
     const longText = 'Listening text '.repeat(200)
     await wrapper.get('#audio-title').setValue('Single practice')
     await wrapper.get('#single-text').setValue(longText)
-    await wrapper.get('#new-topic-tag').setValue('test_topic')
-    await wrapper.get('#new-category-tag').setValue('test_category')
-    const addTagButtons = wrapper.findAll('button').filter((button) => button.text() === 'Add tag')
-    await addTagButtons[0]?.trigger('click')
+
+    const searchInputs = wrapper.findAll('input[placeholder="Search tags"]')
+    expect(searchInputs).toHaveLength(2)
+    await searchInputs[0]?.setValue('climate')
+    expect(wrapper.get('[role="option"]').text()).toContain('climate change')
+    await wrapper.get('[role="option"]').trigger('click')
+
+    const createButtons = wrapper
+      .findAll('button')
+      .filter((button) => button.text() === 'Create tag')
+    await createButtons[1]?.trigger('click')
     await flushPromises()
-    await addTagButtons[1]?.trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Create Category tag')
+    await wrapper.get('[role="dialog"]').trigger('submit')
+    expect(wrapper.get('[role="dialog"] [role="alert"]').text()).toContain(
+      'Enter a valid English tag value',
+    )
+    await wrapper.get('#tag-english-value').setValue('Test Category')
+    await wrapper.get('#tag-translation-zh-CN').setValue('测试 分类')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Test_Category')
+    await wrapper.get('[role="dialog"]').trigger('submit')
     await flushPromises()
+
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
@@ -166,7 +189,12 @@ describe('direct creation view', () => {
     expect(wrapper.text()).toContain('Audio is ready')
     expect(wrapper.get('a[href="/audio/8"]').attributes('href')).toBe('/audio/8')
     expect((submittedBody as { text: string }).text).toBe(longText.trim())
-    expect((submittedBody as { tagIds: number[] }).tagIds).toEqual([5, 6])
+    expect((submittedBody as { tagIds: number[] }).tagIds).toEqual([4, 6])
+    expect(createdTagBody).toEqual({
+      type: 'category',
+      value: 'Test_Category',
+      translations: [{ language: 'zh-CN', value: '测试_分类' }],
+    })
     wrapper.unmount()
   })
 

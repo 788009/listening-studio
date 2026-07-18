@@ -123,14 +123,18 @@ describe('audio API', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await createAudioTag('topic', 'test')
+    await createAudioTag({
+      type: 'topic',
+      englishValue: 'climate_change',
+      translations: [{ language: 'zh-CN', value: '气候_变化' }],
+    })
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audio-tags')
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(JSON.parse(String(request.body))).toEqual({
       type: 'topic',
-      value: 'test',
-      translations: [],
+      value: 'climate_change',
+      translations: [{ language: 'zh-CN', value: '气候_变化' }],
     })
   })
 })
