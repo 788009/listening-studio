@@ -2,7 +2,7 @@ import vue from '@vitejs/plugin-vue'
 import { configDefaults, defineConfig } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
 
-const backendTarget = process.env.VITE_BACKEND_TARGET ?? 'http://127.0.0.1:8000'
+const backendTarget = process.env.VITE_BACKEND_TARGET ?? 'http://127.0.0.1:18765'
 
 export default defineConfig({
   plugins: [vue()],

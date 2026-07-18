@@ -29,7 +29,7 @@ Start the Web service:
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-.venv/bin/python -m uvicorn backend.app.main:app --reload
+.venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 18765 --reload
 ```
 
 Start the persistent job worker in a separate process:
@@ -40,11 +40,11 @@ source .venv/bin/activate
 .venv/bin/python -m backend.app.workers.main
 ```
 
-The liveness endpoint is available at `http://127.0.0.1:8000/health/live`.
+The liveness endpoint is available at `http://127.0.0.1:18765/health/live`.
 Database and data-directory readiness is available at
-`http://127.0.0.1:8000/health/ready`.
+`http://127.0.0.1:18765/health/ready`.
 Set `LISTENING_METRICS_TOKEN` to enable the internal job metrics endpoint at
-`http://127.0.0.1:8000/health/metrics`. It requires that value as a Bearer token.
+`http://127.0.0.1:18765/health/metrics`. It requires that value as a Bearer token.
 
 Run only one TTS worker for a single GPU. Web processes can scale independently
 because they do not load CosyVoice. A SQLite deployment is intended for a
@@ -91,7 +91,7 @@ npm ci
 npm run dev
 ```
 
-Vite proxies `/api`, `/auth`, `/health`, and `/media` to FastAPI on port 8000.
+Vite proxies `/api`, `/auth`, `/health`, and `/media` to FastAPI on port 18765.
 Set `VITE_BACKEND_TARGET` when FastAPI uses another local address.
 Run `npm run typecheck`, `npm run lint`, `npm run test`, and `npm run build`
 before producing a release build.

@@ -143,7 +143,7 @@ an HTTPS reverse proxy:
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-.venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --workers 1
+.venv/bin/python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 18765 --workers 1
 ```
 
 Start exactly one persistent TTS worker for the GPU in a separate service:
@@ -164,8 +164,8 @@ Check Web liveness and database/data-directory readiness:
 ```bash
 export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-curl --noproxy 127.0.0.1 --fail --silent --show-error http://127.0.0.1:8000/health/live
-curl --noproxy 127.0.0.1 --fail --silent --show-error http://127.0.0.1:8000/health/ready
+curl --noproxy 127.0.0.1 --fail --silent --show-error http://127.0.0.1:18765/health/live
+curl --noproxy 127.0.0.1 --fail --silent --show-error http://127.0.0.1:18765/health/ready
 ```
 
 The readiness endpoint deliberately does not load or test the GPU model. Run
