@@ -112,14 +112,16 @@ describe('voice API', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await createVoiceGenderTag('female')
+    await createVoiceGenderTag('female', [
+      { language: 'zh-CN', value: '女性' },
+    ])
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/voice-tags')
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(JSON.parse(String(request.body))).toEqual({
       type: 'gender',
       value: 'female',
-      translations: [],
+      translations: [{ language: 'zh-CN', value: '女性' }],
     })
   })
 })

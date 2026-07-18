@@ -1,15 +1,23 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 
-import type { AudioTag } from '@/api/audios'
 import { useI18n } from '@/i18n'
 
-type SelectableAudioTagType = 'topic' | 'category'
+export type EditableTagType = 'gender' | 'speaker' | 'topic' | 'category'
+
+interface SelectableTag {
+  id: number
+  type: string
+  englishValue: string
+  displayValue: string
+  fullTag: string
+  translations: { language: string; value: string }[]
+}
 
 const props = defineProps<{
   label: string
-  type: SelectableAudioTagType
-  tags: AudioTag[]
+  type: EditableTagType
+  tags: SelectableTag[]
   selectedIds: number[]
 }>()
 const emit = defineEmits<{
@@ -38,7 +46,7 @@ function normalizeSearchValue(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/g, '_').toLocaleLowerCase()
 }
 
-function tagMatches(tag: AudioTag, search: string): boolean {
+function tagMatches(tag: SelectableTag, search: string): boolean {
   return [
     tag.englishValue,
     tag.displayValue,

@@ -208,6 +208,75 @@ describe('audio views', () => {
     wrapper.unmount()
   })
 
+  it('edits speaker, topic, and category tags while preserving the author tag', async () => {
+    const speakerTag = {
+      id: 3,
+      type: 'speaker' as const,
+      englishValue: 'host',
+      displayValue: 'host',
+      fullTag: 'speaker:host',
+      translations: [],
+    }
+    const categoryTag = {
+      id: 4,
+      type: 'category' as const,
+      englishValue: 'practice',
+      displayValue: 'practice',
+      fullTag: 'category:practice',
+      translations: [],
+    }
+    let updateBody: { tagIds?: number[] } | undefined
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.startsWith('/api/audios/5?')) return Promise.resolve(jsonResponse(audio))
+      if (path.startsWith('/api/audio-tags?')) {
+        return Promise.resolve(jsonResponse([...audio.tags, speakerTag, categoryTag]))
+      }
+      if (path === '/api/audios/5' && init?.method === 'PATCH') {
+        updateBody = JSON.parse(String(init.body))
+        return Promise.resolve(
+          jsonResponse({ ...audio, tags: [audio.tags[0], speakerTag, categoryTag] }),
+        )
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const pinia = setupAuth(true)
+    const router = testRouter()
+    await router.push('/audio/5')
+    const wrapper = mount(AudioDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Edit')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('input[placeholder="Search tags"]')).toHaveLength(3)
+
+    const createButtons = wrapper.findAll('button').filter((button) => button.text() === 'Create tag')
+    await createButtons[0]?.trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Create Speaker tag')
+    await wrapper
+      .get('[role="dialog"]')
+      .findAll('button')
+      .find((button) => button.text() === 'Cancel')
+      ?.trigger('click')
+    await flushPromises()
+
+    await wrapper.get('button[title="Remove tag"]').trigger('click')
+    const searchInputs = wrapper.findAll('input[placeholder="Search tags"]')
+    await searchInputs[0]?.setValue('host')
+    await wrapper.get('[role="option"]').trigger('click')
+    await searchInputs[2]?.setValue('practice')
+    await wrapper.get('[role="option"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(updateBody?.tagIds).toEqual([3, 4])
+    expect(wrapper.text()).toContain('host')
+    expect(wrapper.text()).toContain('practice')
+  })
+
   it('does not render private audio content after a not-found response', async () => {
     vi.stubGlobal(
       'fetch',

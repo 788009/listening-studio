@@ -155,6 +155,61 @@ describe('voice views', () => {
     wrapper.unmount()
   })
 
+  it('edits gender tags while preserving the system author tag', async () => {
+    const maleTag = {
+      id: 3,
+      type: 'gender',
+      englishValue: 'male_voice',
+      displayValue: 'male_voice',
+      fullTag: 'gender:male_voice',
+      translations: [],
+    }
+    let updateBody: { genderTagIds?: number[] } | undefined
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      if (path.startsWith('/api/voices/7?')) return Promise.resolve(jsonResponse(voice))
+      if (path.startsWith('/api/audios?')) {
+        return Promise.resolve(jsonResponse({ items: [], page: 1, pageSize: 100, total: 0 }))
+      }
+      if (path.startsWith('/api/voice-tags?')) {
+        return Promise.resolve(jsonResponse([voice.tags[1], maleTag]))
+      }
+      if (path === '/api/voices/7' && init?.method === 'PATCH') {
+        updateBody = JSON.parse(String(init.body))
+        return Promise.resolve(jsonResponse({ ...voice, tags: [voice.tags[0], maleTag] }))
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const pinia = setupAuth()
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/voice/:id', component: VoiceDetailView },
+        { path: '/voices', component: VoiceListView, name: 'voices' },
+        { path: '/create', component: { template: '<div />' }, name: 'create' },
+        { path: '/user/:userId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/voice/7')
+    const wrapper = mount(VoiceDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Edit')?.trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('female voice')
+    await wrapper.get('button[title="Remove tag"]').trigger('click')
+    await wrapper.get('input[placeholder="Search tags"]').setValue('gender:male')
+    await wrapper.get('[role="option"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(updateBody?.genderTagIds).toEqual([3])
+    expect(wrapper.text()).toContain('male voice')
+  })
+
   it('does not render private content when the API returns not found', async () => {
     vi.stubGlobal(
       'fetch',

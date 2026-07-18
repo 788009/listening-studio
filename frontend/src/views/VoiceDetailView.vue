@@ -3,19 +3,25 @@ import { computed, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
+  createVoiceGenderTag,
   deleteVoice,
   getVoice,
   listPublicSampleAudio,
+  listVoiceGenderTags,
   updateVoice,
   voiceSamplePath,
   type AudioSummary,
   type ResourceVisibility,
+  type TagTranslation,
   type Voice,
   type VoiceSampleSource,
+  type VoiceTag,
 } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
+import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import VoiceTagLines from '@/components/VoiceTagLines.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/i18n'
@@ -37,7 +43,13 @@ const visibility = ref<ResourceVisibility>('private')
 const sampleSource = ref<VoiceSampleSource>('original')
 const sampleAudioId = ref('')
 const sampleAudio = ref<AudioSummary[]>([])
-const sampleAudioLoading = ref(false)
+const genderTags = ref<VoiceTag[]>([])
+const selectedGenderTagIds = ref<number[]>([])
+const editingOptionsLoading = ref(false)
+const creatingGenderTag = ref(false)
+const tagDialogOpen = ref(false)
+const tagDialogInitialEnglishValue = ref('')
+const tagDialogError = ref('')
 const sampleRevision = ref(0)
 
 const voiceId = computed(() => Number(route.params.id))
@@ -60,6 +72,9 @@ function resetForm(current: Voice): void {
   visibility.value = current.visibility
   sampleSource.value = current.sampleSource
   sampleAudioId.value = current.sampleAudioId ? String(current.sampleAudioId) : ''
+  selectedGenderTagIds.value = current.tags
+    .filter((tag) => tag.type === 'gender')
+    .map((tag) => tag.id)
 }
 
 async function loadVoice(): Promise<void> {
@@ -85,14 +100,63 @@ async function beginEditing(): Promise<void> {
   resetForm(voice.value)
   formError.value = ''
   editing.value = true
-  sampleAudioLoading.value = true
+  editingOptionsLoading.value = true
   try {
-    sampleAudio.value = await listPublicSampleAudio(locale.value)
+    const [audioOptions, tagOptions] = await Promise.all([
+      listPublicSampleAudio(locale.value),
+      listVoiceGenderTags(locale.value),
+    ])
+    sampleAudio.value = audioOptions
+    genderTags.value = tagOptions
   } catch (error) {
     formError.value =
-      error instanceof ApiError ? error.message : t('Sample audio could not be loaded')
+      error instanceof ApiError ? error.message : t('Editing options could not be loaded')
   } finally {
-    sampleAudioLoading.value = false
+    editingOptionsLoading.value = false
+  }
+}
+
+function selectGenderTag(tagId: number): void {
+  if (!selectedGenderTagIds.value.includes(tagId)) {
+    selectedGenderTagIds.value = [...selectedGenderTagIds.value, tagId]
+  }
+}
+
+function removeGenderTag(tagId: number): void {
+  selectedGenderTagIds.value = selectedGenderTagIds.value.filter((id) => id !== tagId)
+}
+
+function openTagDialog(query: string): void {
+  tagDialogOpen.value = true
+  tagDialogInitialEnglishValue.value = query
+  tagDialogError.value = ''
+}
+
+function closeTagDialog(): void {
+  if (creatingGenderTag.value) return
+  tagDialogOpen.value = false
+  tagDialogInitialEnglishValue.value = ''
+  tagDialogError.value = ''
+}
+
+async function createAndAddGenderTag(input: {
+  englishValue: string
+  translations: TagTranslation[]
+}): Promise<void> {
+  if (creatingGenderTag.value) return
+  creatingGenderTag.value = true
+  tagDialogError.value = ''
+  try {
+    const tag = await createVoiceGenderTag(input.englishValue, input.translations)
+    genderTags.value = [...genderTags.value, tag]
+    selectGenderTag(tag.id)
+    tagDialogOpen.value = false
+    tagDialogInitialEnglishValue.value = ''
+  } catch (error) {
+    tagDialogError.value =
+      error instanceof ApiError ? error.message : t('Tag could not be created')
+  } finally {
+    creatingGenderTag.value = false
   }
 }
 
@@ -105,6 +169,7 @@ async function saveVoice(): Promise<void> {
     voice.value = await updateVoice(voice.value.id, {
       title: title.value,
       visibility: visibility.value,
+      genderTagIds: selectedGenderTagIds.value,
       sampleSource: sampleSource.value,
       sampleAudioId:
         sampleSource.value === 'public_audio' && Number.isInteger(selectedAudioId)
@@ -245,15 +310,25 @@ watch(() => route.params.id, loadVoice, { immediate: true })
               id="sample-audio"
               v-model="sampleAudioId"
               required
-              :disabled="sampleAudioLoading"
+              :disabled="editingOptionsLoading"
               class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:bg-canvas"
             >
-              <option value="" disabled>{{ sampleAudioLoading ? t('Loading audio') : t('Select audio') }}</option>
+              <option value="" disabled>{{ editingOptionsLoading ? t('Loading audio') : t('Select audio') }}</option>
               <option v-for="audio in sampleAudio" :key="audio.id" :value="String(audio.id)">
                 {{ audio.title }} - {{ audio.author.username || audio.author.userId }}
               </option>
             </select>
           </div>
+          <ResourceTagPicker
+            class="md:col-span-2"
+            label="Gender tags"
+            type="gender"
+            :tags="genderTags"
+            :selected-ids="selectedGenderTagIds"
+            @select="selectGenderTag"
+            @remove="removeGenderTag"
+            @create="openTagDialog"
+          />
         </div>
         <p v-if="formError" role="alert" class="mt-4 text-sm text-danger">{{ formError }}</p>
         <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
@@ -277,7 +352,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             </button>
             <button
               type="submit"
-              :disabled="saving || sampleAudioLoading"
+              :disabled="saving || editingOptionsLoading"
               class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-60"
             >
               {{ saving ? t('Saving') : t('Save') }}
@@ -329,5 +404,15 @@ watch(() => route.params.id, loadVoice, { immediate: true })
     >
       <p>{{ t('This voice and its stored files will be removed.') }}</p>
     </ConfirmDialog>
+
+    <TagCreationDialog
+      :open="tagDialogOpen"
+      type="gender"
+      :initial-english-value="tagDialogInitialEnglishValue"
+      :busy="creatingGenderTag"
+      :error-message="tagDialogError"
+      @close="closeTagDialog"
+      @submit="createAndAddGenderTag"
+    />
   </section>
 </template>

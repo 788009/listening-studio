@@ -4,11 +4,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { TagTranslation } from '@/api/voices'
 import { supportedLocales, useI18n } from '@/i18n'
 
-type SelectableAudioTagType = 'topic' | 'category'
+type EditableTagType = 'gender' | 'speaker' | 'topic' | 'category'
 
 const props = defineProps<{
   open: boolean
-  type: SelectableAudioTagType | null
+  type: EditableTagType | null
   initialEnglishValue: string
   busy: boolean
   errorMessage: string
@@ -27,6 +27,15 @@ let previouslyFocused: HTMLElement | null = null
 
 const translationLocales = supportedLocales.filter((locale) => locale !== 'en')
 const normalizedEnglishValue = computed(() => normalizeTagValue(englishValue.value))
+const typeLabel = computed(() => {
+  const labels: Record<EditableTagType, string> = {
+    gender: 'Gender',
+    speaker: 'Speaker',
+    topic: 'Topic',
+    category: 'Category',
+  }
+  return props.type ? labels[props.type] : 'Tag'
+})
 
 watch(
   () => props.open,
@@ -129,7 +138,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleDocumentKeyd
       @keydown="handleKeydown"
     >
       <h2 id="tag-dialog-title" class="text-lg font-semibold">
-        {{ t('Create {type} tag', { type: t(type === 'topic' ? 'Topic' : 'Category') }) }}
+        {{ t('Create {type} tag', { type: t(typeLabel) }) }}
       </h2>
 
       <div class="mt-5 space-y-4">

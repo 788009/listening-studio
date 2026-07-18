@@ -4,16 +4,23 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
   audioMediaPath,
+  createAudioTag,
   deleteAudio,
   getAudio,
+  listAudioTags,
   updateAudio,
   type Audio,
+  type AudioTag,
+  type AudioTagType,
   type ResourceVisibility,
 } from '@/api/audios'
+import type { TagTranslation } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import AudioTagLines from '@/components/AudioTagLines.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
+import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/i18n'
 
@@ -31,6 +38,15 @@ const errorMessage = ref('')
 const formError = ref('')
 const title = ref('')
 const visibility = ref<ResourceVisibility>('private')
+const tags = ref<AudioTag[]>([])
+const selectedTagIds = ref<number[]>([])
+const tagsLoading = ref(false)
+const creatingTagType = ref<EditableAudioTagType | null>(null)
+const tagDialogType = ref<EditableAudioTagType | null>(null)
+const tagDialogInitialEnglishValue = ref('')
+const tagDialogError = ref('')
+
+type EditableAudioTagType = Exclude<AudioTagType, 'author'>
 
 const audioId = computed(() => Number(route.params.id))
 const isOwner = computed(
@@ -41,10 +57,18 @@ const isOwner = computed(
 const orderedUtterances = computed(() =>
   [...(audio.value?.utterances ?? [])].sort((left, right) => left.position - right.position),
 )
+const tagGroups = computed(() => [
+  { label: 'Speakers', type: 'speaker' as const },
+  { label: 'Topics', type: 'topic' as const },
+  { label: 'Categories', type: 'category' as const },
+])
 
 function resetForm(current: Audio): void {
   title.value = current.title
   visibility.value = current.visibility
+  selectedTagIds.value = current.tags
+    .filter((tag) => tag.type !== 'author')
+    .map((tag) => tag.id)
 }
 
 async function loadAudio(): Promise<void> {
@@ -65,11 +89,64 @@ async function loadAudio(): Promise<void> {
   }
 }
 
-function beginEditing(): void {
+async function beginEditing(): Promise<void> {
   if (!audio.value) return
   resetForm(audio.value)
   formError.value = ''
   editing.value = true
+  tagsLoading.value = true
+  try {
+    tags.value = await listAudioTags(locale.value)
+  } catch (error) {
+    formError.value = error instanceof ApiError ? error.message : t('Tags could not be loaded')
+  } finally {
+    tagsLoading.value = false
+  }
+}
+
+function selectTag(tagId: number): void {
+  if (!selectedTagIds.value.includes(tagId)) {
+    selectedTagIds.value = [...selectedTagIds.value, tagId]
+  }
+}
+
+function removeTag(tagId: number): void {
+  selectedTagIds.value = selectedTagIds.value.filter((id) => id !== tagId)
+}
+
+function openTagDialog(type: EditableAudioTagType, query: string): void {
+  tagDialogType.value = type
+  tagDialogInitialEnglishValue.value = query
+  tagDialogError.value = ''
+}
+
+function closeTagDialog(): void {
+  if (creatingTagType.value !== null) return
+  tagDialogType.value = null
+  tagDialogInitialEnglishValue.value = ''
+  tagDialogError.value = ''
+}
+
+async function createAndAddTag(input: {
+  englishValue: string
+  translations: TagTranslation[]
+}): Promise<void> {
+  if (tagDialogType.value === null || creatingTagType.value !== null) return
+  const type = tagDialogType.value
+  creatingTagType.value = type
+  tagDialogError.value = ''
+  try {
+    const tag = await createAudioTag({ type, ...input })
+    tags.value = [...tags.value, tag]
+    selectTag(tag.id)
+    tagDialogType.value = null
+    tagDialogInitialEnglishValue.value = ''
+  } catch (error) {
+    tagDialogError.value =
+      error instanceof ApiError ? error.message : t('Tag could not be created')
+  } finally {
+    creatingTagType.value = null
+  }
 }
 
 async function saveAudio(): Promise<void> {
@@ -80,6 +157,7 @@ async function saveAudio(): Promise<void> {
     audio.value = await updateAudio(audio.value.id, {
       title: title.value,
       visibility: visibility.value,
+      tagIds: selectedTagIds.value,
     })
     editing.value = false
     resetForm(audio.value)
@@ -176,6 +254,19 @@ watch(() => route.params.id, loadAudio, { immediate: true })
               <option value="public" :disabled="audio.status !== 'ready'">{{ t('Public') }}</option>
             </select>
           </div>
+          <div class="grid min-w-0 gap-5 sm:col-span-2 md:grid-cols-3">
+            <ResourceTagPicker
+              v-for="group in tagGroups"
+              :key="group.type"
+              :label="group.label"
+              :type="group.type"
+              :tags="tags"
+              :selected-ids="selectedTagIds"
+              @select="selectTag"
+              @remove="removeTag"
+              @create="openTagDialog(group.type, $event)"
+            />
+          </div>
         </div>
         <p v-if="formError" role="alert" class="mt-4 text-sm text-danger">{{ formError }}</p>
         <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
@@ -199,7 +290,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             </button>
             <button
               type="submit"
-              :disabled="saving"
+              :disabled="saving || tagsLoading"
               class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-60"
             >
               {{ saving ? t('Saving') : t('Save') }}
@@ -269,5 +360,15 @@ watch(() => route.params.id, loadAudio, { immediate: true })
     >
       <p>{{ t('This audio and its stored file will be removed.') }}</p>
     </ConfirmDialog>
+
+    <TagCreationDialog
+      :open="tagDialogType !== null"
+      :type="tagDialogType"
+      :initial-english-value="tagDialogInitialEnglishValue"
+      :busy="creatingTagType !== null"
+      :error-message="tagDialogError"
+      @close="closeTagDialog"
+      @submit="createAndAddTag"
+    />
   </section>
 </template>

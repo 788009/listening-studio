@@ -10,7 +10,7 @@ import {
 } from '@/api/audios'
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
-import AudioTagPicker from '@/components/AudioTagPicker.vue'
+import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import CreationModeControl from '@/components/CreationModeControl.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
@@ -320,7 +320,7 @@ onUnmounted(leaveCreateView)
 
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
-          <AudioTagPicker
+          <ResourceTagPicker
             v-for="group in tagGroups"
             :key="group.type"
             :label="group.label"
