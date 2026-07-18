@@ -100,7 +100,7 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
-  it('creates, polls, and links to a completed single-speaker audio', async () => {
+  it('creates an audio and opens a fresh form after leaving the completed view', async () => {
     vi.useFakeTimers()
     let jobReads = 0
     let submittedBody: unknown
@@ -195,7 +195,15 @@ describe('direct creation view', () => {
       value: 'Test_Category',
       translations: [{ language: 'zh-CN', value: '测试_分类' }],
     })
+    expect(localStorage.getItem('listening.audioCreation')).not.toBeNull()
     wrapper.unmount()
+
+    expect(localStorage.getItem('listening.audioCreation')).toBeNull()
+    const freshWrapper = await mountView()
+    await flushPromises()
+    expect(freshWrapper.find('#audio-title').exists()).toBe(true)
+    expect(freshWrapper.text()).not.toContain('Audio is ready')
+    freshWrapper.unmount()
   })
 
   it('reorders dialogue turns and retains the form after a failed job retry', async () => {

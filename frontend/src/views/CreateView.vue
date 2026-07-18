@@ -194,11 +194,19 @@ function startAnother(): void {
   formError.value = ''
 }
 
+function leaveCreateView(): void {
+  if (creation.completed) {
+    creation.reset()
+    return
+  }
+  creation.stopPolling()
+}
+
 onMounted(() => {
   creation.resume()
   void loadOptions()
 })
-onUnmounted(creation.stopPolling)
+onUnmounted(leaveCreateView)
 </script>
 
 <template>
