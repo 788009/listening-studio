@@ -133,7 +133,7 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
-  it('generates, invalidates, reorders, previews, and publishes turns', async () => {
+  it('keeps previews after edits and allows regeneration before publishing', async () => {
     const previewBodies: unknown[] = []
     const deletedJobs: number[] = []
     let publishBody: unknown
@@ -190,10 +190,23 @@ describe('direct creation view', () => {
     await wrapper.get('button[aria-label="Move turn 2 up"]').trigger('click')
     expect(button(wrapper, 'Publish').exists()).toBe(true)
     await wrapper.get('#turn-text-1').setValue('Changed first line.')
-    expect(wrapper.text()).toContain('Preview is out of date')
-    expect(button(wrapper, 'Generate audio').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('Preview is out of date')
+    expect(wrapper.findAll('audio')).toHaveLength(2)
+    expect(
+      wrapper.findAll('button').filter((item) => item.text() === 'Regenerate preview'),
+    ).toHaveLength(2)
+    expect(button(wrapper, 'Publish').exists()).toBe(true)
 
     await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Changes made after preview generation will be discarded',
+    )
+    expect(publishBody).toBeUndefined()
+    await wrapper.get('[role="dialog"]').findAll('button').find((item) => item.text() === 'Cancel')?.trigger('click')
+
+    const changedTurn = wrapper.findAll('li').find((item) => item.find('#turn-text-1').exists())
+    await changedTurn?.findAll('button').find((item) => item.text() === 'Regenerate preview')?.trigger('click')
     await flushPromises()
     expect(previewBodies).toHaveLength(3)
     expect(deletedJobs).toContain(10)
@@ -221,6 +234,62 @@ describe('direct creation view', () => {
       visibility: 'private',
     })
     expect(wrapper.get('a[href="/audio/8"]').attributes('href')).toBe('/audio/8')
+    wrapper.unmount()
+  })
+
+  it('confirms and publishes the last generated snapshot when edits are not regenerated', async () => {
+    let publishBody: unknown
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      const options = optionsResponse(path)
+      if (options) return Promise.resolve(options)
+      if (path === '/api/audio-previews' && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({ jobId: 30, contentDigest: 'c'.repeat(64) }, 202),
+        )
+      }
+      if (path === '/api/jobs/30') {
+        return Promise.resolve(jobResponse(30, 'succeeded'))
+      }
+      if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+        publishBody = JSON.parse(String(init.body))
+        return Promise.resolve(jsonResponse(publishedAudio(9), 201))
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = await mountView()
+    await flushPromises()
+    await wrapper.get('#audio-title').setValue('Snapshot practice')
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue('Generated text.')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('#turn-text-1').setValue('Edited but not generated.')
+    expect(wrapper.findAll('audio')).toHaveLength(1)
+    expect(button(wrapper, 'Publish').exists()).toBe(true)
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    const dialog = wrapper.get('[role="dialog"]')
+    expect(dialog.text()).toContain('last generated audio')
+    await dialog.findAll('button').find((item) => item.text() === 'Publish')?.trigger('click')
+    await flushPromises()
+
+    expect(publishBody).toEqual({
+      title: 'Snapshot practice',
+      utterances: [
+        {
+          previewJobId: 30,
+          voiceId: 2,
+          speakerDisplayName: 'Woman',
+          text: 'Generated text.',
+        },
+      ],
+      tagIds: [],
+      visibility: 'private',
+    })
+    expect(wrapper.get('a[href="/audio/9"]').attributes('href')).toBe('/audio/9')
     wrapper.unmount()
   })
 

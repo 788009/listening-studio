@@ -12,7 +12,6 @@ export interface DialogueTurnDraft {
 
 export type DialogueTurnPreviewStatus =
   | 'idle'
-  | 'stale'
   | 'submitting'
   | 'queued'
   | 'running'

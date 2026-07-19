@@ -16,6 +16,7 @@ import {
 import { getJob, type JobStatus } from '@/api/jobs'
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
@@ -47,13 +48,22 @@ const loadingOptions = ref(true)
 const formError = ref('')
 const publishing = ref(false)
 const publishedAudioId = ref<number | null>(null)
+const discardChangesDialogOpen = ref(false)
+
+interface GeneratedTurnPreview {
+  signature: string
+  jobId: number
+  content: AudioPreviewInput
+}
 
 interface TurnPreviewState {
   requestId: number
-  signature: string
-  jobId: number | null
+  pendingSignature: string
+  pendingContent: AudioPreviewInput
+  pendingJobId: number | null
   status: 'submitting' | JobStatus
   progress: number
+  generated?: GeneratedTurnPreview
   errorMessage?: string
 }
 
@@ -79,19 +89,15 @@ const previewPresentations = computed<Record<number, DialogueTurnPreview>>(() =>
   const result: Record<number, DialogueTurnPreview> = {}
   for (const turn of turns.value) {
     const state = previewStates.value[turn.key]
-    const signature = turnSignature(turn.key)
     if (!state) {
       result[turn.key] = { status: 'idle', progress: 0 }
-    } else if (!signature || state.signature !== signature) {
-      result[turn.key] = { status: 'stale', progress: state.progress }
     } else {
       result[turn.key] = {
         status: state.status === 'cancelled' ? 'failed' : state.status,
         progress: state.progress,
-        mediaPath:
-          state.status === 'succeeded' && state.jobId
-            ? audioPreviewMediaPath(state.jobId)
-            : undefined,
+        mediaPath: state.generated
+          ? audioPreviewMediaPath(state.generated.jobId)
+          : undefined,
         errorMessage: state.errorMessage,
       }
     }
@@ -102,7 +108,14 @@ const previewPresentations = computed<Record<number, DialogueTurnPreview>>(() =>
 const allPreviewsReady = computed(
   () =>
     turns.value.length > 0 &&
-    turns.value.every((turn) => previewPresentations.value[turn.key]?.status === 'succeeded'),
+    turns.value.every((turn) => Boolean(previewStates.value[turn.key]?.generated)),
+)
+
+const hasUnpublishedTurnChanges = computed(() =>
+  turns.value.some((turn) => {
+    const generated = previewStates.value[turn.key]?.generated
+    return Boolean(generated && generated.signature !== turnSignature(turn.key))
+  }),
 )
 
 const previewGenerationActive = computed(() =>
@@ -197,17 +210,39 @@ function schedulePreviewPoll(): void {
 
 async function refreshPreviewJobs(): Promise<void> {
   const active = Object.entries(previewStates.value).filter(
-    ([, state]) => state.jobId && ['queued', 'running'].includes(state.status),
+    ([, state]) => state.pendingJobId && ['queued', 'running'].includes(state.status),
   )
   await Promise.all(
     active.map(async ([turnKeyValue, state]) => {
       const turnKey = Number(turnKeyValue)
-      const jobId = state.jobId
+      const jobId = state.pendingJobId
       if (!jobId) return
       try {
         const job = await getJob(jobId)
         const current = previewStates.value[turnKey]
-        if (!current || current.jobId !== jobId) return
+        if (!current || current.pendingJobId !== jobId) return
+        if (job.status === 'succeeded') {
+          const previousJobId = current.generated?.jobId
+          previewStates.value = {
+            ...previewStates.value,
+            [turnKey]: {
+              ...current,
+              pendingJobId: null,
+              status: 'succeeded',
+              progress: job.progress,
+              generated: {
+                signature: current.pendingSignature,
+                jobId,
+                content: current.pendingContent,
+              },
+              errorMessage: undefined,
+            },
+          }
+          if (previousJobId && previousJobId !== jobId) {
+            void deleteAudioPreview(previousJobId).catch(() => undefined)
+          }
+          return
+        }
         previewStates.value = {
           ...previewStates.value,
           [turnKey]: {
@@ -219,7 +254,7 @@ async function refreshPreviewJobs(): Promise<void> {
         }
       } catch (error) {
         const current = previewStates.value[turnKey]
-        if (!current || current.jobId !== jobId) return
+        if (!current || current.pendingJobId !== jobId) return
         previewStates.value = {
           ...previewStates.value,
           [turnKey]: {
@@ -255,10 +290,16 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
     ...previewStates.value,
     [turnKey]: {
       requestId,
-      signature,
-      jobId: null,
+      pendingSignature: signature,
+      pendingContent: {
+        voiceId: content.voiceId,
+        speakerDisplayName: content.speakerDisplayName,
+        text: content.text,
+      },
+      pendingJobId: null,
       status: 'submitting',
       progress: 0,
+      generated: previous?.generated,
     },
   }
   try {
@@ -275,14 +316,24 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
       ...previewStates.value,
       [turnKey]: {
         requestId,
-        signature,
-        jobId: accepted.jobId,
+        pendingSignature: signature,
+        pendingContent: {
+          voiceId: content.voiceId,
+          speakerDisplayName: content.speakerDisplayName,
+          text: content.text,
+        },
+        pendingJobId: accepted.jobId,
         status: 'queued',
         progress: 0,
+        generated: previous?.generated,
       },
     }
-    if (previous?.jobId && previous.jobId !== accepted.jobId) {
-      void deleteAudioPreview(previous.jobId).catch(() => undefined)
+    if (
+      previous?.pendingJobId &&
+      previous.pendingJobId !== accepted.jobId &&
+      previous.pendingJobId !== previous.generated?.jobId
+    ) {
+      void deleteAudioPreview(previous.pendingJobId).catch(() => undefined)
     }
     await refreshPreviewJobs()
   } catch (error) {
@@ -291,10 +342,16 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
       ...previewStates.value,
       [turnKey]: {
         requestId,
-        signature,
-        jobId: null,
+        pendingSignature: signature,
+        pendingContent: {
+          voiceId: content.voiceId,
+          speakerDisplayName: content.speakerDisplayName,
+          text: content.text,
+        },
+        pendingJobId: null,
         status: 'failed',
         progress: 0,
+        generated: previous?.generated,
         errorMessage:
           error instanceof ApiError ? error.message : t('Preview could not be submitted'),
       },
@@ -307,7 +364,7 @@ async function generateMissingPreviews(): Promise<void> {
   const content = validateContent()
   if (!content) return
   const missing = content.filter(
-    (item) => previewPresentations.value[item.turnKey]?.status !== 'succeeded',
+    (item) => !previewStates.value[item.turnKey]?.generated,
   )
   await Promise.all(missing.map((item) => generateTurnPreview(item.turnKey)))
 }
@@ -317,9 +374,12 @@ async function removeTurnPreview(turnKey: number): Promise<void> {
   const next = { ...previewStates.value }
   delete next[turnKey]
   previewStates.value = next
-  if (state?.jobId) {
-    await deleteAudioPreview(state.jobId).catch(() => undefined)
-  }
+  const jobIds = new Set(
+    [state?.pendingJobId, state?.generated?.jobId].filter(
+      (jobId): jobId is number => typeof jobId === 'number',
+    ),
+  )
+  await Promise.allSettled([...jobIds].map((jobId) => deleteAudioPreview(jobId)))
 }
 
 function selectTag(tagId: number): void {
@@ -400,21 +460,32 @@ async function submit(): Promise<void> {
     await generateMissingPreviews()
     return
   }
+  if (!title.value.trim()) {
+    formError.value = t('Enter a title')
+    return
+  }
+  if (hasUnpublishedTurnChanges.value) {
+    discardChangesDialogOpen.value = true
+    return
+  }
+  await publishGeneratedAudio()
+}
+
+async function publishGeneratedAudio(): Promise<void> {
+  formError.value = ''
   const normalizedTitle = title.value.trim()
   if (!normalizedTitle) {
     formError.value = t('Enter a title')
     return
   }
-  const content = validateContent()
-  if (!content) return
-  const utterances = content.map((item) => {
-    const preview = previewStates.value[item.turnKey]
-    return preview?.jobId
+  const utterances = turns.value.map((turn) => {
+    const generated = previewStates.value[turn.key]?.generated
+    return generated
       ? {
-          previewJobId: preview.jobId,
-          voiceId: item.voiceId,
-          speakerDisplayName: item.speakerDisplayName,
-          text: item.text,
+          previewJobId: generated.jobId,
+          voiceId: generated.content.voiceId,
+          speakerDisplayName: generated.content.speakerDisplayName,
+          text: generated.content.text,
         }
       : null
   })
@@ -437,6 +508,11 @@ async function submit(): Promise<void> {
   }
 }
 
+async function confirmDiscardChangesAndPublish(): Promise<void> {
+  discardChangesDialogOpen.value = false
+  await publishGeneratedAudio()
+}
+
 function startAnother(): void {
   publishedAudioId.value = null
   title.value = ''
@@ -445,6 +521,7 @@ function startAnother(): void {
   selectedTagIds.value = []
   visibility.value = 'private'
   formError.value = ''
+  discardChangesDialogOpen.value = false
 }
 
 async function cleanupPreviews(): Promise<void> {
@@ -452,8 +529,8 @@ async function cleanupPreviews(): Promise<void> {
   const jobIds = [
     ...new Set(
       Object.values(previewStates.value)
-        .map((state) => state.jobId)
-        .filter((jobId): jobId is number => jobId !== null),
+        .flatMap((state) => [state.pendingJobId, state.generated?.jobId])
+        .filter((jobId): jobId is number => typeof jobId === 'number'),
     ),
   ]
   previewStates.value = {}
@@ -582,5 +659,16 @@ onUnmounted(() => clearTimeout(previewPollTimer))
       @close="closeTagDialog"
       @submit="createAndAddTag"
     />
+
+    <ConfirmDialog
+      :open="discardChangesDialogOpen"
+      :title="t('Publish generated audio?')"
+      :busy="publishing"
+      confirm-label="Publish"
+      @close="discardChangesDialogOpen = false"
+      @confirm="confirmDiscardChangesAndPublish"
+    >
+      {{ t('Changes made after preview generation will be discarded. The last generated audio will be published instead.') }}
+    </ConfirmDialog>
   </section>
 </template>

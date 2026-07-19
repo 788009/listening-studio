@@ -65,7 +65,7 @@ function generateLabel(turnKey: number): string {
   if (current.status === 'running') {
     return t('Generating {progress}%', { progress: current.progress })
   }
-  if (['succeeded', 'stale', 'failed'].includes(current.status)) {
+  if (['succeeded', 'failed'].includes(current.status)) {
     return t('Regenerate preview')
   }
   return t('Generate preview')
@@ -128,7 +128,7 @@ function speakerLabel(speaker: SpeakerDraft, index: number): string {
         </div>
         <div class="flex min-w-0 flex-col gap-3 lg:pt-6">
           <audio
-            v-if="preview(turn.key).status === 'succeeded' && preview(turn.key).mediaPath"
+            v-if="preview(turn.key).mediaPath"
             :key="preview(turn.key).mediaPath"
             :src="preview(turn.key).mediaPath"
             controls
@@ -136,10 +136,7 @@ function speakerLabel(speaker: SpeakerDraft, index: number): string {
             class="h-10 w-full min-w-0"
             :aria-label="t('Preview turn {position}', { position: index + 1 })"
           />
-          <p v-else-if="preview(turn.key).status === 'stale'" class="text-xs leading-5 text-muted">
-            {{ t('Preview is out of date') }}
-          </p>
-          <p v-else-if="preview(turn.key).status === 'failed'" role="alert" class="break-words text-xs leading-5 text-danger">
+          <p v-if="preview(turn.key).status === 'failed'" role="alert" class="break-words text-xs leading-5 text-danger">
             {{ preview(turn.key).errorMessage || t('Preview generation failed') }}
           </p>
           <p v-else-if="isBusy(turn.key)" class="text-xs leading-5 text-muted">
