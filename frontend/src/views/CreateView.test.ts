@@ -80,7 +80,7 @@ describe('direct creation view', () => {
     vi.unstubAllGlobals()
   })
 
-  it('opens in single-speaker mode with the requested voice selected', async () => {
+  it('opens with one speaker and the requested voice selected', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
@@ -93,7 +93,9 @@ describe('direct creation view', () => {
     const wrapper = await mountView()
     await flushPromises()
 
-    expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Single')
+    expect(wrapper.find('[aria-label="Creation mode"]').exists()).toBe(false)
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Add speaker')).toBe(true)
+    expect(wrapper.findAll('button').some((button) => button.text() === 'Add turn')).toBe(true)
     expect(wrapper.get('#speaker-voice-1').element).toHaveProperty('value', '2')
     expect(wrapper.get('#turn-speaker-1').text()).toContain('Speaker 1')
     expect(wrapper.text()).not.toContain('climate change')
@@ -209,6 +211,61 @@ describe('direct creation view', () => {
     freshWrapper.unmount()
   })
 
+  it('treats multiple turns from one speaker as a single-speaker audio', async () => {
+    let submittedPath = ''
+    let submittedBody: unknown
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input)
+      const options = optionsResponse(path)
+      if (options) return Promise.resolve(options)
+      if (path === '/api/audios') {
+        submittedPath = path
+        submittedBody = JSON.parse(String(init?.body))
+        return Promise.resolve(jsonResponse({ audioId: 12, jobId: 22 }, 202))
+      }
+      if (path === '/api/jobs/22') {
+        return Promise.resolve(
+          jsonResponse({
+            id: 22,
+            type: 'audio_synthesis',
+            status: 'succeeded',
+            progress: 100,
+            inputSummary: {},
+            result: { type: 'audio', id: 12 },
+            cancelRequested: false,
+            retryable: true,
+            attemptCount: 1,
+            createdAt: '',
+            updatedAt: '',
+          }),
+        )
+      }
+      throw new Error(`Unexpected request: ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = await mountView()
+    await flushPromises()
+
+    await wrapper.get('#audio-title').setValue('One speaker, two sections')
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue('First section.')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add turn')?.trigger('click')
+    await wrapper.get('#turn-text-2').setValue('Second section.')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(submittedPath).toBe('/api/audios')
+    expect(submittedBody).toEqual(
+      expect.objectContaining({
+        speakerDisplayName: 'Woman',
+        text: 'First section.\nSecond section.',
+        voiceId: 2,
+      }),
+    )
+    expect(fetchMock.mock.calls.some(([input]) => String(input) === '/api/audios/dialogues')).toBe(false)
+    wrapper.unmount()
+  })
+
   it('reorders dialogue turns and retains the form after a failed job retry', async () => {
     const dialogueBodies: unknown[] = []
     let submissions = 0
@@ -266,7 +323,6 @@ describe('direct creation view', () => {
     const wrapper = await mountView()
     await flushPromises()
     await wrapper.get('#audio-title').setValue('Dialogue practice')
-    await wrapper.findAll('button').find((button) => button.text() === 'Dialogue')?.trigger('click')
     await wrapper.get('#speaker-name-1').setValue('Alice')
     await wrapper.get('#turn-text-1').setValue('First line '.repeat(80))
     await wrapper.findAll('button').find((button) => button.text() === 'Add speaker')?.trigger('click')

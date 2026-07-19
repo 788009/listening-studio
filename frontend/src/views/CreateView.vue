@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -11,7 +11,6 @@ import {
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
-import CreationModeControl from '@/components/CreationModeControl.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
@@ -23,13 +22,11 @@ import type { TagTranslation } from '@/api/voices'
 import { useAudioCreationStore } from '@/stores/audioCreation'
 import { useI18n } from '@/i18n'
 
-type CreationMode = 'single' | 'dialogue'
 type CreationTagType = 'topic' | 'category'
 
 const route = useRoute()
 const { locale, t } = useI18n()
 const creation = useAudioCreationStore()
-const mode = ref<CreationMode>('single')
 const title = ref('')
 const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
@@ -181,16 +178,15 @@ async function submit(): Promise<void> {
     return
   }
 
-  const content = (mode.value === 'single' ? turns.value.slice(0, 1) : turns.value).map(
-    (turn) => {
-      const speaker = normalizedSpeakers.find((item) => item.key === turn.speakerKey)
-      return {
-        voiceId: speaker?.voiceId ?? 0,
-        speakerDisplayName: speaker?.name ?? '',
-        text: turn.text.trim(),
-      }
-    },
-  )
+  const content = turns.value.map((turn) => {
+    const speaker = normalizedSpeakers.find((item) => item.key === turn.speakerKey)
+    return {
+      speakerKey: turn.speakerKey,
+      voiceId: speaker?.voiceId ?? 0,
+      speakerDisplayName: speaker?.name ?? '',
+      text: turn.text.trim(),
+    }
+  })
   if (
     content.some(
       (turn) =>
@@ -204,12 +200,13 @@ async function submit(): Promise<void> {
     return
   }
 
-  if (mode.value === 'single') {
+  const speakerKeys = new Set(content.map((item) => item.speakerKey))
+  if (speakerKeys.size === 1) {
     const item = content[0]
     if (!item) return
     await creation.submitSingle({
       title: normalizedTitle,
-      text: item.text,
+      text: content.map((turn) => turn.text).join('\n'),
       voiceId: item.voiceId,
       speakerDisplayName: item.speakerDisplayName,
       tagIds: selectedTagIds.value,
@@ -219,7 +216,11 @@ async function submit(): Promise<void> {
   }
   await creation.submitDialogue({
     title: normalizedTitle,
-    utterances: content,
+    utterances: content.map((utterance) => ({
+      voiceId: utterance.voiceId,
+      speakerDisplayName: utterance.speakerDisplayName,
+      text: utterance.text,
+    })),
     tagIds: selectedTagIds.value,
     visibility: visibility.value,
   })
@@ -248,14 +249,6 @@ onMounted(() => {
   void loadOptions()
 })
 onUnmounted(leaveCreateView)
-
-watch(mode, (value) => {
-  if (value !== 'single' || speakers.value.length === 0 || turns.value.length === 0) return
-  const speaker = speakers.value[0]
-  if (!speaker) return
-  speakers.value = [speaker]
-  turns.value = [{ ...turns.value[0]!, speakerKey: speaker.key }]
-})
 </script>
 
 <template>
@@ -324,7 +317,7 @@ watch(mode, (value) => {
         </p>
       </div>
 
-      <div class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="border-b border-line px-5 py-6">
         <div class="min-w-0">
           <label for="audio-title" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
           <input
@@ -335,10 +328,6 @@ watch(mode, (value) => {
             maxlength="200"
             class="h-10 w-full min-w-0 border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           />
-        </div>
-        <div>
-          <span class="mb-1 block text-sm font-medium">{{ t('Mode') }}</span>
-          <CreationModeControl v-model="mode" />
         </div>
       </div>
 
@@ -352,7 +341,6 @@ watch(mode, (value) => {
         v-if="!loadingOptions && voices.length > 0"
         v-model="speakers"
         :voices="voices"
-        :multiple="mode === 'dialogue'"
         @remove="removeSpeaker"
       />
 
@@ -360,7 +348,6 @@ watch(mode, (value) => {
         v-if="!loadingOptions && voices.length > 0"
         v-model="turns"
         :speakers="speakers"
-        :multiple="mode === 'dialogue'"
       />
 
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

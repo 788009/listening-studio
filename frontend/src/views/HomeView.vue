@@ -110,7 +110,7 @@ onMounted(async () => {
       <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <RouterLink to="/create" class="group flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3.5 shadow-panel transition-colors hover:border-accent/50 hover:bg-raised">
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent"><svg viewBox="0 0 24 24" fill="none" class="h-[18px] w-[18px]" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></span>
-          <span class="min-w-0"><span class="block text-sm font-semibold">{{ t('Create audio') }}</span><span class="mt-0.5 block truncate text-xs text-muted">{{ t('Single speaker or dialogue') }}</span></span>
+          <span class="min-w-0"><span class="block text-sm font-semibold">{{ t('Create audio') }}</span><span class="mt-0.5 block truncate text-xs text-muted">{{ t('Speakers and listening content') }}</span></span>
         </RouterLink>
         <RouterLink to="/generate" class="group flex items-center gap-3 rounded-md border border-line bg-surface px-4 py-3.5 shadow-panel transition-colors hover:border-accent/50 hover:bg-raised">
           <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-raised text-muted"><svg viewBox="0 0 24 24" fill="none" class="h-[18px] w-[18px]" aria-hidden="true"><path d="M5 7h14M5 12h14M5 17h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg></span>

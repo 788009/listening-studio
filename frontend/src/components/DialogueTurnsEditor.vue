@@ -7,7 +7,6 @@ const { t } = useI18n()
 const props = defineProps<{
   modelValue: DialogueTurnDraft[]
   speakers: SpeakerDraft[]
-  multiple: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: DialogueTurnDraft[]]
@@ -66,10 +65,9 @@ function speakerLabel(speaker: SpeakerDraft, index: number): string {
       <li
         v-for="(turn, index) in modelValue"
         :key="turn.key"
-        class="grid min-w-0 gap-4 px-5 py-5"
-        :class="multiple ? 'lg:grid-cols-[4.5rem_minmax(10rem,0.7fr)_minmax(14rem,1.5fr)]' : 'md:grid-cols-[14rem_minmax(14rem,1fr)]'"
+        class="grid min-w-0 gap-4 px-5 py-5 lg:grid-cols-[4.5rem_minmax(10rem,0.7fr)_minmax(14rem,1.5fr)]"
       >
-        <div v-if="multiple" class="grid h-9 grid-cols-3" :aria-label="t('Turn controls')">
+        <div class="grid h-9 grid-cols-3" :aria-label="t('Turn controls')">
           <button type="button" class="flex h-9 w-6 items-center justify-center text-muted hover:text-ink disabled:opacity-30" :disabled="index === 0" :title="t('Move turn up')" :aria-label="t('Move turn {position} up', { position: index + 1 })" @click="moveTurn(index, -1)">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" /></svg>
           </button>
@@ -100,7 +98,7 @@ function speakerLabel(speaker: SpeakerDraft, index: number): string {
         </div>
       </li>
     </ol>
-    <button v-if="multiple" type="button" class="m-5 inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink" @click="addTurn">
+    <button type="button" class="m-5 inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink" @click="addTurn">
       <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" /></svg>
       {{ t('Add turn') }}
     </button>

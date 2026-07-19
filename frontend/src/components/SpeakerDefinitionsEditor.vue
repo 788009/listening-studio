@@ -6,7 +6,6 @@ import { useI18n } from '@/i18n'
 const props = defineProps<{
   modelValue: SpeakerDraft[]
   voices: Voice[]
-  multiple: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: SpeakerDraft[]]
@@ -41,7 +40,6 @@ function addSpeaker(): void {
     <div class="flex items-center justify-between gap-4 border-b border-line px-5 py-4">
       <h2 id="speaker-definitions-title" class="text-base font-semibold">{{ t('Speakers') }}</h2>
       <button
-        v-if="multiple"
         type="button"
         class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink"
         @click="addSpeaker"
@@ -55,8 +53,7 @@ function addSpeaker(): void {
       <li
         v-for="(speaker, index) in modelValue"
         :key="speaker.key"
-        class="grid min-w-0 gap-4 px-5 py-5 sm:items-end"
-        :class="multiple ? 'sm:grid-cols-[minmax(10rem,0.9fr)_minmax(12rem,1fr)_2.5rem]' : 'sm:grid-cols-2'"
+        class="grid min-w-0 gap-4 px-5 py-5 sm:grid-cols-[minmax(10rem,0.9fr)_minmax(12rem,1fr)_2.5rem] sm:items-end"
       >
         <div class="min-w-0">
           <label :for="`speaker-name-${speaker.key}`" class="mb-1 block text-sm font-medium">{{ t('Speaker name') }}</label>
@@ -81,7 +78,6 @@ function addSpeaker(): void {
           </select>
         </div>
         <button
-          v-if="multiple"
           type="button"
           class="flex h-10 w-10 items-center justify-center border border-line text-muted hover:border-danger hover:text-danger disabled:opacity-30"
           :disabled="modelValue.length === 1"
