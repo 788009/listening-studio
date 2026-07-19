@@ -72,17 +72,17 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
 </script>
 
 <template>
-  <section aria-labelledby="profile-title">
+  <section class="page-shell" aria-labelledby="profile-title">
     <p v-if="loading" class="py-12 text-sm text-muted">{{ t('Loading profile') }}</p>
     <p v-else-if="errorMessage && !profile" role="alert" class="py-12 text-sm text-danger">
       {{ errorMessage }}
     </p>
 
     <template v-else-if="profile">
-      <div class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+      <div class="page-heading">
         <div>
-          <p class="mb-1 text-sm font-medium text-accent">@{{ profile.userId }}</p>
-          <h1 id="profile-title" class="text-2xl font-semibold">
+          <p class="eyebrow">@{{ profile.userId }}</p>
+          <h1 id="profile-title" class="text-3xl font-semibold">
             {{ profile.username || profile.userId }}
           </h1>
         </div>
@@ -98,7 +98,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
 
       <form
         v-if="editing"
-        class="grid gap-4 border-b border-line bg-surface py-6 sm:grid-cols-[1fr_12rem_auto] sm:items-end"
+        class="mt-6 grid gap-4 rounded-lg border border-line bg-surface p-5 shadow-panel sm:grid-cols-[1fr_12rem_auto] sm:items-end"
         @submit.prevent="saveProfile"
       >
         <div>
@@ -131,7 +131,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
       </form>
 
       <dl
-        class="grid border-b border-line bg-surface"
+        class="mt-6 grid overflow-hidden rounded-lg border border-line bg-surface shadow-panel"
         :class="{ 'sm:grid-cols-2': auth.isTeacher }"
       >
         <div

@@ -1,23 +1,26 @@
 import type { Config } from 'tailwindcss'
 
 export default {
+  darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{vue,ts}'],
   theme: {
     extend: {
       colors: {
-        canvas: '#f6f7f7',
-        surface: '#ffffff',
-        ink: '#18211f',
-        muted: '#5f6b67',
-        line: '#d8dddb',
-        accent: '#0f766e',
-        'accent-soft': '#ccfbf1',
-        success: '#15803d',
-        warning: '#b45309',
-        danger: '#b91c1c',
+        canvas: 'rgb(var(--color-canvas) / <alpha-value>)',
+        surface: 'rgb(var(--color-surface) / <alpha-value>)',
+        raised: 'rgb(var(--color-raised) / <alpha-value>)',
+        ink: 'rgb(var(--color-ink) / <alpha-value>)',
+        muted: 'rgb(var(--color-muted) / <alpha-value>)',
+        line: 'rgb(var(--color-line) / <alpha-value>)',
+        accent: 'rgb(var(--color-accent) / <alpha-value>)',
+        'accent-soft': 'rgb(var(--color-accent-soft) / <alpha-value>)',
+        success: 'rgb(var(--color-success) / <alpha-value>)',
+        warning: 'rgb(var(--color-warning) / <alpha-value>)',
+        danger: 'rgb(var(--color-danger) / <alpha-value>)',
       },
       boxShadow: {
-        focus: '0 0 0 3px rgba(15, 118, 110, 0.22)',
+        panel: '0 1px 2px rgb(16 24 40 / 0.04), 0 8px 24px rgb(16 24 40 / 0.04)',
+        focus: '0 0 0 3px rgb(var(--color-accent) / 0.2)',
       },
     },
   },

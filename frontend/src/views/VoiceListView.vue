@@ -47,11 +47,11 @@ onMounted(loadVoices)
 </script>
 
 <template>
-  <section aria-labelledby="voices-title">
-    <div class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+  <section class="page-shell" aria-labelledby="voices-title">
+    <div class="page-heading">
       <div>
-        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-        <h1 id="voices-title" class="text-2xl font-semibold">{{ t('Voices') }}</h1>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="voices-title" class="text-3xl font-semibold">{{ t('Voices') }}</h1>
       </div>
       <div class="flex items-center gap-4">
         <span class="text-sm text-muted">{{ t('{count} available', { count: voices.length }) }}</span>
@@ -68,7 +68,7 @@ onMounted(loadVoices)
     </div>
 
     <form
-      class="flex flex-col gap-3 border-b border-line py-4 sm:flex-row sm:items-end"
+      class="my-6 flex flex-col gap-3 rounded-lg border border-line bg-surface p-4 shadow-panel sm:flex-row sm:items-end"
       role="search"
       @submit.prevent="loadVoices"
     >
@@ -94,10 +94,10 @@ onMounted(loadVoices)
       </button>
     </form>
 
-    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">
+    <p v-if="loading" class="rounded-lg border border-line bg-surface px-5 py-12 text-sm text-muted">
       {{ t('Loading voices') }}
     </p>
-    <div v-else-if="errorMessage" class="border-b border-line py-10">
+    <div v-else-if="errorMessage" class="rounded-lg border border-danger/30 bg-surface p-5">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
       <button
         type="button"
@@ -111,11 +111,11 @@ onMounted(loadVoices)
         {{ t('Retry') }}
       </button>
     </div>
-    <p v-else-if="voices.length === 0" class="border-b border-line py-12 text-sm text-muted">
+    <p v-else-if="voices.length === 0" class="rounded-lg border border-dashed border-line bg-surface px-5 py-12 text-center text-sm text-muted">
       {{ t('No voices found') }}
     </p>
 
-    <ul v-else class="divide-y divide-line border-b border-line bg-surface">
+    <ul v-else class="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface shadow-panel">
       <li v-for="voice in voices" :key="voice.id">
         <RouterLink
           :to="`/voice/${voice.id}`"

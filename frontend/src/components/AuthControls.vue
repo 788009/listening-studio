@@ -85,28 +85,35 @@ async function signOut(): Promise<void> {
 </script>
 
 <template>
-  <div class="flex flex-col items-end gap-1">
-    <div class="flex min-h-9 items-center gap-2">
+  <div class="flex flex-col items-end gap-1 lg:w-full lg:items-stretch">
+    <div class="flex min-h-9 items-center gap-1 lg:w-full lg:gap-2">
       <template v-if="auth.isTeacher">
         <RouterLink
           :to="auth.profileComplete && auth.user?.userId ? `/user/${auth.user.userId}` : '/setup-profile'"
-          class="max-w-40 truncate px-2 text-sm font-medium text-ink hover:text-accent"
+          class="flex h-9 min-w-0 items-center gap-2 rounded-md px-1.5 text-sm font-medium text-ink hover:bg-raised hover:text-accent lg:flex-1"
+          :title="accountLabel"
         >
-          {{ accountLabel }}
+          <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-xs font-semibold uppercase text-accent">{{ accountLabel.slice(0, 1) }}</span>
+          <span class="hidden min-w-0 truncate lg:block">{{ accountLabel }}</span>
         </RouterLink>
         <button
           type="button"
-          class="h-9 border border-line bg-surface px-3 text-sm font-medium text-ink hover:border-muted disabled:cursor-not-allowed disabled:opacity-60"
+          class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted hover:bg-raised hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
           :disabled="submitting"
+          :aria-label="t('Sign out')"
+          :title="t('Sign out')"
           @click="signOut"
         >
-          {{ t('Sign out') }}
+          <svg viewBox="0 0 24 24" fill="none" class="h-[18px] w-[18px]" aria-hidden="true">
+            <path d="M14 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M10 12h11m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
       </template>
       <button
         v-else-if="auth.capabilities.loginMethod !== 'none'"
         type="button"
-        class="h-9 bg-ink px-3 text-sm font-medium text-white hover:bg-accent"
+        class="h-9 rounded-md bg-ink px-3 text-sm font-medium text-white hover:bg-accent lg:w-full"
         @click="beginSignIn"
       >
         {{ t('Sign in') }}
@@ -126,7 +133,7 @@ async function signOut(): Promise<void> {
         role="dialog"
         aria-modal="true"
         aria-labelledby="debug-sign-in-title"
-        class="w-full max-w-md border border-line bg-surface p-5 shadow-xl"
+        class="w-full max-w-md rounded-lg border border-line bg-surface p-5 shadow-xl"
       >
         <h2 id="debug-sign-in-title" class="text-lg font-semibold">
           {{ t('Development sign in') }}
@@ -141,7 +148,7 @@ async function signOut(): Promise<void> {
               v-model="issuer"
               required
               maxlength="2048"
-              class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+              class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
             />
           </div>
           <div>
@@ -155,7 +162,7 @@ async function signOut(): Promise<void> {
               required
               maxlength="255"
               autocomplete="username"
-              class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+              class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
             />
           </div>
           <p v-if="errorMessage" role="alert" class="text-sm text-danger">

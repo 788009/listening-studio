@@ -299,13 +299,15 @@ onMounted(() => {
 </script>
 
 <template>
-  <section aria-labelledby="management-title" class="min-w-0">
-    <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-      <h1 id="management-title" class="text-2xl font-semibold">{{ t('Resource management') }}</h1>
+  <section aria-labelledby="management-title" class="page-shell">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="management-title" class="text-3xl font-semibold">{{ t('Resource management') }}</h1>
+      </div>
     </div>
 
-    <div class="border-b border-line" role="tablist" :aria-label="t('Resource type')">
+    <div class="mt-6 overflow-hidden rounded-t-lg border border-line bg-surface" role="tablist" :aria-label="t('Resource type')">
       <div class="grid grid-cols-2 sm:grid-cols-4">
         <button
           v-for="(tab, index) in tabs"
@@ -333,7 +335,7 @@ onMounted(() => {
       {{ errorMessage }}
     </p>
 
-    <form class="border-b border-line bg-surface px-4 py-5" @submit.prevent="applyFilters">
+    <form class="border-x border-b border-line bg-surface px-4 py-5 shadow-panel" @submit.prevent="applyFilters">
       <div class="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1fr)_10rem_10rem_10rem_10rem]">
         <div class="min-w-0">
           <label for="management-query" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>

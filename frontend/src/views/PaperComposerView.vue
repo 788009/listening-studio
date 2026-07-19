@@ -303,11 +303,11 @@ onUnmounted(stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="paper-title" class="min-w-0">
-    <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+  <section aria-labelledby="paper-title" class="page-shell">
+    <div class="page-heading">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-        <h1 id="paper-title" class="break-words text-2xl font-semibold">{{ t('Assemble paper') }}</h1>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="paper-title" class="break-words text-3xl font-semibold">{{ t('Assemble paper') }}</h1>
       </div>
       <span v-if="!accepted" class="text-sm text-muted">
         {{ selected.length }} selected
@@ -317,12 +317,12 @@ onUnmounted(stopPolling)
     <p
       v-if="errorMessage"
       role="alert"
-      class="border-b border-line bg-surface px-5 py-4 text-sm text-danger"
+      class="mt-6 rounded-md border border-danger/30 bg-surface px-5 py-4 text-sm text-danger"
     >
       {{ errorMessage }}
     </p>
 
-    <div v-if="accepted" class="border-b border-line bg-surface px-5 py-6">
+    <div v-if="accepted" class="mt-6 rounded-lg border border-line bg-surface px-5 py-6 shadow-panel">
       <div class="flex min-w-0 items-start justify-between gap-5">
         <div class="min-w-0">
           <h2 class="text-base font-semibold">{{ t('Rendering {title}', { title: title.trim() }) }}</h2>
@@ -361,7 +361,7 @@ onUnmounted(stopPolling)
     </div>
 
     <template v-else>
-      <div class="grid min-w-0 gap-6 border-b border-line bg-surface px-5 py-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div class="mt-6 grid min-w-0 gap-6 rounded-t-lg border border-line bg-surface px-5 py-6 shadow-panel lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div class="min-w-0">
           <label for="paper-name" class="mb-1 block text-sm font-medium">{{ t('Paper title') }}</label>
           <input
@@ -390,7 +390,7 @@ onUnmounted(stopPolling)
 
       <dl
         v-if="selectedPreset"
-        class="grid border-b border-line bg-surface sm:grid-cols-3 lg:grid-cols-5"
+        class="grid border-x border-b border-line bg-surface sm:grid-cols-3 lg:grid-cols-5"
         :aria-label="t('Preset parameters')"
       >
         <div class="border-b border-line px-4 py-4 sm:border-r lg:border-b-0">
@@ -415,7 +415,7 @@ onUnmounted(stopPolling)
         </div>
       </dl>
 
-      <div class="grid min-w-0 gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
+      <div class="grid min-w-0 gap-8 py-7 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
         <section aria-labelledby="candidate-title" class="min-w-0">
           <div class="mb-4 flex min-w-0 items-end justify-between gap-3">
             <div>

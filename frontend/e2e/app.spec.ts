@@ -367,7 +367,7 @@ test('anonymous student can search and inspect public audio', async ({ page }, t
   const monitor = monitorPage(page)
   await mockBackend(page, false)
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Listening library' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Listening Studio' })).toBeVisible()
   await expect(page.getByRole('link', { name: 'Create', exact: true })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Batch' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Manage' })).toHaveCount(0)
@@ -376,6 +376,24 @@ test('anonymous student can search and inspect public audio', async ({ page }, t
   const skipLink = page.getByRole('link', { name: 'Skip to content' })
   await expect(skipLink).toBeFocused()
   await expect(skipLink).toBeVisible()
+
+  await page.screenshot({
+    path: testInfo.outputPath('student-home-light.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await page.getByRole('button', { name: 'Use dark theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await expectTextContrast(page.getByRole('heading', { name: 'Listening Studio' }))
+  await page.screenshot({
+    path: testInfo.outputPath('student-home-dark.png'),
+    fullPage: true,
+    animations: 'disabled',
+  })
+  await page.getByRole('button', { name: 'Use light theme' }).click()
+
+  await page.getByRole('link', { name: 'Library', exact: true }).first().click()
+  await expect(page.getByRole('heading', { name: 'Listening library' })).toBeVisible()
   await expectTextContrast(page.getByText('Public audio'))
 
   const search = page.getByRole('combobox', { name: 'Search audio' })

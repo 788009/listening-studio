@@ -186,25 +186,25 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 </script>
 
 <template>
-  <section aria-labelledby="audio-title">
+  <section class="page-shell" aria-labelledby="audio-title">
     <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">{{ t('Loading audio') }}</p>
     <div v-else-if="errorMessage && !audio" class="border-b border-line py-12">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
-      <RouterLink to="/" class="mt-4 inline-block text-sm font-medium text-accent underline">
+      <RouterLink to="/audio" class="mt-4 inline-block text-sm font-medium text-accent underline">
         {{ t('Back to library') }}
       </RouterLink>
     </div>
 
     <template v-else-if="audio">
-      <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+      <div class="page-heading">
         <div class="min-w-0">
-          <RouterLink to="/" class="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
+          <RouterLink to="/audio" class="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
               <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
             </svg>
             {{ t('Library') }}
           </RouterLink>
-          <h1 id="audio-title" class="break-words text-2xl font-semibold">{{ audio.title }}</h1>
+          <h1 id="audio-title" class="break-words text-3xl font-semibold">{{ audio.title }}</h1>
           <RouterLink
             :to="`/user/${audio.author.userId}`"
             class="mt-1 inline-block break-words text-sm text-muted hover:text-ink"
@@ -230,7 +230,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
         {{ formError }}
       </p>
 
-      <form v-if="editing" class="border-b border-line bg-surface py-6" @submit.prevent="saveAudio">
+      <form v-if="editing" class="mt-6 rounded-lg border border-line bg-surface p-5 shadow-panel" @submit.prevent="saveAudio">
         <div class="grid gap-5 sm:grid-cols-[minmax(0,1fr)_12rem]">
           <div>
             <label for="audio-title-input" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
@@ -298,7 +298,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
         </div>
       </form>
 
-      <div class="grid border-b border-line bg-surface md:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="mt-6 grid overflow-hidden rounded-lg border border-line bg-surface shadow-panel md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0 border-b border-line px-4 py-6 md:border-b-0 md:border-r md:px-5">
           <h2 class="text-sm font-semibold">{{ t('Playback') }}</h2>
           <audio
@@ -318,7 +318,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
-        <AudioTagLines :tags="audio.tags" search-path="/" />
+        <AudioTagLines :tags="audio.tags" search-path="/audio" />
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">

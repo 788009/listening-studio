@@ -5,6 +5,12 @@ import { useAuthStore } from '@/stores/auth'
 const routes = [
   {
     path: '/',
+    name: 'home',
+    component: () => import('@/views/HomeView.vue'),
+    meta: { title: 'Home' },
+  },
+  {
+    path: '/audio',
     name: 'library',
     component: () => import('@/views/LibraryView.vue'),
     meta: { title: 'Library' },
@@ -93,10 +99,10 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       return { name: 'setup-profile' }
     }
     if (route.name === 'setup-profile' && (!auth.isTeacher || auth.profileComplete)) {
-      return { name: 'library' }
+      return { name: 'home' }
     }
     if (route.meta.requiresTeacher && !auth.isTeacher) {
-      return { name: 'library' }
+      return { name: 'home' }
     }
     return true
   })

@@ -92,6 +92,6 @@ describe('AuthControls', () => {
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(new Headers(init.headers).get('X-CSRF-Token')).toBe('csrf-token')
     expect(auth.user).toBeNull()
-    expect(router.currentRoute.value.name).toBe('library')
+    expect(router.currentRoute.value.name).toBe('home')
   })
 })

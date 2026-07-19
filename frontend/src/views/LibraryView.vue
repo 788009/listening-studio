@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
   audioMediaPath,
@@ -16,6 +16,7 @@ import { useI18n } from '@/i18n'
 
 const { locale, t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const audios = ref<Audio[]>([])
 const localizedTags = ref<AudioTag[]>([])
 const loading = ref(true)
@@ -56,8 +57,12 @@ function contentTags(audio: Audio): AudioTag[] {
   return audio.tags.filter((tag) => tag.type !== 'author' && tag.type !== 'speaker')
 }
 
-async function loadPage(reset = false): Promise<void> {
+async function loadPage(reset = false, syncUrl = false): Promise<void> {
   if (reset) page.value = 1
+  if (syncUrl) {
+    const normalizedQuery = query.value.trim()
+    await router.replace({ path: '/audio', query: normalizedQuery ? { q: normalizedQuery } : {} })
+  }
   loading.value = true
   errorMessage.value = ''
   try {
@@ -97,28 +102,29 @@ onMounted(async () => {
 </script>
 
 <template>
-  <section aria-labelledby="library-title">
-    <div class="flex flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+  <section class="page-shell" aria-labelledby="library-title">
+    <div class="page-heading">
       <div>
-        <p class="mb-1 text-sm font-medium text-accent">{{ t('Public audio') }}</p>
-        <h1 id="library-title" class="text-2xl font-semibold">{{ t('Listening library') }}</h1>
+        <p class="eyebrow">{{ t('Public audio') }}</p>
+        <h1 id="library-title" class="text-3xl font-semibold">{{ t('Listening library') }}</h1>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">{{ t('Browse exercises by title, speaker, topic, or category.') }}</p>
       </div>
-      <span class="text-sm text-muted">{{ t('{count} exercises', { count: total }) }}</span>
+      <span class="rounded-md bg-raised px-3 py-1.5 text-sm tabular-nums text-muted">{{ t('{count} exercises', { count: total }) }}</span>
     </div>
 
-    <div class="border-b border-line py-4">
+    <div class="my-6 rounded-md border border-line bg-surface p-4 shadow-panel sm:p-5">
       <AudioSearchBox
         v-model="query"
         :tags="tagCatalog"
         :busy="loading"
-        @submit="loadPage(true)"
+        @submit="loadPage(true, true)"
       />
     </div>
 
-    <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">
-      {{ t('Loading audio') }}
-    </p>
-    <div v-else-if="errorMessage" class="border-b border-line py-10">
+    <div v-if="loading" class="grid gap-3 md:grid-cols-2">
+      <div v-for="item in 6" :key="item" class="h-40 animate-pulse rounded-md border border-line bg-surface"></div>
+    </div>
+    <div v-else-if="errorMessage" class="rounded-md border border-danger/30 bg-surface p-6">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
       <button
         type="button"
@@ -132,21 +138,23 @@ onMounted(async () => {
         {{ t('Retry') }}
       </button>
     </div>
-    <p v-else-if="audios.length === 0" class="border-b border-line py-12 text-sm text-muted">
-      {{ t('No audio found') }}
-    </p>
+    <div v-else-if="audios.length === 0" class="rounded-md border border-dashed border-line bg-surface px-6 py-12 text-center">
+      <svg viewBox="0 0 24 24" fill="none" class="mx-auto h-7 w-7 text-muted" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7" /><path d="m16 16 4 4" stroke="currentColor" stroke-width="1.7" /></svg>
+      <p class="mt-3 text-sm font-medium">{{ t('No audio found') }}</p>
+      <p class="mt-1 text-sm text-muted">{{ t('Try a shorter search or remove a tag filter.') }}</p>
+    </div>
 
-    <ul v-else class="divide-y divide-line border-b border-line bg-surface">
+    <ul v-else class="grid gap-3 md:grid-cols-2">
       <li
         v-for="audio in audios"
         :key="audio.id"
-        class="grid min-w-0 gap-5 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_minmax(15rem,0.8fr)] lg:items-center lg:px-5"
+        class="flex min-w-0 flex-col rounded-md border border-line bg-surface p-5 shadow-panel transition-colors hover:border-accent/40"
       >
         <div class="min-w-0">
-          <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+          <div class="flex min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-1">
             <RouterLink
               :to="`/audio/${audio.id}`"
-              class="min-w-0 break-words text-base font-semibold hover:text-accent hover:underline"
+              class="min-w-0 flex-1 break-words text-base font-semibold leading-6 hover:text-accent"
             >
               {{ audio.title }}
             </RouterLink>
@@ -162,7 +170,7 @@ onMounted(async () => {
           </RouterLink>
           <div
             v-if="speakerNames(audio).length > 0 || contentTags(audio).length > 0"
-            class="mt-4 space-y-2"
+            class="mt-4 space-y-2 border-t border-line pt-4"
           >
             <div
               v-if="speakerNames(audio).length > 0"
@@ -181,7 +189,7 @@ onMounted(async () => {
           </div>
         </div>
         <audio
-          class="h-10 w-full"
+          class="mt-5 h-10 w-full"
           controls
           preload="none"
           :src="audioMediaPath(audio.id)"
@@ -191,7 +199,7 @@ onMounted(async () => {
 
     <nav
       v-if="!loading && totalPages > 1"
-      class="flex items-center justify-between gap-4 border-b border-line py-4"
+      class="mt-6 flex items-center justify-between gap-4 border-t border-line pt-5"
       :aria-label="t('Audio pages')"
     >
       <button

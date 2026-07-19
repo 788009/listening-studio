@@ -54,12 +54,14 @@ async function submit(): Promise<void> {
 
 <template>
   <section class="mx-auto max-w-xl" aria-labelledby="setup-title">
-    <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher account') }}</p>
-      <h1 id="setup-title" class="text-2xl font-semibold">{{ t('Set up your profile') }}</h1>
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">{{ t('Teacher account') }}</p>
+        <h1 id="setup-title" class="text-3xl font-semibold">{{ t('Set up your profile') }}</h1>
+      </div>
     </div>
 
-    <form class="space-y-5 border-b border-line bg-surface py-6" @submit.prevent="submit">
+    <form class="mt-6 space-y-5 rounded-lg border border-line bg-surface p-5 shadow-panel" @submit.prevent="submit">
       <div>
         <label for="user-id" class="mb-1 block text-sm font-medium">{{ t('User ID') }}</label>
         <input
@@ -71,7 +73,7 @@ async function submit(): Promise<void> {
           autocomplete="username"
           :aria-invalid="Boolean(userIdError)"
           :aria-describedby="userIdError ? 'user-id-error' : undefined"
-          class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+          class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         />
         <p v-if="userIdError" id="user-id-error" role="alert" class="mt-1 text-sm text-danger">
           {{ userIdError }}
@@ -84,7 +86,7 @@ async function submit(): Promise<void> {
           v-model="username"
           maxlength="200"
           autocomplete="name"
-          class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+          class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         />
       </div>
       <div>
@@ -92,7 +94,7 @@ async function submit(): Promise<void> {
         <select
           id="locale"
           v-model="locale"
-          class="h-10 w-full border border-line bg-white px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+          class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         >
           <option value="en">{{ t('English') }}</option>
           <option value="zh-CN">{{ t('Chinese') }}</option>

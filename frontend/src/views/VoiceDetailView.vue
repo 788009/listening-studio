@@ -214,7 +214,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
 </script>
 
 <template>
-  <section aria-labelledby="voice-title">
+  <section class="page-shell" aria-labelledby="voice-title">
     <p v-if="loading" class="border-b border-line py-12 text-sm text-muted">{{ t('Loading voice') }}</p>
     <div v-else-if="errorMessage && !voice" class="border-b border-line py-12">
       <p role="alert" class="text-sm text-danger">{{ errorMessage }}</p>
@@ -224,7 +224,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
     </div>
 
     <template v-else-if="voice">
-      <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+      <div class="page-heading">
         <div class="min-w-0">
           <RouterLink to="/voices" class="mb-2 inline-flex items-center gap-1 text-sm text-muted hover:text-ink">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
@@ -232,7 +232,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             </svg>
             {{ t('Voices') }}
           </RouterLink>
-          <h1 id="voice-title" class="break-words text-2xl font-semibold">{{ voice.title }}</h1>
+          <h1 id="voice-title" class="break-words text-3xl font-semibold">{{ voice.title }}</h1>
           <RouterLink
             :to="`/user/${voice.author.userId}`"
             class="mt-1 inline-block break-words text-sm text-muted hover:text-ink"
@@ -270,7 +270,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
         {{ formError }}
       </p>
 
-      <form v-if="editing" class="border-b border-line bg-surface py-6" @submit.prevent="saveVoice">
+      <form v-if="editing" class="mt-6 rounded-lg border border-line bg-surface p-5 shadow-panel" @submit.prevent="saveVoice">
         <div class="grid gap-5 md:grid-cols-2">
           <div class="md:col-span-2">
             <label for="voice-title-input" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
@@ -361,7 +361,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
         </div>
       </form>
 
-      <div class="grid border-b border-line bg-surface md:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="mt-6 grid overflow-hidden rounded-lg border border-line bg-surface shadow-panel md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0 border-b border-line px-4 py-6 md:border-b-0 md:border-r md:px-5">
           <h2 class="text-sm font-semibold">{{ t('Sample') }}</h2>
           <p class="mt-1 text-sm text-muted">

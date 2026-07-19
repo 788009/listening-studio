@@ -108,7 +108,7 @@ async function mountWorkflow() {
         name: 'audio',
         component: AudioDetailView,
       },
-      { path: '/', name: 'library', component: { template: '<div />' } },
+      { path: '/audio', name: 'library', component: { template: '<div />' } },
       { path: '/user/:userId', component: { template: '<div />' } },
     ],
   })

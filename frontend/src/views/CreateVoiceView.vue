@@ -109,13 +109,15 @@ onUnmounted(creation.stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="create-title">
-    <div class="border-b border-line pb-5">
-      <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-      <h1 id="create-title" class="text-2xl font-semibold">{{ t('Create voice') }}</h1>
+  <section class="page-shell" aria-labelledby="create-title">
+    <div class="page-heading">
+      <div>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="create-title" class="text-3xl font-semibold">{{ t('Create voice') }}</h1>
+      </div>
     </div>
 
-    <div v-if="creation.active" class="border-b border-line bg-surface px-5 py-8">
+    <div v-if="creation.active" class="mt-6 rounded-lg border border-line bg-surface px-5 py-8 shadow-panel">
       <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p class="text-base font-semibold">{{ statusLabel }}</p>
@@ -138,7 +140,7 @@ onUnmounted(creation.stopPolling)
       </div>
     </div>
 
-    <div v-else-if="creation.completed && creation.voiceId" class="border-b border-line bg-surface px-5 py-9">
+    <div v-else-if="creation.completed && creation.voiceId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
       <p class="text-base font-semibold text-success">{{ t('Voice is ready') }}</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
@@ -160,7 +162,7 @@ onUnmounted(creation.stopPolling)
       </div>
     </div>
 
-    <div v-else-if="creation.failed" class="border-b border-line bg-surface px-5 py-9">
+    <div v-else-if="creation.failed" class="mt-6 rounded-lg border border-danger/30 bg-surface px-5 py-9 shadow-panel">
       <p class="text-base font-semibold">{{ t('Voice creation failed') }}</p>
       <p role="alert" class="mt-2 text-sm text-danger">
         {{ failureMessage || t('The task could not be completed') }}
@@ -176,7 +178,7 @@ onUnmounted(creation.stopPolling)
 
     <form
       v-else
-      class="grid border-b border-line bg-surface lg:grid-cols-[minmax(0,1fr)_18rem]"
+      class="mt-6 grid overflow-hidden rounded-lg border border-line bg-surface shadow-panel lg:grid-cols-[minmax(0,1fr)_18rem]"
       @submit.prevent="submit"
     >
       <div class="space-y-5 px-5 py-7 lg:border-r lg:border-line">

@@ -288,11 +288,11 @@ onUnmounted(stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="batch-page-title" class="min-w-0">
-    <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+  <section aria-labelledby="batch-page-title" class="page-shell">
+    <div class="page-heading">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-        <h1 id="batch-page-title" class="break-words text-2xl font-semibold">{{ t('Corpus generation') }}</h1>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="batch-page-title" class="break-words text-3xl font-semibold">{{ t('Corpus generation') }}</h1>
       </div>
       <RouterLink
         v-if="batch"
@@ -306,16 +306,16 @@ onUnmounted(stopPolling)
       </RouterLink>
     </div>
 
-    <p v-if="errorMessage" role="alert" class="border-b border-line bg-surface px-5 py-4 text-sm text-danger">
+    <p v-if="errorMessage" role="alert" class="mt-6 rounded-md border border-danger/30 bg-surface px-5 py-4 text-sm text-danger">
       {{ errorMessage }}
     </p>
 
-    <div v-if="loadingBatch" class="border-b border-line bg-surface px-5 py-12 text-sm text-muted">
+    <div v-if="loadingBatch" class="mt-6 rounded-lg border border-line bg-surface px-5 py-12 text-sm text-muted shadow-panel">
       {{ t('Loading batch') }}
     </div>
 
     <template v-else-if="batch">
-      <div class="border-b border-line bg-surface px-5 py-6">
+      <div class="mt-6 rounded-t-lg border border-line bg-surface px-5 py-6 shadow-panel">
         <div class="flex min-w-0 items-start justify-between gap-5">
           <div class="min-w-0">
             <p class="text-base font-semibold">{{ t('Batch {id}', { id: batch.id }) }}</p>
@@ -342,7 +342,7 @@ onUnmounted(stopPolling)
         <p v-if="batch.errorSummary" class="mt-2 text-sm text-danger">{{ batch.errorSummary }}</p>
       </div>
 
-      <div class="border-b border-line bg-surface">
+      <div class="border-x border-b border-line bg-surface">
         <div class="border-b border-line px-5 py-4">
           <h2 class="text-base font-semibold">{{ t('Generated items') }}</h2>
         </div>
@@ -392,7 +392,7 @@ onUnmounted(stopPolling)
 
       <form
         v-if="completedCount > 0"
-        class="border-b border-line bg-surface px-5 py-6"
+        class="rounded-b-lg border-x border-b border-line bg-surface px-5 py-6 shadow-panel"
         @submit.prevent="applyCompletedUpdates"
       >
         <h2 class="text-base font-semibold">{{ t('Completed audios') }}</h2>
@@ -446,7 +446,7 @@ onUnmounted(stopPolling)
       </form>
     </template>
 
-    <form v-else class="min-w-0 border-b border-line bg-surface" @submit.prevent="submit">
+    <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
       <div class="grid min-w-0 gap-6 border-b border-line px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0">
           <div class="grid h-10 grid-cols-2 border border-line" :aria-label="t('Corpus input mode')">

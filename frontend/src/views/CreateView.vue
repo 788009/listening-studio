@@ -210,11 +210,11 @@ onUnmounted(leaveCreateView)
 </script>
 
 <template>
-  <section aria-labelledby="create-title" class="min-w-0">
-    <div class="flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5">
+  <section aria-labelledby="create-title" class="page-shell min-w-0">
+    <div class="page-heading">
       <div class="min-w-0">
-        <p class="mb-1 text-sm font-medium text-accent">{{ t('Teacher workspace') }}</p>
-        <h1 id="create-title" class="break-words text-2xl font-semibold">{{ t('Create listening') }}</h1>
+        <p class="eyebrow">{{ t('Teacher workspace') }}</p>
+        <h1 id="create-title" class="break-words text-3xl font-semibold">{{ t('Create listening') }}</h1>
       </div>
       <RouterLink
         to="/voices/create"
@@ -228,7 +228,7 @@ onUnmounted(leaveCreateView)
       </RouterLink>
     </div>
 
-    <div v-if="creation.active" class="border-b border-line bg-surface px-5 py-8">
+    <div v-if="creation.active" class="mt-6 rounded-lg border border-line bg-surface px-5 py-8 shadow-panel">
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
           <p class="break-words text-base font-semibold">
@@ -250,7 +250,7 @@ onUnmounted(leaveCreateView)
       </div>
     </div>
 
-    <div v-else-if="creation.completed && creation.audioId" class="border-b border-line bg-surface px-5 py-9">
+    <div v-else-if="creation.completed && creation.audioId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
       <p class="text-base font-semibold text-success">{{ t('Audio is ready') }}</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
@@ -268,7 +268,7 @@ onUnmounted(leaveCreateView)
       </div>
     </div>
 
-    <form v-else class="min-w-0 border-b border-line bg-surface" @submit.prevent="submit">
+    <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
       <div v-if="creation.failed" class="border-b border-line px-5 py-4">
         <p role="alert" class="break-words text-sm text-danger">
           {{ failureMessage || t('Audio generation failed') }}

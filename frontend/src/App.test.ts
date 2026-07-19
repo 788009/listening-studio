@@ -27,6 +27,7 @@ describe('App', () => {
     expect(wrapper.text()).toContain('Listening Studio')
     expect(wrapper.text()).toContain('Page not found')
     expect(wrapper.get('a[href="/"]').text()).toContain('Listening Studio')
+    expect(wrapper.find('a[href="/audio"]').exists()).toBe(true)
     expect(wrapper.find('a[href="/create"]').exists()).toBe(false)
     expect(wrapper.find('a[href="/manage"]').exists()).toBe(false)
 

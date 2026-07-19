@@ -72,7 +72,7 @@ function testRouter() {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/', component: LibraryView, name: 'library' },
+      { path: '/audio', component: LibraryView, name: 'library' },
       { path: '/audio/:id', component: AudioDetailView },
       { path: '/user/:userId', component: { template: '<div />' } },
     ],
@@ -100,7 +100,7 @@ describe('audio views', () => {
     )
     const pinia = setupAuth()
     const router = testRouter()
-    await router.push('/?q=topic%3Aclimate_change')
+    await router.push('/audio?q=topic%3Aclimate_change')
     const wrapper = mount(LibraryView, { global: { plugins: [pinia, router] } })
     await flushPromises()
 
@@ -165,7 +165,7 @@ describe('audio views', () => {
     vi.stubGlobal('fetch', fetchMock)
     const pinia = setupAuth()
     const router = testRouter()
-    await router.push('/')
+    await router.push('/audio')
     const wrapper = mount(LibraryView, { global: { plugins: [pinia, router] } })
     await flushPromises()
 
@@ -200,7 +200,7 @@ describe('audio views', () => {
       tagSearchLinks.map((link) =>
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
-    ).toContain('/?q=topic:climate_change')
+    ).toContain('/audio?q=topic:climate_change')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
   })

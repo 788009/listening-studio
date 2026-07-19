@@ -6,14 +6,14 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <section class="py-12 text-center" aria-labelledby="not-found-title">
-    <p class="mb-2 text-sm font-medium text-danger">404</p>
-    <h1 id="not-found-title" class="text-2xl font-semibold">{{ t('Page not found') }}</h1>
+  <section class="mx-auto max-w-lg py-16 text-center" aria-labelledby="not-found-title">
+    <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-md bg-raised text-sm font-semibold text-muted">404</span>
+    <h1 id="not-found-title" class="mt-5 text-3xl font-semibold">{{ t('Page not found') }}</h1>
     <RouterLink
       to="/"
       class="mt-6 inline-flex h-10 items-center border border-ink bg-ink px-4 text-sm font-medium text-white hover:bg-accent focus:outline-none focus:shadow-focus"
     >
-      {{ t('Back to library') }}
+      {{ t('Back home') }}
     </RouterLink>
   </section>
 </template>

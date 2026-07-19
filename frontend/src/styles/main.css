@@ -4,20 +4,52 @@
 
 @layer base {
   :root {
+    --color-canvas: 246 247 248;
+    --color-surface: 255 255 255;
+    --color-raised: 241 243 244;
+    --color-ink: 29 35 34;
+    --color-muted: 101 111 108;
+    --color-line: 220 225 223;
+    --color-accent: 31 105 95;
+    --color-accent-soft: 221 239 235;
+    --color-success: 38 126 76;
+    --color-warning: 166 105 25;
+    --color-danger: 181 55 55;
+    --color-primary: 29 35 34;
+    --color-on-primary: 255 255 255;
     font-family:
-      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
       sans-serif;
-    color: #18211f;
-    background: #f6f7f7;
+    color: rgb(var(--color-ink));
+    background: rgb(var(--color-canvas));
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     letter-spacing: 0;
+  }
+
+  :root[data-theme='dark'] {
+    --color-canvas: 20 24 24;
+    --color-surface: 27 32 31;
+    --color-raised: 34 40 39;
+    --color-ink: 232 237 235;
+    --color-muted: 158 169 165;
+    --color-line: 57 65 63;
+    --color-accent: 104 185 171;
+    --color-accent-soft: 34 74 68;
+    --color-success: 102 190 132;
+    --color-warning: 221 164 82;
+    --color-danger: 234 119 119;
+    --color-primary: 104 185 171;
+    --color-on-primary: 14 31 28;
   }
 
   body {
     min-width: 320px;
     min-height: 100vh;
     margin: 0;
+    background: rgb(var(--color-canvas));
+    color: rgb(var(--color-ink));
+    transition: background-color 160ms ease, color 160ms ease;
   }
 
   button,
@@ -29,7 +61,72 @@
   }
 
   :focus-visible {
-    outline: 2px solid #0f766e;
+    outline: 2px solid rgb(var(--color-accent));
     outline-offset: 2px;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    border-radius: 6px;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input,
+  select,
+  textarea {
+    background-color: rgb(var(--color-surface));
+    color: rgb(var(--color-ink));
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: rgb(var(--color-muted));
+  }
+
+  audio {
+    color-scheme: light dark;
+    border-radius: 6px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply min-w-0;
+  }
+
+  .page-heading {
+    @apply flex min-w-0 flex-wrap items-end justify-between gap-4 border-b border-line pb-5;
+  }
+
+  .eyebrow {
+    @apply mb-1 text-xs font-semibold uppercase text-accent;
+  }
+
+  .control-surface {
+    @apply border border-line bg-surface shadow-panel;
+  }
+}
+
+@layer utilities {
+  .bg-ink.text-white {
+    background-color: rgb(var(--color-primary));
+    color: rgb(var(--color-on-primary));
   }
 }

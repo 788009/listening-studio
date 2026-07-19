@@ -48,7 +48,7 @@ describe('profile completion guard', () => {
 
     await router.push('/voice/7')
 
-    expect(router.currentRoute.value.name).toBe('library')
+    expect(router.currentRoute.value.name).toBe('home')
   })
 
   it('allows anonymous students to open public audio routes', async () => {
@@ -59,6 +59,18 @@ describe('profile completion guard', () => {
     await router.push('/audio/5')
 
     expect(router.currentRoute.value.name).toBe('audio')
+  })
+
+  it('keeps the home and audio library as separate public routes', async () => {
+    const auth = useAuthStore()
+    auth.loaded = true
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/')
+    expect(router.currentRoute.value.name).toBe('home')
+
+    await router.push('/audio')
+    expect(router.currentRoute.value.name).toBe('library')
   })
 
   it('allows a completed teacher to restore a generation batch route', async () => {
@@ -98,6 +110,6 @@ describe('profile completion guard', () => {
 
     await anonymousRouter.push('/manage')
 
-    expect(anonymousRouter.currentRoute.value.name).toBe('library')
+    expect(anonymousRouter.currentRoute.value.name).toBe('home')
   })
 })
