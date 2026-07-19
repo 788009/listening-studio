@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import {
@@ -26,6 +26,7 @@ const query = ref(typeof route.query.q === 'string' ? route.query.q : '')
 const page = ref(1)
 const pageSize = 20
 const total = ref(0)
+let nextLoadRequestId = 0
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
 const tagCatalog = computed(() => {
@@ -79,8 +80,13 @@ async function loadPage(reset = false, syncUrl = false): Promise<void> {
   if (reset) page.value = 1
   if (syncUrl) {
     const normalizedQuery = query.value.trim()
-    await router.replace({ path: '/audio', query: normalizedQuery ? { q: normalizedQuery } : {} })
+    const currentQuery = typeof route.query.q === 'string' ? route.query.q : ''
+    if (normalizedQuery !== currentQuery) {
+      await router.replace({ path: '/audio', query: normalizedQuery ? { q: normalizedQuery } : {} })
+      return
+    }
   }
+  const requestId = ++nextLoadRequestId
   loading.value = true
   errorMessage.value = ''
   try {
@@ -91,15 +97,17 @@ async function loadPage(reset = false, syncUrl = false): Promise<void> {
       query: query.value,
       status: 'ready',
     })
+    if (requestId !== nextLoadRequestId) return
     audios.value = response.items
     total.value = response.total
   } catch (error) {
+    if (requestId !== nextLoadRequestId) return
     audios.value = []
     total.value = 0
     errorMessage.value =
       error instanceof ApiError ? error.message : t('Audio could not be loaded')
   } finally {
-    loading.value = false
+    if (requestId === nextLoadRequestId) loading.value = false
   }
 }
 
@@ -108,6 +116,14 @@ async function movePage(target: number): Promise<void> {
   page.value = target
   await loadPage()
 }
+
+watch(
+  () => route.query.q,
+  (value) => {
+    query.value = typeof value === 'string' ? value : ''
+    void loadPage(true)
+  },
+)
 
 onMounted(async () => {
   const [, tags] = await Promise.allSettled([

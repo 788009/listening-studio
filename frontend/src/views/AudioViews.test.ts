@@ -172,6 +172,24 @@ describe('audio views', () => {
         String(input).includes('visibility=public'),
       ),
     ).toBe(false)
+
+    const otherTagLink = wrapper.findAll('a').find(
+      (link) =>
+        decodeURIComponent(link.attributes('href') ?? '') ===
+        '/audio?q=other:with_questions',
+    )
+    await otherTagLink?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.q).toBe('other:with_questions')
+    expect(wrapper.get('input[role="combobox"]').element).toHaveProperty(
+      'value',
+      'other:with_questions',
+    )
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('q=other%3Awith_questions'),
+      ),
+    ).toBe(true)
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.find('button').text()).toContain('Search')
     expect(wrapper.text()).not.toContain('Delete audio')
