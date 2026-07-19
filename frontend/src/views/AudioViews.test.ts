@@ -106,8 +106,10 @@ describe('audio views', () => {
 
     expect(wrapper.text()).toContain('Climate briefing')
     expect(wrapper.text()).not.toContain('Author')
-    expect(wrapper.text()).toContain('Speakers')
-    expect(wrapper.text()).toContain('Teacher, Student')
+    expect(wrapper.text()).toContain('Speaker')
+    expect(wrapper.text()).toContain('Teacher')
+    expect(wrapper.text()).toContain('Student')
+    expect(wrapper.findAll('.tag-chip').length).toBeGreaterThanOrEqual(3)
     expect(wrapper.get('input[role="combobox"]').element).toHaveProperty(
       'value',
       'topic:climate_change',

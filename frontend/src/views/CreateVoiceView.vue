@@ -207,19 +207,26 @@ onUnmounted(creation.stopPolling)
           />
         </div>
 
-        <div>
-          <label for="voice-gender" class="mb-1 block text-sm font-medium">{{ t('Gender tag') }}</label>
-          <select
-            id="voice-gender"
-            v-model="genderTagId"
-            :disabled="tagsLoading"
-            class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:text-muted"
-          >
-            <option value="">{{ t('No gender tag') }}</option>
-            <option v-for="tag in genderTags" :key="tag.id" :value="String(tag.id)">
+        <fieldset>
+          <legend class="mb-2 text-sm font-medium">{{ t('Gender tag') }}</legend>
+          <div class="flex min-w-0 flex-wrap gap-2" :aria-busy="tagsLoading">
+            <label
+              class="tag-chip tag-chip-interactive cursor-pointer"
+              :class="{ 'tag-chip-selected': genderTagId === '', 'opacity-50': tagsLoading }"
+            >
+              <input v-model="genderTagId" type="radio" value="" class="sr-only" :disabled="tagsLoading" />
+              {{ t('No gender tag') }}
+            </label>
+            <label
+              v-for="tag in genderTags"
+              :key="tag.id"
+              class="tag-chip tag-chip-interactive cursor-pointer"
+              :class="{ 'tag-chip-selected': genderTagId === String(tag.id), 'opacity-50': tagsLoading }"
+            >
+              <input v-model="genderTagId" type="radio" :value="String(tag.id)" class="sr-only" :disabled="tagsLoading" />
               {{ tag.displayValue.replace(/_/g, ' ') }}
-            </option>
-          </select>
+            </label>
+          </div>
           <div class="mt-2 grid grid-cols-[minmax(0,1fr)_auto] gap-2">
             <label for="voice-new-gender" class="sr-only">{{ t('New gender tag') }}</label>
             <input
@@ -240,7 +247,7 @@ onUnmounted(creation.stopPolling)
               {{ t('Add tag') }}
             </button>
           </div>
-        </div>
+        </fieldset>
       </div>
 
       <div class="flex flex-col justify-between gap-7 px-5 py-7">

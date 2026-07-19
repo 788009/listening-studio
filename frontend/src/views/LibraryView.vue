@@ -12,6 +12,7 @@ import {
 import { ApiError } from '@/api/errors'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import AudioTagLines from '@/components/AudioTagLines.vue'
+import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 
 const { locale, t } = useI18n()
@@ -172,15 +173,11 @@ onMounted(async () => {
             v-if="speakerNames(audio).length > 0 || contentTags(audio).length > 0"
             class="mt-4 space-y-2 border-t border-line pt-4"
           >
-            <div
-              v-if="speakerNames(audio).length > 0"
-              class="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-2 text-sm"
-            >
-              <span class="text-muted">{{ t('Speakers') }}</span>
-              <span class="min-w-0 break-words text-ink">
-                {{ speakerNames(audio).join(', ') }}
-              </span>
-            </div>
+            <ul v-if="speakerNames(audio).length > 0" class="flex min-w-0 flex-wrap gap-2">
+              <li v-for="speaker in speakerNames(audio)" :key="speaker" class="flex min-w-0 max-w-full">
+                <TagChip :label="speaker" :type-label="t('Speaker')" />
+              </li>
+            </ul>
             <AudioTagLines
               v-if="contentTags(audio).length > 0"
               :tags="contentTags(audio)"

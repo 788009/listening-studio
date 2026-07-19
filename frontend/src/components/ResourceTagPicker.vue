@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, useId } from 'vue'
 
+import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 
 export type EditableTagType = 'gender' | 'topic' | 'category'
@@ -65,24 +66,18 @@ function selectTag(tagId: number): void {
   <fieldset class="min-w-0">
     <legend class="mb-2 text-sm font-medium">{{ t(label) }}</legend>
 
-    <ul v-if="selectedTags.length > 0" class="mb-3 divide-y divide-line border-y border-line">
+    <ul v-if="selectedTags.length > 0" class="mb-3 flex min-w-0 flex-wrap gap-2">
       <li
         v-for="tag in selectedTags"
         :key="tag.id"
-        class="flex min-w-0 items-center justify-between gap-3 py-2 text-sm"
+        class="flex min-w-0 max-w-full"
       >
-        <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
-        <button
-          type="button"
-          class="inline-flex h-8 w-8 shrink-0 items-center justify-center text-muted hover:text-danger"
-          :aria-label="t('Remove {tag}', { tag: tag.displayValue.replace(/_/g, ' ') })"
-          :title="t('Remove tag')"
-          @click="emit('remove', tag.id)"
-        >
-          <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-            <path d="M5 5l14 14M19 5 5 19" stroke="currentColor" stroke-width="2" />
-          </svg>
-        </button>
+        <TagChip
+          :label="tag.displayValue.replace(/_/g, ' ')"
+          selected
+          removable
+          @activate="emit('remove', tag.id)"
+        />
       </li>
     </ul>
 
@@ -123,7 +118,7 @@ function selectTag(tagId: number): void {
         class="flex min-h-10 w-full min-w-0 items-center justify-between gap-3 border-b border-line px-3 py-2 text-left text-sm last:border-b-0 hover:bg-canvas"
         @click="selectTag(tag.id)"
       >
-        <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
+        <span class="tag-chip min-w-0">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
         <span class="shrink-0 text-xs text-muted">{{ tag.englishValue }}</span>
       </button>
       <p v-if="matches.length === 0" class="px-3 py-3 text-sm text-muted">

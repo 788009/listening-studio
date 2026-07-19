@@ -394,19 +394,20 @@ onMounted(() => {
 
       <fieldset v-if="tagOptions.length > 0" class="mt-4 border-t border-line pt-4">
         <legend class="mb-2 text-sm font-medium">{{ t('Tags') }}</legend>
-        <div class="flex flex-wrap gap-x-5 gap-y-2">
+        <div class="flex min-w-0 flex-wrap gap-2">
           <label
             v-for="tag in tagOptions"
             :key="tag.id"
-            class="flex min-w-0 max-w-full items-start gap-2 text-sm"
+            class="tag-chip tag-chip-interactive cursor-pointer"
+            :class="{ 'tag-chip-selected': filterTagIds.includes(tag.id) }"
           >
             <input
               type="checkbox"
-              class="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+              class="sr-only"
               :checked="filterTagIds.includes(tag.id)"
               @change="toggleTag('filter', tag.id)"
             />
-            <span class="min-w-0 break-all">{{ tag.label }}</span>
+            <span class="min-w-0 break-words">{{ tag.label }}</span>
           </label>
         </div>
       </fieldset>
@@ -463,15 +464,20 @@ onMounted(() => {
             <input v-model="applyBulkTags" type="checkbox" class="h-4 w-4 accent-accent" />
             {{ t('Replace tags') }}
           </label>
-          <div v-if="applyBulkTags" class="mt-2 flex flex-wrap gap-x-4 gap-y-2">
-            <label v-for="tag in tagOptions" :key="tag.id" class="flex items-start gap-2 text-sm">
+          <div v-if="applyBulkTags" class="mt-2 flex min-w-0 flex-wrap gap-2">
+            <label
+              v-for="tag in tagOptions"
+              :key="tag.id"
+              class="tag-chip tag-chip-interactive cursor-pointer"
+              :class="{ 'tag-chip-selected': bulkTagIds.includes(tag.id) }"
+            >
               <input
                 type="checkbox"
-                class="mt-0.5 h-4 w-4 accent-accent"
+                class="sr-only"
                 :checked="bulkTagIds.includes(tag.id)"
                 @change="toggleTag('bulk', tag.id)"
               />
-              {{ tag.label }}
+              <span class="min-w-0 break-words">{{ tag.label }}</span>
             </label>
             <span v-if="tagOptions.length === 0" class="text-sm text-muted">{{ t('No user tags') }}</span>
           </div>

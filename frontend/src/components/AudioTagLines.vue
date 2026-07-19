@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
 
 import type { AudioTag, AudioTagType } from '@/api/audios'
+import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 
 const props = withDefaults(
@@ -36,26 +36,18 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <dl class="space-y-2">
-    <div
+  <ul class="flex min-w-0 flex-wrap gap-2">
+    <template
       v-for="row in rows"
       :key="row.type"
-      class="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-2 text-sm"
     >
-      <dt class="text-muted">{{ row.label }}</dt>
-      <dd class="min-w-0 break-words text-ink">
-        <template v-for="(tag, index) in row.values" :key="tag.id">
-          <RouterLink
-            v-if="searchPath"
-            :to="{ path: searchPath, query: { q: tag.fullTag } }"
-            class="hover:text-accent hover:underline"
-          >
-            {{ tag.displayValue.replace(/_/g, ' ') }}
-          </RouterLink>
-          <span v-else>{{ tag.displayValue.replace(/_/g, ' ') }}</span>
-          <span v-if="index < row.values.length - 1">, </span>
-        </template>
-      </dd>
-    </div>
-  </dl>
+      <li v-for="tag in row.values" :key="tag.id" class="flex min-w-0 max-w-full">
+        <TagChip
+          :label="tag.displayValue.replace(/_/g, ' ')"
+          :type-label="row.label"
+          :to="searchPath ? { path: searchPath, query: { q: tag.fullTag } } : undefined"
+        />
+      </li>
+    </template>
+  </ul>
 </template>

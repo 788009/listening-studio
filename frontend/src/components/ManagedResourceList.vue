@@ -2,6 +2,7 @@
 import { RouterLink } from 'vue-router'
 
 import type { ManagedResource } from '@/api/resourceManagement'
+import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 
 const { formatDate, t } = useI18n()
@@ -89,9 +90,14 @@ function statusClass(status: string): string {
           </span>
           <time :datetime="item.createdAt">{{ formatDate(item.createdAt) }}</time>
         </div>
-        <p v-if="item.tags.length > 0" class="mt-2 break-all text-xs text-muted">
-          {{ item.tags.map((tag) => `${tagLabel(tag.type)}: ${tag.value.replace(/_/g, ' ')}`).join(', ') }}
-        </p>
+        <ul v-if="item.tags.length > 0" class="mt-3 flex min-w-0 flex-wrap gap-2">
+          <li v-for="tag in item.tags" :key="tag.id" class="flex min-w-0 max-w-full">
+            <TagChip
+              :label="tag.value.replace(/_/g, ' ')"
+              :type-label="tagLabel(tag.type)"
+            />
+          </li>
+        </ul>
         <p v-if="item.references.length > 0" class="mt-2 break-words text-xs text-danger">
           {{ t('Referenced by {references}', { references: references(item) }) }}
         </p>

@@ -77,6 +77,7 @@ describe('voice views', () => {
     expect(wrapper.text()).toContain('Clear English')
     expect(wrapper.text()).not.toContain('Author')
     expect(wrapper.text()).toContain('female voice')
+    expect(wrapper.findAll('.tag-chip').length).toBeGreaterThan(0)
     expect(wrapper.get('#voice-search').element).toHaveProperty(
       'value',
       'gender:female_voice',

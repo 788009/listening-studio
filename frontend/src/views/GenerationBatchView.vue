@@ -407,11 +407,16 @@ onUnmounted(stopPolling)
               class="min-w-0"
             >
               <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
-              <div class="space-y-2">
-                <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
+              <div class="flex min-w-0 flex-wrap gap-2">
+                <label
+                  v-for="tag in group.items"
+                  :key="tag.id"
+                  class="tag-chip tag-chip-interactive cursor-pointer"
+                  :class="{ 'tag-chip-selected': bulkTagIds.includes(tag.id) }"
+                >
                   <input
                     type="checkbox"
-                    class="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+                    class="sr-only"
                     :checked="bulkTagIds.includes(tag.id)"
                     @change="toggleTag('bulk', tag.id)"
                   />
@@ -566,9 +571,14 @@ onUnmounted(stopPolling)
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
           <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
             <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
-            <div class="space-y-2">
-              <label v-for="tag in group.items" :key="tag.id" class="flex min-w-0 items-start gap-2 text-sm">
-                <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag('submission', tag.id)" />
+            <div class="flex min-w-0 flex-wrap gap-2">
+              <label
+                v-for="tag in group.items"
+                :key="tag.id"
+                class="tag-chip tag-chip-interactive cursor-pointer"
+                :class="{ 'tag-chip-selected': selectedTagIds.includes(tag.id) }"
+              >
+                <input type="checkbox" class="sr-only" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag('submission', tag.id)" />
                 <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
               </label>
               <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>

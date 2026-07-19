@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 
 import { listAudios, type Audio } from '@/api/audios'
+import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
@@ -151,7 +152,10 @@ onMounted(async () => {
           <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
             <svg viewBox="0 0 24 24" fill="none" class="h-5 w-5" aria-hidden="true"><path d="m9 7 8 5-8 5V7Z" fill="currentColor" /></svg>
           </span>
-          <span class="min-w-0 flex-1"><span class="block truncate text-sm font-semibold group-hover:text-accent">{{ audio.title }}</span><span class="mt-1 block truncate text-xs text-muted">{{ category(audio) }}</span></span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-semibold group-hover:text-accent">{{ audio.title }}</span>
+            <TagChip class="mt-2" :label="category(audio)" />
+          </span>
           <span class="shrink-0 text-xs tabular-nums text-muted">{{ duration(audio.durationSeconds) }}</span>
         </RouterLink>
       </div>

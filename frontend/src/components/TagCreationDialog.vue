@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { TagTranslation } from '@/api/voices'
+import TagChip from '@/components/TagChip.vue'
 import { supportedLocales, useI18n } from '@/i18n'
 
 type EditableTagType = 'gender' | 'topic' | 'category'
@@ -154,9 +155,11 @@ onBeforeUnmount(() => document.removeEventListener('keydown', handleDocumentKeyd
             autocomplete="off"
             class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           />
-          <p v-if="normalizedEnglishValue" class="mt-1 break-words text-xs text-muted">
-            {{ t('Saved value: {value}', { value: normalizedEnglishValue }) }}
-          </p>
+          <TagChip
+            v-if="normalizedEnglishValue"
+            class="mt-2"
+            :label="t('Saved value: {value}', { value: normalizedEnglishValue })"
+          />
         </div>
 
         <div v-for="language in translationLocales" :key="language">

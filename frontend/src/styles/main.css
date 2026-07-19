@@ -122,6 +122,26 @@
   .control-surface {
     @apply border border-line bg-surface shadow-panel;
   }
+
+  .tag-chip {
+    @apply inline-flex min-h-7 max-w-full items-center gap-1.5 rounded-full border border-line bg-raised px-2.5 py-1 text-xs font-medium leading-4 text-ink;
+  }
+
+  .tag-chip-type {
+    @apply shrink-0 font-normal text-muted;
+  }
+
+  .tag-chip-selected {
+    @apply border-accent/40 bg-accent-soft text-accent;
+  }
+
+  .tag-chip-selected .tag-chip-type {
+    @apply text-accent/75;
+  }
+
+  .tag-chip-interactive {
+    @apply transition-colors hover:border-accent/50 hover:bg-accent-soft hover:text-accent;
+  }
 }
 
 @layer utilities {
