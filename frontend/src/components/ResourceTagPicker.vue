@@ -66,21 +66,6 @@ function selectTag(tagId: number): void {
   <fieldset class="min-w-0">
     <legend class="mb-2 text-sm font-medium">{{ t(label) }}</legend>
 
-    <ul v-if="selectedTags.length > 0" class="mb-3 flex min-w-0 flex-wrap gap-2">
-      <li
-        v-for="tag in selectedTags"
-        :key="tag.id"
-        class="flex min-w-0 max-w-full"
-      >
-        <TagChip
-          :label="tag.displayValue.replace(/_/g, ' ')"
-          selected
-          removable
-          @activate="emit('remove', tag.id)"
-        />
-      </li>
-    </ul>
-
     <div class="grid grid-cols-[minmax(0,1fr)_auto] gap-2">
       <label :for="inputId" class="sr-only">{{ t('Search {label}', { label: t(label) }) }}</label>
       <input
@@ -107,6 +92,21 @@ function selectTag(tagId: number): void {
         {{ t('Create tag') }}
       </button>
     </div>
+
+    <ul v-if="selectedTags.length > 0" class="mt-3 flex min-w-0 flex-wrap gap-2">
+      <li
+        v-for="tag in selectedTags"
+        :key="tag.id"
+        class="flex min-w-0 max-w-full"
+      >
+        <TagChip
+          :label="tag.displayValue.replace(/_/g, ' ')"
+          selected
+          removable
+          @activate="emit('remove', tag.id)"
+        />
+      </li>
+    </ul>
 
     <div v-if="query.trim()" :id="resultsId" class="mt-2 border-y border-line" role="listbox">
       <button
