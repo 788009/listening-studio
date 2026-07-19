@@ -34,7 +34,7 @@ class JobStorage:
     def audio_preview_temporary_path(self, job_id: int) -> Path:
         directory = self.directory(job_id)
         directory.mkdir(parents=True, exist_ok=True)
-        return directory / f".{self.AUDIO_PREVIEW_FILENAME}.tmp"
+        return directory / ".preview.tmp.wav"
 
     def write_audio_preview_input(
         self,

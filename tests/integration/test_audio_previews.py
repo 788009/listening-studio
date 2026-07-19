@@ -40,6 +40,18 @@ from backend.app.workers.jobs import JobWorker
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
+class WavSuffixCheckingIntegration(FakeCosyVoiceIntegration):
+    def synthesize(
+        self,
+        voice_path: Path,
+        text: str,
+        output_audio_path: Path,
+    ) -> Path:
+        if output_audio_path.suffix.casefold() != ".wav":
+            raise ValueError(f"Unsupported format: {output_audio_path.suffix[1:]}")
+        return super().synthesize(voice_path, text, output_audio_path)
+
+
 class AudioPreviewIntegrationTest(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_dir = tempfile.TemporaryDirectory()
@@ -303,6 +315,20 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             self.assertEqual(job.status, JobStatus.FAILED)
             self.assertNotIn("model details", job.error_summary or "")
         self.assertFalse(self.job_storage.directory(job_id).exists())
+
+    def test_preview_model_output_path_keeps_wav_extension(self) -> None:
+        job_id = self.submit_preview("Woman", "Extension check.").json()["jobId"]
+        integration = WavSuffixCheckingIntegration()
+
+        self.assertTrue(self.worker(integration).run_once())
+
+        with self.app.state.session_factory() as session:
+            job = session.get(Job, job_id)
+            assert job is not None
+            self.assertEqual(job.status, JobStatus.SUCCEEDED)
+        self.assertEqual(len(integration.calls), 1)
+        self.assertEqual(integration.calls[0].output_path.suffix, ".wav")
+        self.assertTrue(self.job_storage.audio_preview_path(job_id).is_file())
 
     def test_consistency_retains_only_valid_successful_preview_output(self) -> None:
         response = self.submit_preview("Woman", "Retained line.")
