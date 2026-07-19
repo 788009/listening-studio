@@ -147,6 +147,16 @@ describe('audio views', () => {
         .findAll('a')
         .map((link) => decodeURIComponent(link.attributes('href') ?? '')),
     ).toContain('/audio?q=voice:test')
+    expect(
+      wrapper
+        .findAll('a')
+        .map((link) => decodeURIComponent(link.attributes('href') ?? '')),
+    ).toEqual(
+      expect.arrayContaining([
+        '/audio?q=topic:climate_change',
+        '/audio?q=other:with_questions',
+      ]),
+    )
     expect(wrapper.findAll('.tag-chip').length).toBeGreaterThanOrEqual(3)
     expect(wrapper.get('input[role="combobox"]').element).toHaveProperty(
       'value',

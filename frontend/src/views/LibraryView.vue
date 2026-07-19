@@ -202,6 +202,7 @@ onMounted(async () => {
               v-if="contentTags(audio).length > 0"
               :tags="contentTags(audio)"
               :include-author="false"
+              search-path="/audio"
             />
           </div>
         </div>
