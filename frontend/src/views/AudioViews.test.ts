@@ -164,6 +164,57 @@ describe('audio views', () => {
     expect(updates[updates.length - 1]?.[0]).toBe('topic:climate_change ')
   })
 
+  it('keeps the latest suggestions when an older request finishes later', async () => {
+    vi.useFakeTimers()
+    let resolveFirst!: (response: Response) => void
+    const firstResponse = new Promise<Response>((resolve) => {
+      resolveFirst = resolve
+    })
+    const fetchMock = vi.fn((input: string | URL | Request) => {
+      const query = new URL(String(input), 'http://test').searchParams.get('q')
+      return query === 's'
+        ? firstResponse
+        : Promise.resolve(jsonResponse(['category:single']))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(AudioSearchBox, {
+      props: { modelValue: '', tags: [], busy: false },
+    })
+
+    await wrapper.setProps({ modelValue: 's' })
+    await vi.advanceTimersByTimeAsync(160)
+    await wrapper.setProps({ modelValue: 'si' })
+    await vi.advanceTimersByTimeAsync(160)
+    await flushPromises()
+    expect(wrapper.text()).toContain('category:single')
+
+    resolveFirst(jsonResponse(['category:conversation']))
+    await flushPromises()
+    expect(wrapper.text()).toContain('category:single')
+    expect(wrapper.text()).not.toContain('category:conversation')
+  })
+
+  it('does not suggest a tag already present in the search query', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse(['topic:climate_change', 'topic:climate_policy']),
+      ),
+    )
+    const wrapper = mount(AudioSearchBox, {
+      props: { modelValue: '', tags: audio.tags, busy: false },
+    })
+
+    await wrapper.setProps({ modelValue: 'topic:climate_change clim' })
+    await vi.advanceTimersByTimeAsync(160)
+    await flushPromises()
+
+    const options = wrapper.findAll('[role="option"]')
+    expect(options).toHaveLength(1)
+    expect(options[0]?.text()).toContain('topic:climate policy')
+  })
+
   it('switches fixed text and tag display without changing canonical values or IDs', async () => {
     setLocale('zh-CN')
     const fallbackTag = {

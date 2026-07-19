@@ -22,6 +22,7 @@ const suggestions = ref<string[]>([])
 const open = ref(false)
 const activeIndex = ref(-1)
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
+let suggestionRequest = 0
 
 const currentToken = computed(() => {
   const tokens = props.modelValue.trimStart().split(/\s+/)
@@ -37,16 +38,29 @@ function displayValue(value: string): string {
 
 async function loadSuggestions(): Promise<void> {
   const token = currentToken.value
+  const request = ++suggestionRequest
   if (!token) {
     suggestions.value = []
     open.value = false
     return
   }
   try {
-    suggestions.value = await autocompleteAudioTags(token)
+    const results = await autocompleteAudioTags(token)
+    if (request !== suggestionRequest || token !== currentToken.value) return
+    const existingTerms = new Set(
+      props.modelValue
+        .trim()
+        .split(/\s+/)
+        .slice(0, -1)
+        .map((term) => term.normalize('NFKC').toLocaleLowerCase()),
+    )
+    suggestions.value = results.filter(
+      (suggestion) => !existingTerms.has(suggestion.normalize('NFKC').toLocaleLowerCase()),
+    )
     activeIndex.value = -1
     open.value = suggestions.value.length > 0
   } catch {
+    if (request !== suggestionRequest) return
     suggestions.value = []
     open.value = false
   }
@@ -56,6 +70,12 @@ watch(
   () => props.modelValue,
   () => {
     clearTimeout(debounceTimer)
+    suggestionRequest += 1
+    if (!currentToken.value) {
+      suggestions.value = []
+      open.value = false
+      return
+    }
     debounceTimer = setTimeout(loadSuggestions, 150)
   },
 )
@@ -98,7 +118,10 @@ function closeLater(): void {
   }, 120)
 }
 
-onBeforeUnmount(() => clearTimeout(debounceTimer))
+onBeforeUnmount(() => {
+  clearTimeout(debounceTimer)
+  suggestionRequest += 1
+})
 </script>
 
 <template>
