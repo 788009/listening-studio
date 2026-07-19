@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
+import { setLocale } from '@/i18n'
 import CreateView from './CreateView.vue'
 
 const voices = {
@@ -111,6 +112,26 @@ describe('direct creation view', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
+    setLocale('en')
+  })
+
+  it('uses the localized default speaker name', async () => {
+    setLocale('zh-CN')
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const response = optionsResponse(String(input))
+        if (response) return Promise.resolve(response)
+        throw new Error(`Unexpected request: ${String(input)}`)
+      }),
+    )
+
+    const wrapper = await mountView()
+    await flushPromises()
+
+    expect(wrapper.get('#speaker-name-1').element).toHaveProperty('value', '说话人 1')
+    expect(wrapper.get('#turn-speaker-1').text()).toContain('说话人 1')
+    wrapper.unmount()
   })
 
   it('opens with one speaker and the requested voice selected', async () => {
@@ -127,6 +148,7 @@ describe('direct creation view', () => {
     await flushPromises()
 
     expect(wrapper.get('#speaker-voice-1').element).toHaveProperty('value', '2')
+    expect(wrapper.get('#speaker-name-1').element).toHaveProperty('value', 'Speaker 1')
     expect(wrapper.get('#turn-speaker-1').text()).toContain('Speaker 1')
     expect(button(wrapper, 'Generate preview').exists()).toBe(true)
     expect(button(wrapper, 'Generate audio').exists()).toBe(true)

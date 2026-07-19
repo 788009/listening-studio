@@ -128,7 +128,7 @@ function newSpeaker(voiceId?: string): SpeakerDraft {
   const nextKey = Math.max(0, ...speakers.value.map((speaker) => speaker.key)) + 1
   return {
     key: nextKey,
-    name: '',
+    name: t('Speaker {position}', { position: nextKey }),
     voiceId: voiceId ?? (voices.value[0] ? String(voices.value[0].id) : ''),
   }
 }
@@ -516,6 +516,7 @@ async function confirmDiscardChangesAndPublish(): Promise<void> {
 function startAnother(): void {
   publishedAudioId.value = null
   title.value = ''
+  speakers.value = []
   speakers.value = [newSpeaker()]
   turns.value = [newTurn(speakers.value[0]?.key)]
   selectedTagIds.value = []
