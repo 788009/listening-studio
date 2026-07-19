@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { apiRequest } from '@/api/client'
 import { ApiError } from '@/api/errors'
@@ -23,6 +23,7 @@ interface UserSummary {
 }
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const { t } = useI18n()
 const profile = ref<UserSummary | null>(null)
@@ -66,6 +67,14 @@ async function saveProfile(): Promise<void> {
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : t('Profile update failed')
   }
+}
+
+function searchAuthor(path: '/audio' | '/voices'): void {
+  if (!profile.value) return
+  void router.push({
+    path,
+    query: { q: `author:${profile.value.userId}` },
+  })
 }
 
 watch(() => route.params.userId, loadProfile, { immediate: true })
@@ -136,12 +145,26 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
       >
         <div
           v-if="auth.isTeacher"
-          class="border-b border-line px-5 py-6 sm:border-b-0 sm:border-r"
+          role="link"
+          tabindex="0"
+          :aria-label="`${t('Public voices')}: ${profile.userId}`"
+          class="cursor-pointer border-b border-line px-5 py-6 transition-colors hover:bg-canvas focus:outline-none focus:shadow-focus sm:border-b-0 sm:border-r"
+          @click="searchAuthor('/voices')"
+          @keydown.enter="searchAuthor('/voices')"
+          @keydown.space.prevent="searchAuthor('/voices')"
         >
           <dt class="text-sm text-muted">{{ t('Public voices') }}</dt>
           <dd class="mt-1 text-2xl font-semibold">{{ profile.statistics.publicVoiceCount }}</dd>
         </div>
-        <div class="px-5 py-6">
+        <div
+          role="link"
+          tabindex="0"
+          :aria-label="`${t('Public audio count')}: ${profile.userId}`"
+          class="cursor-pointer px-5 py-6 transition-colors hover:bg-canvas focus:outline-none focus:shadow-focus"
+          @click="searchAuthor('/audio')"
+          @keydown.enter="searchAuthor('/audio')"
+          @keydown.space.prevent="searchAuthor('/audio')"
+        >
           <dt class="text-sm text-muted">{{ t('Public audio count') }}</dt>
           <dd class="mt-1 text-2xl font-semibold">{{ profile.statistics.publicAudioCount }}</dd>
         </div>

@@ -41,12 +41,16 @@ async function mountUserView(authenticated: boolean) {
   }
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/user/:userId', component: UserView }],
+    routes: [
+      { path: '/user/:userId', component: UserView },
+      { path: '/audio', component: { template: '<div />' } },
+      { path: '/voices', component: { template: '<div />' } },
+    ],
   })
   await router.push('/user/TeacherOne')
   const wrapper = mount(UserView, { global: { plugins: [pinia, router] } })
   await flushPromises()
-  return wrapper
+  return { wrapper, router }
 }
 
 describe('user view', () => {
@@ -56,16 +60,21 @@ describe('user view', () => {
   })
 
   it('shows only public audio information to anonymous visitors', async () => {
-    const wrapper = await mountUserView(false)
+    const { wrapper, router } = await mountUserView(false)
     const statistics = wrapper.findAll('dl > div')
 
     expect(statistics).toHaveLength(1)
     expect(statistics[0]?.get('dt').text()).toBe('Public audio count')
     expect(statistics[0]?.get('dd').text()).toBe('1')
+    expect(statistics[0]?.attributes('role')).toBe('link')
+    await statistics[0]?.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/audio')
+    expect(router.currentRoute.value.query.q).toBe('author:TeacherOne')
   })
 
   it('shows public voice and audio information to signed-in teachers', async () => {
-    const wrapper = await mountUserView(true)
+    const { wrapper, router } = await mountUserView(true)
     const statistics = wrapper.findAll('dl > div')
 
     expect(statistics).toHaveLength(2)
@@ -73,5 +82,10 @@ describe('user view', () => {
     expect(statistics[0]?.get('dd').text()).toBe('2')
     expect(statistics[1]?.get('dt').text()).toBe('Public audio count')
     expect(statistics[1]?.get('dd').text()).toBe('1')
+    expect(statistics[0]?.attributes('tabindex')).toBe('0')
+    await statistics[0]?.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/voices')
+    expect(router.currentRoute.value.query.q).toBe('author:TeacherOne')
   })
 })
