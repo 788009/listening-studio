@@ -39,8 +39,22 @@ const audio: Audio = {
     },
   ],
   utterances: [
-    { voiceId: 1, speakerDisplayName: 'Teacher', text: 'First line', position: 0 },
-    { voiceId: 2, speakerDisplayName: 'Student', text: 'Second line', position: 1 },
+    {
+      voiceId: 1,
+      voiceTitle: 'test',
+      speakerTag: 'speaker:test',
+      speakerDisplayName: 'Woman',
+      text: 'First line',
+      position: 0,
+    },
+    {
+      voiceId: 2,
+      voiceTitle: 'Second voice',
+      speakerTag: 'speaker:Second_voice',
+      speakerDisplayName: 'Student',
+      text: 'Second line',
+      position: 1,
+    },
   ],
 }
 
@@ -194,19 +208,26 @@ describe('audio views', () => {
     expect(wrapper.text()).toContain('A readable listening transcript.')
     expect(wrapper.text()).toContain('Author')
     expect(wrapper.text()).toContain('Second line')
+    expect(wrapper.text()).toContain('Woman')
+    expect(wrapper.text()).toContain('test')
     expect(wrapper.text()).toContain('气候 变化')
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
-      expect.arrayContaining(['Author', 'Topic']),
+      expect.arrayContaining(['Author', 'Speakers', 'Topic']),
     )
     const tagSearchLinks = wrapper
       .findAll('a')
       .filter((link) => link.attributes('href')?.includes('?q='))
-    expect(tagSearchLinks).toHaveLength(2)
+    expect(tagSearchLinks).toHaveLength(4)
     expect(
       tagSearchLinks.map((link) =>
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
     ).toContain('/audio?q=topic:climate_change')
+    expect(
+      tagSearchLinks.map((link) =>
+        decodeURIComponent(link.attributes('href') ?? ''),
+      ),
+    ).toContain('/audio?q=speaker:test')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
   })
@@ -290,7 +311,7 @@ describe('audio views', () => {
     await flushPromises()
 
     expect(updateBody?.tagIds).toEqual([4])
-    expect(wrapper.text()).toContain('host')
+    expect(wrapper.text()).toContain('test')
     expect(wrapper.text()).toContain('practice')
   })
 

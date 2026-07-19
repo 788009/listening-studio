@@ -18,6 +18,8 @@ class AudioAuthorResponse(TagApiModel):
 
 class AudioUtteranceResponse(TagApiModel):
     voice_id: int | None
+    voice_title: str | None
+    speaker_tag: str | None
     speaker_display_name: str
     text: str
     position: int
@@ -49,6 +51,7 @@ class AudioSynthesisRequest(TagApiModel):
     title: Title
     text: str = Field(min_length=1)
     voice_id: ResourceId
+    speaker_display_name: str | None = Field(default=None, min_length=1, max_length=200)
     tag_ids: list[ResourceId] = Field(default_factory=list)
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 

@@ -15,6 +15,7 @@ const input = {
   title: 'Practice',
   text: 'Listening text',
   voiceId: 2,
+  speakerDisplayName: 'Woman',
   tagIds: [],
   visibility: 'private' as const,
 }

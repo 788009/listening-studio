@@ -38,6 +38,7 @@ from backend.app.services.audios import AudioUtteranceInput
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.tag_values import normalize_english_tag_value
+from backend.app.services.speaker_tags import voice_speaker_tag_value
 from backend.app.services.voice_storage import VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -350,10 +351,17 @@ class CorpusGenerationService:
             self._tag(session, AudioTagType.CATEGORY, value)
             for value in content.suggested_categories
         )
-        tags.extend(
-            self._tag(session, AudioTagType.SPEAKER, item.speaker_display_name)
-            for item in utterances
-        )
+        for voice_id in {item.voice_id for item in utterances}:
+            voice = self.voice_repository.get_by_id(session, voice_id)
+            if voice is None:
+                raise JobFailedError("Mapped voice is unavailable")
+            tags.append(
+                self._tag(
+                    session,
+                    AudioTagType.SPEAKER,
+                    voice_speaker_tag_value(voice).value,
+                )
+            )
         return list({tag.id: tag for tag in tags}.values())
 
     def _tag(

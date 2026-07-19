@@ -9,10 +9,11 @@ const props = withDefaults(
   defineProps<{
     tags: AudioTag[]
     includeAuthor?: boolean
+    includeSpeaker?: boolean
     searchPath?: string
     grouped?: boolean
   }>(),
-  { includeAuthor: true, searchPath: undefined, grouped: false },
+  { includeAuthor: true, includeSpeaker: true, searchPath: undefined, grouped: false },
 )
 const { t } = useI18n()
 
@@ -23,9 +24,12 @@ const rows = computed(() => {
     topic: t('Topic'),
     category: t('Category'),
   }
-  const types: AudioTagType[] = props.includeAuthor
-    ? ['author', 'speaker', 'topic', 'category']
-    : ['speaker', 'topic', 'category']
+  const types: AudioTagType[] = [
+    ...(props.includeAuthor ? (['author'] as const) : []),
+    ...(props.includeSpeaker ? (['speaker'] as const) : []),
+    'topic',
+    'category',
+  ]
   return types
     .map((type) => ({
       type,

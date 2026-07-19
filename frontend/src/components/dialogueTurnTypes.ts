@@ -1,6 +1,11 @@
+export interface SpeakerDraft {
+  key: number
+  name: string
+  voiceId: string
+}
+
 export interface DialogueTurnDraft {
   key: number
-  voiceId: string
-  speaker: string
+  speakerKey: number | ''
   text: string
 }

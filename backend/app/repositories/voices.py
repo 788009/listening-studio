@@ -25,39 +25,6 @@ class VoiceRepository:
         )
         return list(session.scalars(statement))
 
-    def synchronize_utterance_speaker_names(
-        self,
-        session: Session,
-        *,
-        voice_id: int,
-        previous_title: str,
-        title: str,
-    ) -> int:
-        if previous_title == title:
-            return 0
-        statement = (
-            select(AudioUtterance)
-            .options(
-                selectinload(AudioUtterance.audio).selectinload(Audio.utterances)
-            )
-            .where(
-                AudioUtterance.voice_id == voice_id,
-                AudioUtterance.speaker_display_name == previous_title,
-            )
-        )
-        utterances = list(session.scalars(statement))
-        affected_audios = {item.audio_id: item.audio for item in utterances}
-        for utterance in utterances:
-            utterance.speaker_display_name = title
-        for audio in affected_audios.values():
-            if len(audio.utterances) > 1:
-                audio.text = "\n".join(
-                    f"{item.speaker_display_name}: {item.text}"
-                    for item in audio.utterances
-                )
-        session.flush()
-        return len(utterances)
-
     def count_active_audio_utterance_references(
         self,
         session: Session,

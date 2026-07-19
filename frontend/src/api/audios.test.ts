@@ -88,6 +88,7 @@ describe('audio API', () => {
       title: 'Single',
       text: 'Text',
       voiceId: 2,
+      speakerDisplayName: 'Woman',
       tagIds: [4],
       visibility: 'private',
     })

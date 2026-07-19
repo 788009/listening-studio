@@ -112,14 +112,7 @@ class VoiceManagementService:
         descriptor = self._descriptor(voice)
         self.authorization.require_edit(principal, descriptor)
         if title is not None:
-            previous_title = voice.title
             self.voice_service.update_title(session, voice, title)
-            self.repository.synchronize_utterance_speaker_names(
-                session,
-                voice_id=voice.id,
-                previous_title=previous_title,
-                title=voice.title,
-            )
         if gender_tag_ids is not None:
             tags = self._gender_tags(session, gender_tag_ids)
             self.voice_service.replace_gender_tags(session, voice, tags)

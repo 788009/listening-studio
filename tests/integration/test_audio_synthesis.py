@@ -135,6 +135,7 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
         voice_id: int,
         *,
         subject: str = "first",
+        speaker_display_name: str | None = None,
         tag_ids: list[int] | None = None,
         visibility: str = "public",
         request_id: str | None = None,
@@ -150,6 +151,7 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
                 "title": "Morning practice",
                 "text": "  Good morning, class.  ",
                 "voiceId": voice_id,
+                "speakerDisplayName": speaker_display_name,
                 "tagIds": tag_ids or [],
                 "visibility": visibility,
             },
@@ -181,7 +183,11 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
             topic_id = topic.id
         fake = FakeCosyVoiceIntegration()
 
-        response = self.create_request(voice_id, tag_ids=[topic_id])
+        response = self.create_request(
+            voice_id,
+            speaker_display_name="Woman",
+            tag_ids=[topic_id],
+        )
 
         self.assertEqual(response.status_code, 202)
         audio_id = response.json()["audioId"]
@@ -197,11 +203,12 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
             self.assertEqual(audio.text, "Good morning, class.")
             self.assertEqual(len(audio.utterances), 1)
             self.assertEqual(audio.utterances[0].voice_id, voice_id)
-            self.assertEqual(audio.utterances[0].speaker_display_name, "Calm voice")
+            self.assertEqual(audio.utterances[0].speaker_display_name, "Woman")
             self.assertEqual(
                 {(tag.type, tag.value) for tag in audio.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
+                    (AudioTagType.SPEAKER, "Calm_voice"),
                     (AudioTagType.TOPIC, "Morning_Routine"),
                 },
             )
@@ -233,6 +240,7 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
             self.assertEqual(audio.audio_format, "wav")
             self.assertAlmostEqual(audio.duration_seconds or 0, 0.1)
             self.assertEqual(audio.sample_rate, 8000)
+
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
             self.assertEqual(job.result_type, "audio")
             self.assertEqual(job.result_id, audio_id)
@@ -245,6 +253,17 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
 
         self.assertTrue(worker.run_once())
         self.assertEqual(len(fake.calls), 1)
+
+        search = self.send(
+            "GET",
+            "/api/audios",
+            params={"q": "speaker:Calm_voice"},
+        )
+        self.assertEqual(search.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in search.json()["items"]],
+            [audio_id],
+        )
 
     def test_voice_access_rules_are_checked_before_records_are_created(self) -> None:
         other_private = self.create_voice(

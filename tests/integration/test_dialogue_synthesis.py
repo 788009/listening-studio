@@ -244,8 +244,8 @@ class DialogueSynthesisIntegrationTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in audio.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.SPEAKER, "Alice"),
-                    (AudioTagType.SPEAKER, "Bob"),
+                    (AudioTagType.SPEAKER, "First_voice"),
+                    (AudioTagType.SPEAKER, "Second_voice"),
                 },
             )
             self.assertEqual(job.input_summary["silenceMilliseconds"], 50)

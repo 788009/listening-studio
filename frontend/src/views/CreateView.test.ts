@@ -94,8 +94,8 @@ describe('direct creation view', () => {
     await flushPromises()
 
     expect(wrapper.get('button[aria-pressed="true"]').text()).toBe('Single')
-    expect(wrapper.get('#single-voice').element).toHaveProperty('value', '2')
-    expect(wrapper.find('#turn-voice-1').exists()).toBe(false)
+    expect(wrapper.get('#speaker-voice-1').element).toHaveProperty('value', '2')
+    expect(wrapper.get('#turn-speaker-1').text()).toContain('Speaker 1')
     expect(wrapper.text()).not.toContain('climate change')
     wrapper.unmount()
   })
@@ -156,7 +156,8 @@ describe('direct creation view', () => {
     await flushPromises()
     const longText = 'Listening text '.repeat(200)
     await wrapper.get('#audio-title').setValue('Single practice')
-    await wrapper.get('#single-text').setValue(longText)
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue(longText)
 
     const searchInputs = wrapper.findAll('input[placeholder="Search tags"]')
     expect(searchInputs).toHaveLength(2)
@@ -189,6 +190,8 @@ describe('direct creation view', () => {
     expect(wrapper.text()).toContain('Audio is ready')
     expect(wrapper.get('a[href="/audio/8"]').attributes('href')).toBe('/audio/8')
     expect((submittedBody as { text: string }).text).toBe(longText.trim())
+    expect((submittedBody as { voiceId: number }).voiceId).toBe(2)
+    expect((submittedBody as { speakerDisplayName: string }).speakerDisplayName).toBe('Woman')
     expect((submittedBody as { tagIds: number[] }).tagIds).toEqual([4, 6])
     expect(createdTagBody).toEqual({
       type: 'category',
@@ -264,13 +267,15 @@ describe('direct creation view', () => {
     await flushPromises()
     await wrapper.get('#audio-title').setValue('Dialogue practice')
     await wrapper.findAll('button').find((button) => button.text() === 'Dialogue')?.trigger('click')
-    await wrapper.get('#turn-speaker-1').setValue('Alice')
+    await wrapper.get('#speaker-name-1').setValue('Alice')
     await wrapper.get('#turn-text-1').setValue('First line '.repeat(80))
-    await wrapper.findAll('button').find((button) => button.text().includes('Add turn'))?.trigger('click')
-    await wrapper.get('#turn-voice-2').setValue('3')
-    await wrapper.get('#turn-speaker-2').setValue('Bob')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add speaker')?.trigger('click')
+    await wrapper.get('#speaker-name-2').setValue('Bob')
+    await wrapper.get('#speaker-voice-2').setValue('3')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add turn')?.trigger('click')
+    await wrapper.get('#turn-speaker-2').setValue('2')
     await wrapper.get('#turn-text-2').setValue('Second line')
-    await wrapper.findAll('button').find((button) => button.text().includes('Add turn'))?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add turn')?.trigger('click')
     await wrapper.get('button[aria-label="Delete turn 3"]').trigger('click')
     expect(wrapper.find('#turn-text-3').exists()).toBe(false)
     await wrapper.get('button[aria-label="Move turn 2 up"]').trigger('click')
@@ -278,13 +283,17 @@ describe('direct creation view', () => {
     await flushPromises()
 
     expect(wrapper.get('[role="alert"]').text()).toContain('Verify the selected voice')
-    expect(wrapper.get('#turn-speaker-2').element).toHaveProperty('value', 'Bob')
+    expect(wrapper.get('#speaker-name-2').element).toHaveProperty('value', 'Bob')
     expect(wrapper.classes()).toContain('min-w-0')
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(dialogueBodies).toHaveLength(2)
-    expect((dialogueBodies[0] as { utterances: { text: string }[] }).utterances[0]?.text).toBe('Second line')
+    expect(
+      (dialogueBodies[0] as {
+        utterances: { voiceId: number; speakerDisplayName: string; text: string }[]
+      }).utterances[0],
+    ).toEqual({ voiceId: 3, speakerDisplayName: 'Bob', text: 'Second line' })
     expect(wrapper.get('a[href="/audio/11"]').attributes('href')).toBe('/audio/11')
     wrapper.unmount()
   })

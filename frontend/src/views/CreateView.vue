@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 
 import {
@@ -13,8 +13,12 @@ import { ApiError } from '@/api/errors'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import CreationModeControl from '@/components/CreationModeControl.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
+import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
-import type { DialogueTurnDraft } from '@/components/dialogueTurnTypes'
+import type {
+  DialogueTurnDraft,
+  SpeakerDraft,
+} from '@/components/dialogueTurnTypes'
 import type { TagTranslation } from '@/api/voices'
 import { useAudioCreationStore } from '@/stores/audioCreation'
 import { useI18n } from '@/i18n'
@@ -27,8 +31,7 @@ const { locale, t } = useI18n()
 const creation = useAudioCreationStore()
 const mode = ref<CreationMode>('single')
 const title = ref('')
-const singleVoiceId = ref('')
-const singleText = ref('')
+const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
 const visibility = ref<ResourceVisibility>('private')
 const selectedTagIds = ref<number[]>([])
@@ -55,14 +58,31 @@ const failureMessage = computed(
   () => creation.job?.errorSummary || creation.errorMessage,
 )
 
-function newTurn(): DialogueTurnDraft {
-  const voiceId = voices.value[0] ? String(voices.value[0].id) : ''
+function newSpeaker(voiceId?: string): SpeakerDraft {
+  const nextKey = Math.max(0, ...speakers.value.map((speaker) => speaker.key)) + 1
   return {
-    key: 1,
-    voiceId,
-    speaker: '',
+    key: nextKey,
+    name: '',
+    voiceId: voiceId ?? (voices.value[0] ? String(voices.value[0].id) : ''),
+  }
+}
+
+function newTurn(speakerKey?: number): DialogueTurnDraft {
+  const nextKey = Math.max(0, ...turns.value.map((turn) => turn.key)) + 1
+  return {
+    key: nextKey,
+    speakerKey: speakerKey ?? speakers.value[0]?.key ?? '',
     text: '',
   }
+}
+
+function removeSpeaker(speakerKey: number): void {
+  if (speakers.value.length <= 1) return
+  speakers.value = speakers.value.filter((speaker) => speaker.key !== speakerKey)
+  const fallbackKey = speakers.value[0]?.key ?? ''
+  turns.value = turns.value.map((turn) =>
+    turn.speakerKey === speakerKey ? { ...turn, speakerKey: fallbackKey } : turn,
+  )
 }
 
 function selectTag(tagId: number): void {
@@ -122,12 +142,13 @@ async function loadOptions(): Promise<void> {
     tags.value = tagResponse
     const requestedVoice = Number(route.query.voice)
     const selected = voices.value.find((voice) => voice.id === requestedVoice)
-    singleVoiceId.value = selected
+    const voiceId = selected
       ? String(selected.id)
       : voices.value[0]
         ? String(voices.value[0].id)
         : ''
-    if (turns.value.length === 0) turns.value = [newTurn()]
+    if (speakers.value.length === 0) speakers.value = [newSpeaker(voiceId)]
+    if (turns.value.length === 0) turns.value = [newTurn(speakers.value[0]?.key)]
   } catch (error) {
     formError.value =
       error instanceof ApiError ? error.message : t('Creation options could not be loaded')
@@ -143,29 +164,35 @@ async function submit(): Promise<void> {
     formError.value = t('Enter a title')
     return
   }
-  if (mode.value === 'single') {
-    const voiceId = Number(singleVoiceId.value)
-    if (!Number.isInteger(voiceId) || !singleText.value.trim()) {
-      formError.value = t('Choose a voice and enter listening text')
-      return
-    }
-    await creation.submitSingle({
-      title: normalizedTitle,
-      text: singleText.value.trim(),
-      voiceId,
-      tagIds: selectedTagIds.value,
-      visibility: visibility.value,
-    })
+  const normalizedSpeakers = speakers.value.map((speaker) => ({
+    ...speaker,
+    name: speaker.name.trim(),
+    voiceId: Number(speaker.voiceId),
+  }))
+  const normalizedNames = normalizedSpeakers.map((speaker) =>
+    speaker.name.normalize('NFKC').toLocaleLowerCase(),
+  )
+  if (
+    normalizedSpeakers.some(
+      (speaker) => !speaker.name || !Number.isInteger(speaker.voiceId) || speaker.voiceId < 1,
+    ) || new Set(normalizedNames).size !== normalizedNames.length
+  ) {
+    formError.value = t('Complete each speaker with a unique name and voice')
     return
   }
 
-  const utterances = turns.value.map((turn) => ({
-    voiceId: Number(turn.voiceId),
-    speakerDisplayName: turn.speaker.trim(),
-    text: turn.text.trim(),
-  }))
+  const content = (mode.value === 'single' ? turns.value.slice(0, 1) : turns.value).map(
+    (turn) => {
+      const speaker = normalizedSpeakers.find((item) => item.key === turn.speakerKey)
+      return {
+        voiceId: speaker?.voiceId ?? 0,
+        speakerDisplayName: speaker?.name ?? '',
+        text: turn.text.trim(),
+      }
+    },
+  )
   if (
-    utterances.some(
+    content.some(
       (turn) =>
         !Number.isInteger(turn.voiceId) ||
         turn.voiceId < 1 ||
@@ -173,12 +200,26 @@ async function submit(): Promise<void> {
         !turn.text,
     )
   ) {
-    formError.value = t('Complete the voice, speaker, and text for every turn')
+    formError.value = t('Select a speaker and enter text for every item')
+    return
+  }
+
+  if (mode.value === 'single') {
+    const item = content[0]
+    if (!item) return
+    await creation.submitSingle({
+      title: normalizedTitle,
+      text: item.text,
+      voiceId: item.voiceId,
+      speakerDisplayName: item.speakerDisplayName,
+      tagIds: selectedTagIds.value,
+      visibility: visibility.value,
+    })
     return
   }
   await creation.submitDialogue({
     title: normalizedTitle,
-    utterances,
+    utterances: content,
     tagIds: selectedTagIds.value,
     visibility: visibility.value,
   })
@@ -187,8 +228,8 @@ async function submit(): Promise<void> {
 function startAnother(): void {
   creation.reset()
   title.value = ''
-  singleText.value = ''
-  turns.value = [newTurn()]
+  speakers.value = [newSpeaker()]
+  turns.value = [newTurn(speakers.value[0]?.key)]
   selectedTagIds.value = []
   visibility.value = 'private'
   formError.value = ''
@@ -207,6 +248,14 @@ onMounted(() => {
   void loadOptions()
 })
 onUnmounted(leaveCreateView)
+
+watch(mode, (value) => {
+  if (value !== 'single' || speakers.value.length === 0 || turns.value.length === 0) return
+  const speaker = speakers.value[0]
+  if (!speaker) return
+  speakers.value = [speaker]
+  turns.value = [{ ...turns.value[0]!, speakerKey: speaker.key }]
+})
 </script>
 
 <template>
@@ -299,23 +348,19 @@ onUnmounted(leaveCreateView)
         <RouterLink to="/voices/create" class="mt-3 inline-block text-sm font-medium text-accent underline">{{ t('Create voice') }}</RouterLink>
       </div>
 
-      <div v-else-if="mode === 'single'" class="grid min-w-0 gap-5 border-b border-line px-5 py-6 md:grid-cols-[18rem_minmax(0,1fr)]">
-        <div class="min-w-0">
-          <label for="single-voice" class="mb-1 block text-sm font-medium">{{ t('Voice') }}</label>
-          <select id="single-voice" v-model="singleVoiceId" class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus">
-            <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">{{ voice.title }}</option>
-          </select>
-        </div>
-        <div class="min-w-0">
-          <label for="single-text" class="mb-1 block text-sm font-medium">{{ t('Listening text') }}</label>
-          <textarea id="single-text" v-model="singleText" required class="min-h-40 w-full min-w-0 resize-y border border-line p-3 text-sm leading-6 focus:border-accent focus:outline-none focus:shadow-focus" />
-        </div>
-      </div>
+      <SpeakerDefinitionsEditor
+        v-if="!loadingOptions && voices.length > 0"
+        v-model="speakers"
+        :voices="voices"
+        :multiple="mode === 'dialogue'"
+        @remove="removeSpeaker"
+      />
 
       <DialogueTurnsEditor
-        v-else-if="voices.length > 0"
+        v-if="!loadingOptions && voices.length > 0"
         v-model="turns"
-        :voices="voices"
+        :speakers="speakers"
+        :multiple="mode === 'dialogue'"
       />
 
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

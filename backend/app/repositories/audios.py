@@ -42,7 +42,7 @@ class AudioRepository:
             .options(
                 selectinload(Audio.author),
                 selectinload(Audio.tags).selectinload(AudioTag.translations),
-                selectinload(Audio.utterances),
+                selectinload(Audio.utterances).selectinload(AudioUtterance.voice),
             )
             .where(Audio.id.in_(audio_ids))
             .order_by(Audio.id.desc())

@@ -17,6 +17,7 @@ import {
 import type { TagTranslation } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import AudioTagLines from '@/components/AudioTagLines.vue'
+import SpeakerVoiceLines from '@/components/SpeakerVoiceLines.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
@@ -318,7 +319,12 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
-        <AudioTagLines :tags="audio.tags" search-path="/audio" grouped />
+        <div class="space-y-5">
+          <AudioTagLines :tags="audio.tags" :include-speaker="false" search-path="/audio" grouped />
+          <dl>
+            <SpeakerVoiceLines :utterances="audio.utterances" />
+          </dl>
+        </div>
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">

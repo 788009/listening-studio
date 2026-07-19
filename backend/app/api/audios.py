@@ -28,6 +28,7 @@ from backend.app.services.audio_management import AudioManagementService
 from backend.app.services.audio_synthesis import AudioSynthesisService
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audios import AudioUtteranceInput
+from backend.app.services.speaker_tags import voice_speaker_tag_value
 from backend.app.services.tag_values import select_tag_display_value
 from backend.app.services.voice_storage import VoiceStorage
 
@@ -75,6 +76,12 @@ def _response(audio: Audio, principal: Principal, language: str) -> AudioRespons
         utterances=[
             AudioUtteranceResponse(
                 voice_id=item.voice_id,
+                voice_title=item.voice.title if item.voice is not None else None,
+                speaker_tag=(
+                    f"speaker:{voice_speaker_tag_value(item.voice).value}"
+                    if item.voice is not None
+                    else None
+                ),
                 speaker_display_name=item.speaker_display_name,
                 text=item.text,
                 position=item.position,
@@ -105,6 +112,7 @@ async def create_audio(
         title=payload.title,
         text=payload.text,
         voice_id=payload.voice_id,
+        speaker_display_name=payload.speaker_display_name,
         tag_ids=payload.tag_ids,
         target_visibility=payload.visibility,
     )

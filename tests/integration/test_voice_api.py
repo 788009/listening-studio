@@ -607,7 +607,9 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             renamed_audio.json()["utterances"][0],
             {
                 "voiceId": referenced.id,
-                "speakerDisplayName": "Renamed",
+                "voiceTitle": "Renamed",
+                "speakerTag": "speaker:Renamed",
+                "speakerDisplayName": "Referenced",
                 "text": "Text",
                 "position": 0,
             },
@@ -623,7 +625,7 @@ class VoiceApiIntegrationTest(unittest.TestCase):
         self.assertEqual(
             historical_audio.json()["utterances"][0],
             {
-                "speakerDisplayName": "Renamed",
+                "speakerDisplayName": "Referenced",
                 "text": "Text",
                 "position": 0,
             },

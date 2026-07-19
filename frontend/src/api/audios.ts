@@ -32,6 +32,8 @@ export interface AudioTagCreationInput {
 
 export interface AudioUtterance {
   voiceId?: number | null
+  voiceTitle?: string | null
+  speakerTag?: string | null
   speakerDisplayName: string
   text: string
   position: number
@@ -83,6 +85,7 @@ export interface SingleAudioCreationInput {
   title: string
   text: string
   voiceId: number
+  speakerDisplayName: string
   tagIds: number[]
   visibility: ResourceVisibility
 }

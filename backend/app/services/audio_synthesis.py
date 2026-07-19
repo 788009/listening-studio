@@ -32,7 +32,7 @@ from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audios import AudioService, AudioUtteranceInput
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.jobs import JobService
-from backend.app.services.tag_values import normalize_english_tag_value
+from backend.app.services.speaker_tags import voice_speaker_tag_value
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -83,24 +83,27 @@ class AudioSynthesisService:
         title: str,
         text: str,
         voice_id: int,
+        speaker_display_name: str | None = None,
         tag_ids: list[int],
         target_visibility: AudioVisibility,
     ) -> AudioSynthesisSubmission:
         self._validate_visibility(target_visibility)
         voice = self._authorized_voice(session, author, voice_id)
         tags = self._tags(session, tag_ids)
+        utterances = [
+            AudioUtteranceInput(
+                voice_id=voice.id,
+                speaker_display_name=speaker_display_name or voice.title,
+                text=text,
+            )
+        ]
+        tags.extend(self._speaker_tags(session, utterances))
         return self._create_submission(
             session,
             author=author,
             title=title,
             source_type=AudioSourceType.SINGLE_SPEAKER,
-            utterances=[
-                AudioUtteranceInput(
-                    voice_id=voice.id,
-                    speaker_display_name=voice.title,
-                    text=text,
-                )
-            ],
+            utterances=utterances,
             tags=tags,
             target_visibility=target_visibility,
             silence_milliseconds=0,
@@ -391,7 +394,10 @@ class AudioSynthesisService:
         tags: list[AudioTag] = []
         seen_ids: set[int] = set()
         for utterance in utterances:
-            value = normalize_english_tag_value(utterance.speaker_display_name)
+            voice = self.voice_repository.get_by_id(session, utterance.voice_id)
+            if voice is None:
+                raise NotFoundError("Voice not found")
+            value = voice_speaker_tag_value(voice)
             tag = self.tag_repository.get_by_normalized_value(
                 session,
                 AudioTagType.SPEAKER,
