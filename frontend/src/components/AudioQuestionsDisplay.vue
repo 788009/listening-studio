@@ -7,7 +7,7 @@ const { t } = useI18n()
 </script>
 
 <template>
-  <ol class="min-w-0 divide-y divide-line border-y border-line">
+  <ol class="min-w-0 divide-y divide-line">
     <li v-for="(question, index) in questions" :key="question.id" class="py-5 first:pt-0 last:pb-0">
       <div class="flex min-w-0 gap-3">
         <span class="flex h-7 w-7 shrink-0 items-center justify-center border border-line text-sm font-medium">
