@@ -223,6 +223,7 @@ class AudioSynthesisService:
                     "Audio cannot be generated from its current state"
                 )
 
+            checkpoint(10)
             if self.audio_storage.exists(audio.id):
                 return self._complete_existing(
                     session,
@@ -245,7 +246,9 @@ class AudioSynthesisService:
             else:
                 raise JobFailedError("Audio synthesis task data is invalid")
             self.audio_storage.inspect_temporary(job_id)
+            checkpoint(82)
             self.audio_storage.atomic_replace(audio.id, job_id)
+            checkpoint(88)
             self.audio_service.record_file_metadata(session, audio)
             self.audio_service.transition_status(session, audio, AudioStatus.READY)
             self.audio_service.set_visibility(session, audio, target_visibility)
@@ -303,7 +306,7 @@ class AudioSynthesisService:
         segment_paths: list[Path] = []
         utterance_count = len(audio.utterances)
         for position, utterance in enumerate(audio.utterances):
-            checkpoint(10 + (position * 60 // utterance_count))
+            checkpoint(20 + (position * 55 // utterance_count))
             segment_path = self.audio_storage.segment_audio_path(job_id, position)
             self.integration.synthesize(
                 self.voice_storage.path(utterance.voice_id, VoiceAsset.MODEL),
@@ -312,7 +315,7 @@ class AudioSynthesisService:
             )
             self.audio_storage.inspect_segment(job_id, position)
             segment_paths.append(segment_path)
-        checkpoint(70)
+        checkpoint(75)
         self.combiner.combine_wav(
             segment_paths,
             self.audio_storage.temporary_audio_path(job_id),

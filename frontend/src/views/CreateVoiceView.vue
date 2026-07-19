@@ -9,6 +9,7 @@ import {
   type VoiceTag,
 } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import ActiveJobProgress from '@/components/ActiveJobProgress.vue'
 import { useVoiceCreationStore } from '@/stores/voiceCreation'
 import { useI18n } from '@/i18n'
 
@@ -24,11 +25,12 @@ const tagsLoading = ref(true)
 const tagCreating = ref(false)
 const formError = ref('')
 
-const statusLabel = computed(() => {
-  if (creation.job?.status === 'running') return t('Generating voice model')
-  if (creation.job?.status === 'queued') return t('Waiting for processing')
-  return ''
-})
+const progressStages = computed(() => [
+  { threshold: 5, label: t('Preparing reference audio') },
+  { threshold: 20, label: t('Generating voice model') },
+  { threshold: 80, label: t('Saving voice model') },
+  { threshold: 90, label: t('Finalizing voice') },
+])
 const failureMessage = computed(
   () => creation.job?.errorSummary || creation.errorMessage,
 )
@@ -118,26 +120,14 @@ onUnmounted(creation.stopPolling)
     </div>
 
     <div v-if="creation.active" class="mt-6 rounded-lg border border-line bg-surface px-5 py-8 shadow-panel">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p class="text-base font-semibold">{{ statusLabel }}</p>
-          <p class="mt-1 text-sm text-muted">{{ t('Task {id}', { id: creation.jobId ?? '' }) }}</p>
-        </div>
-        <span class="text-sm font-medium tabular-nums">{{ creation.job?.progress ?? 0 }}%</span>
-      </div>
-      <div
-        class="mt-5 h-2 overflow-hidden bg-canvas"
-        role="progressbar"
-        :aria-label="t('Voice creation progress')"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-valuenow="creation.job?.progress ?? 0"
-      >
-        <div
-          class="h-full bg-accent transition-[width] motion-reduce:transition-none"
-          :style="{ width: `${creation.job?.progress ?? 0}%` }"
-        />
-      </div>
+      <ActiveJobProgress
+        :progress="creation.job?.progress ?? 0"
+        :queued="creation.job?.status === 'queued'"
+        :queued-label="t('Waiting for processing')"
+        :stages="progressStages"
+        :task-label="t('Task {id}', { id: creation.jobId ?? '' })"
+        :progress-label="t('Voice creation progress')"
+      />
     </div>
 
     <div v-else-if="creation.completed && creation.voiceId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">

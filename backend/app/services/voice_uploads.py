@@ -253,7 +253,7 @@ class VoiceUploadService:
         job_id: int,
         target_visibility: VoiceVisibility,
         request_id: str,
-        checkpoint: Callable[[], None],
+        checkpoint: Callable[[int], None],
     ) -> Voice:
         if self.job_storage is None:
             raise RuntimeError("Job storage is required for asynchronous uploads")
@@ -278,7 +278,7 @@ class VoiceUploadService:
         reference_temporary: Path | None = None
         model_temporary: Path | None = None
         try:
-            checkpoint()
+            checkpoint(10)
             staged_reference = self.job_storage.reference_path(job_id)
             if not staged_reference.is_file() or staged_reference.is_symlink():
                 raise JobFailedError("Staged reference audio is unavailable")
@@ -291,8 +291,9 @@ class VoiceUploadService:
                 voice.id,
                 VoiceAsset.MODEL,
             )
+            checkpoint(20)
             self.integration.extract_voice(reference_temporary, model_temporary)
-            checkpoint()
+            checkpoint(80)
             self.storage.atomic_replace(
                 voice.id,
                 VoiceAsset.REFERENCE,
@@ -305,6 +306,7 @@ class VoiceUploadService:
                 model_temporary,
             )
             model_temporary = None
+            checkpoint(90)
             self.voice_service.transition_status(session, voice, VoiceStatus.READY)
             self.voice_service.set_visibility(session, voice, target_visibility)
             session.commit()

@@ -29,11 +29,6 @@ class VoiceUploadJobHandler:
         except (TypeError, ValueError):
             raise JobExecutionError("Voice upload visibility is invalid") from None
 
-        progress_steps = iter((15, 80))
-
-        def checkpoint() -> None:
-            context.update_progress(next(progress_steps, 90))
-
         context.update_progress(5)
         try:
             with context.session_factory() as session:
@@ -43,7 +38,7 @@ class VoiceUploadJobHandler:
                     job_id=job.id,
                     target_visibility=visibility,
                     request_id=f"job-{job.id}",
-                    checkpoint=checkpoint,
+                    checkpoint=context.update_progress,
                 )
         except JobFailedError as exc:
             raise JobExecutionError(
