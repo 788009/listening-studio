@@ -87,9 +87,9 @@ class AudioSynthesisService:
         tag_ids: list[int],
         target_visibility: AudioVisibility,
     ) -> AudioSynthesisSubmission:
-        self._validate_visibility(target_visibility)
-        voice = self._authorized_voice(session, author, voice_id)
-        tags = self._tags(session, tag_ids)
+        self.validate_visibility(target_visibility)
+        voice = self.authorized_voice(session, author, voice_id)
+        tags = self.resolve_tags(session, tag_ids)
         utterances = [
             AudioUtteranceInput(
                 voice_id=voice.id,
@@ -97,7 +97,7 @@ class AudioSynthesisService:
                 text=text,
             )
         ]
-        tags.extend(self._voice_tags(session, utterances))
+        tags.extend(self.voice_tags(session, utterances))
         return self._create_submission(
             session,
             author=author,
@@ -120,8 +120,8 @@ class AudioSynthesisService:
         target_visibility: AudioVisibility,
         silence_milliseconds: int,
     ) -> AudioSynthesisSubmission:
-        self._validate_visibility(target_visibility)
-        self._validate_silence(silence_milliseconds)
+        self.validate_visibility(target_visibility)
+        self.validate_silence(silence_milliseconds)
         if not utterances:
             raise DomainValidationError(
                 "Dialogue requires at least one utterance",
@@ -133,9 +133,9 @@ class AudioSynthesisService:
                     "Audio utterance is invalid",
                     details={"field": "utterances"},
                 )
-            self._authorized_voice(session, author, utterance.voice_id)
-        tags = self._tags(session, tag_ids)
-        tags.extend(self._voice_tags(session, utterances))
+            self.authorized_voice(session, author, utterance.voice_id)
+        tags = self.resolve_tags(session, tag_ids)
+        tags.extend(self.voice_tags(session, utterances))
         return self._create_submission(
             session,
             author=author,
@@ -236,7 +236,7 @@ class AudioSynthesisService:
                 AudioSourceType.MULTI_TURN,
                 AudioSourceType.CORPUS,
             }:
-                self._validate_silence(silence_milliseconds)
+                self.validate_silence(silence_milliseconds)
                 self._synthesize_dialogue(
                     audio,
                     job_id,
@@ -380,7 +380,7 @@ class AudioSynthesisService:
             details={"audioId": audio_id},
         ) from exception
 
-    def _tags(self, session: Session, tag_ids: list[int]) -> list[AudioTag]:
+    def resolve_tags(self, session: Session, tag_ids: list[int]) -> list[AudioTag]:
         tags: list[AudioTag] = []
         for tag_id in dict.fromkeys(tag_ids):
             tag = self.tag_repository.get_by_id(session, tag_id)
@@ -389,7 +389,7 @@ class AudioSynthesisService:
             tags.append(tag)
         return tags
 
-    def _voice_tags(
+    def voice_tags(
         self,
         session: Session,
         utterances: list[AudioUtteranceInput],
@@ -418,7 +418,7 @@ class AudioSynthesisService:
                 seen_ids.add(tag.id)
         return tags
 
-    def _authorized_voice(
+    def authorized_voice(
         self,
         session: Session,
         author: User,
@@ -434,7 +434,7 @@ class AudioSynthesisService:
         return voice
 
     @staticmethod
-    def _validate_visibility(visibility: AudioVisibility) -> None:
+    def validate_visibility(visibility: AudioVisibility) -> None:
         if not isinstance(visibility, AudioVisibility):
             raise DomainValidationError(
                 "Audio visibility is invalid",
@@ -442,7 +442,7 @@ class AudioSynthesisService:
             )
 
     @staticmethod
-    def _validate_silence(silence_milliseconds: int) -> None:
+    def validate_silence(silence_milliseconds: int) -> None:
         if (
             isinstance(silence_milliseconds, bool)
             or not isinstance(silence_milliseconds, int)

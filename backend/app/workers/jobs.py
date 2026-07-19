@@ -258,6 +258,8 @@ class JobWorker:
         with self.session_factory() as session:
             self.repository.mark_cancelled(session, job_id)
             session.commit()
+        if self.job_storage is not None:
+            self.job_storage.cleanup(job_id)
 
     def _fail(self, job_id: int, error_summary: str) -> None:
         with self.session_factory() as session:
@@ -266,3 +268,5 @@ class JobWorker:
             else:
                 self.repository.fail(session, job_id, error_summary[:1000])
             session.commit()
+        if self.job_storage is not None:
+            self.job_storage.cleanup(job_id)

@@ -219,6 +219,8 @@ class SecurityMiddleware:
             path in {
                 "/api/audios",
                 "/api/audios/dialogues",
+                "/api/audios/from-previews",
+                "/api/audio-previews",
                 "/api/generation-batches",
             }
             or path.endswith("/retry")

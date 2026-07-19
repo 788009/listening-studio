@@ -103,6 +103,28 @@ export interface DialogueAudioCreationInput {
   visibility: ResourceVisibility
 }
 
+export interface AudioPreviewInput {
+  voiceId: number
+  speakerDisplayName: string
+  text: string
+}
+
+export interface AudioPreviewAccepted {
+  jobId: number
+  contentDigest: string
+}
+
+export interface PreviewAudioUtterance extends AudioPreviewInput {
+  previewJobId: number
+}
+
+export interface PublishAudioFromPreviewsInput {
+  title: string
+  utterances: PreviewAudioUtterance[]
+  tagIds: number[]
+  visibility: ResourceVisibility
+}
+
 export function listAudios(options: AudioListOptions = {}): Promise<AudioList> {
   const parameters = new URLSearchParams({
     page: String(options.page ?? 1),
@@ -145,6 +167,34 @@ export function createDialogueAudio(
   input: DialogueAudioCreationInput,
 ): Promise<AudioCreationAccepted> {
   return apiRequest<AudioCreationAccepted>('/audios/dialogues', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function createAudioPreview(
+  input: AudioPreviewInput,
+): Promise<AudioPreviewAccepted> {
+  return apiRequest<AudioPreviewAccepted>('/audio-previews', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteAudioPreview(jobId: number): Promise<void> {
+  return apiRequest<void>(`/audio-previews/${positiveId(jobId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function audioPreviewMediaPath(jobId: number): string {
+  return `/media/audio-preview/${positiveId(jobId)}`
+}
+
+export function publishAudioFromPreviews(
+  input: PublishAudioFromPreviewsInput,
+): Promise<Audio> {
+  return apiRequest<Audio>('/audios/from-previews', {
     method: 'POST',
     body: JSON.stringify(input),
   })

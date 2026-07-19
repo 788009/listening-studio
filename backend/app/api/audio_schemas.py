@@ -74,6 +74,28 @@ class DialogueSynthesisRequest(TagApiModel):
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 
 
+class AudioPreviewRequest(TagApiModel):
+    voice_id: ResourceId
+    speaker_display_name: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1)
+
+
+class AudioPreviewAccepted(TagApiModel):
+    job_id: int
+    content_digest: str
+
+
+class PreviewAudioUtteranceRequest(DialogueUtteranceRequest):
+    preview_job_id: ResourceId
+
+
+class AudioPublishFromPreviewsRequest(TagApiModel):
+    title: Title
+    utterances: list[PreviewAudioUtteranceRequest] = Field(min_length=1)
+    tag_ids: list[ResourceId] = Field(default_factory=list)
+    visibility: AudioVisibility = AudioVisibility.PRIVATE
+
+
 class AudioUpdateRequest(TagApiModel):
     title: Title | None = None
     tag_ids: list[ResourceId] | None = None

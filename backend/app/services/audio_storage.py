@@ -31,6 +31,17 @@ class AudioStorage:
     def path(self, audio_id: int) -> Path:
         return self.directory(audio_id) / "audio.wav"
 
+    def publishing_path(self, audio_id: int) -> Path:
+        return self.prepare_directory(audio_id) / ".audio.wav.tmp"
+
+    def finalize_publishing(self, audio_id: int) -> Path:
+        source = self.publishing_path(audio_id)
+        target = self.path(audio_id)
+        if source.is_symlink() or not source.is_file():
+            raise ConflictError("Publishing audio file does not exist")
+        os.replace(source, target)
+        return target
+
     def prepare_directory(self, audio_id: int) -> Path:
         directory = self.directory(audio_id)
         directory.mkdir(parents=True, exist_ok=True)
@@ -87,6 +98,11 @@ class AudioStorage:
         path = self.segment_audio_path(job_id, position)
         if path.is_symlink() or not path.is_file():
             raise ConflictError("Audio segment file does not exist")
+        return self._inspect_path(path)
+
+    def inspect_file(self, path: Path) -> StoredAudioMetadata:
+        if path.is_symlink() or not path.is_file():
+            raise ConflictError("Audio file does not exist")
         return self._inspect_path(path)
 
     @staticmethod

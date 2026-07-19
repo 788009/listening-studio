@@ -7,6 +7,11 @@ from loguru import logger
 from backend.app.api.auth import router as auth_router
 from backend.app.api.audios import media_router as audio_media_router
 from backend.app.api.audios import router as audios_router
+from backend.app.api.audio_previews import media_router as audio_preview_media_router
+from backend.app.api.audio_previews import (
+    publish_router as audio_preview_publish_router,
+)
+from backend.app.api.audio_previews import router as audio_previews_router
 from backend.app.api.generation_batches import router as generation_batches_router
 from backend.app.api.jobs import router as jobs_router
 from backend.app.api.papers import paper_router, preset_router
@@ -83,7 +88,10 @@ def create_app(
     app.include_router(audio_tags_router)
     app.include_router(voices_router)
     app.include_router(audios_router)
+    app.include_router(audio_previews_router)
+    app.include_router(audio_preview_publish_router)
     app.include_router(audio_media_router)
+    app.include_router(audio_preview_media_router)
     app.include_router(voice_media_router)
     app.include_router(jobs_router)
     app.include_router(generation_batches_router)

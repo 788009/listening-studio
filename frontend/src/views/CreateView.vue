@@ -1,33 +1,37 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 
 import {
+  audioPreviewMediaPath,
+  createAudioPreview,
   createAudioTag,
+  deleteAudioPreview,
   listAudioCreationTags,
+  publishAudioFromPreviews,
   type AudioTag,
+  type AudioPreviewInput,
   type ResourceVisibility,
 } from '@/api/audios'
+import { getJob, type JobStatus } from '@/api/jobs'
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
-import ActiveJobProgress from '@/components/ActiveJobProgress.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import type {
   DialogueTurnDraft,
+  DialogueTurnPreview,
   SpeakerDraft,
 } from '@/components/dialogueTurnTypes'
 import type { TagTranslation } from '@/api/voices'
-import { useAudioCreationStore } from '@/stores/audioCreation'
 import { useI18n } from '@/i18n'
 
 type CreationTagType = 'topic' | 'category'
 
 const route = useRoute()
 const { locale, t } = useI18n()
-const creation = useAudioCreationStore()
 const title = ref('')
 const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
@@ -41,13 +45,25 @@ const tagDialogInitialEnglishValue = ref('')
 const tagDialogError = ref('')
 const loadingOptions = ref(true)
 const formError = ref('')
+const publishing = ref(false)
+const publishedAudioId = ref<number | null>(null)
 
-const progressStages = computed(() => [
-  { threshold: 5, label: t('Preparing audio generation') },
-  { threshold: 20, label: t('Generating speech') },
-  { threshold: 82, label: t('Processing generated audio') },
-  { threshold: 88, label: t('Saving audio') },
-])
+interface TurnPreviewState {
+  requestId: number
+  signature: string
+  jobId: number | null
+  status: 'submitting' | JobStatus
+  progress: number
+  errorMessage?: string
+}
+
+interface TurnContent extends AudioPreviewInput {
+  turnKey: number
+}
+
+const previewStates = ref<Record<number, TurnPreviewState>>({})
+let previewPollTimer: ReturnType<typeof setTimeout> | undefined
+let nextPreviewRequestId = 0
 
 const tagGroups = computed(() => [
   {
@@ -59,8 +75,40 @@ const tagGroups = computed(() => [
     type: 'category' as const,
   },
 ])
-const failureMessage = computed(
-  () => creation.job?.errorSummary || creation.errorMessage,
+const previewPresentations = computed<Record<number, DialogueTurnPreview>>(() => {
+  const result: Record<number, DialogueTurnPreview> = {}
+  for (const turn of turns.value) {
+    const state = previewStates.value[turn.key]
+    const signature = turnSignature(turn.key)
+    if (!state) {
+      result[turn.key] = { status: 'idle', progress: 0 }
+    } else if (!signature || state.signature !== signature) {
+      result[turn.key] = { status: 'stale', progress: state.progress }
+    } else {
+      result[turn.key] = {
+        status: state.status === 'cancelled' ? 'failed' : state.status,
+        progress: state.progress,
+        mediaPath:
+          state.status === 'succeeded' && state.jobId
+            ? audioPreviewMediaPath(state.jobId)
+            : undefined,
+        errorMessage: state.errorMessage,
+      }
+    }
+  }
+  return result
+})
+
+const allPreviewsReady = computed(
+  () =>
+    turns.value.length > 0 &&
+    turns.value.every((turn) => previewPresentations.value[turn.key]?.status === 'succeeded'),
+)
+
+const previewGenerationActive = computed(() =>
+  Object.values(previewPresentations.value).some((preview) =>
+    ['submitting', 'queued', 'running'].includes(preview.status),
+  ),
 )
 
 function newSpeaker(voiceId?: string): SpeakerDraft {
@@ -88,6 +136,190 @@ function removeSpeaker(speakerKey: number): void {
   turns.value = turns.value.map((turn) =>
     turn.speakerKey === speakerKey ? { ...turn, speakerKey: fallbackKey } : turn,
   )
+}
+
+function turnContent(turnKey: number): TurnContent | null {
+  const turn = turns.value.find((item) => item.key === turnKey)
+  if (!turn) return null
+  const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
+  const voiceId = Number(speaker?.voiceId)
+  const speakerDisplayName = speaker?.name.trim() ?? ''
+  const text = turn.text.trim()
+  if (
+    !Number.isInteger(voiceId) ||
+    voiceId < 1 ||
+    !speakerDisplayName ||
+    !text
+  ) {
+    return null
+  }
+  return { turnKey, voiceId, speakerDisplayName, text }
+}
+
+function turnSignature(turnKey: number): string | null {
+  const content = turnContent(turnKey)
+  return content
+    ? JSON.stringify([content.voiceId, content.speakerDisplayName, content.text])
+    : null
+}
+
+function validateContent(): TurnContent[] | null {
+  const normalizedNames = speakers.value.map((speaker) =>
+    speaker.name.trim().normalize('NFKC').toLocaleLowerCase(),
+  )
+  if (
+    speakers.value.some(
+      (speaker) =>
+        !speaker.name.trim() ||
+        !Number.isInteger(Number(speaker.voiceId)) ||
+        Number(speaker.voiceId) < 1,
+    ) ||
+    new Set(normalizedNames).size !== normalizedNames.length
+  ) {
+    formError.value = t('Complete each speaker with a unique name and voice')
+    return null
+  }
+  const content = turns.value.map((turn) => turnContent(turn.key))
+  if (content.some((item) => item === null)) {
+    formError.value = t('Select a speaker and enter text for every item')
+    return null
+  }
+  return content as TurnContent[]
+}
+
+function schedulePreviewPoll(): void {
+  clearTimeout(previewPollTimer)
+  const hasActiveJob = Object.values(previewStates.value).some((state) =>
+    ['queued', 'running'].includes(state.status),
+  )
+  if (hasActiveJob) previewPollTimer = setTimeout(refreshPreviewJobs, 1000)
+}
+
+async function refreshPreviewJobs(): Promise<void> {
+  const active = Object.entries(previewStates.value).filter(
+    ([, state]) => state.jobId && ['queued', 'running'].includes(state.status),
+  )
+  await Promise.all(
+    active.map(async ([turnKeyValue, state]) => {
+      const turnKey = Number(turnKeyValue)
+      const jobId = state.jobId
+      if (!jobId) return
+      try {
+        const job = await getJob(jobId)
+        const current = previewStates.value[turnKey]
+        if (!current || current.jobId !== jobId) return
+        previewStates.value = {
+          ...previewStates.value,
+          [turnKey]: {
+            ...current,
+            status: job.status,
+            progress: job.progress,
+            errorMessage: job.errorSummary,
+          },
+        }
+      } catch (error) {
+        const current = previewStates.value[turnKey]
+        if (!current || current.jobId !== jobId) return
+        previewStates.value = {
+          ...previewStates.value,
+          [turnKey]: {
+            ...current,
+            status: 'failed',
+            errorMessage:
+              error instanceof ApiError
+                ? error.message
+                : t('Preview status could not be loaded'),
+          },
+        }
+      }
+    }),
+  )
+  schedulePreviewPoll()
+}
+
+async function generateTurnPreview(turnKey: number): Promise<void> {
+  formError.value = ''
+  const content = turnContent(turnKey)
+  if (!content) {
+    formError.value = t('Select a speaker and enter text for every item')
+    return
+  }
+  const signature = JSON.stringify([
+    content.voiceId,
+    content.speakerDisplayName,
+    content.text,
+  ])
+  const previous = previewStates.value[turnKey]
+  const requestId = ++nextPreviewRequestId
+  previewStates.value = {
+    ...previewStates.value,
+    [turnKey]: {
+      requestId,
+      signature,
+      jobId: null,
+      status: 'submitting',
+      progress: 0,
+    },
+  }
+  try {
+    const accepted = await createAudioPreview({
+      voiceId: content.voiceId,
+      speakerDisplayName: content.speakerDisplayName,
+      text: content.text,
+    })
+    if (previewStates.value[turnKey]?.requestId !== requestId) {
+      void deleteAudioPreview(accepted.jobId).catch(() => undefined)
+      return
+    }
+    previewStates.value = {
+      ...previewStates.value,
+      [turnKey]: {
+        requestId,
+        signature,
+        jobId: accepted.jobId,
+        status: 'queued',
+        progress: 0,
+      },
+    }
+    if (previous?.jobId && previous.jobId !== accepted.jobId) {
+      void deleteAudioPreview(previous.jobId).catch(() => undefined)
+    }
+    await refreshPreviewJobs()
+  } catch (error) {
+    if (previewStates.value[turnKey]?.requestId !== requestId) return
+    previewStates.value = {
+      ...previewStates.value,
+      [turnKey]: {
+        requestId,
+        signature,
+        jobId: null,
+        status: 'failed',
+        progress: 0,
+        errorMessage:
+          error instanceof ApiError ? error.message : t('Preview could not be submitted'),
+      },
+    }
+  }
+}
+
+async function generateMissingPreviews(): Promise<void> {
+  formError.value = ''
+  const content = validateContent()
+  if (!content) return
+  const missing = content.filter(
+    (item) => previewPresentations.value[item.turnKey]?.status !== 'succeeded',
+  )
+  await Promise.all(missing.map((item) => generateTurnPreview(item.turnKey)))
+}
+
+async function removeTurnPreview(turnKey: number): Promise<void> {
+  const state = previewStates.value[turnKey]
+  const next = { ...previewStates.value }
+  delete next[turnKey]
+  previewStates.value = next
+  if (state?.jobId) {
+    await deleteAudioPreview(state.jobId).catch(() => undefined)
+  }
 }
 
 function selectTag(tagId: number): void {
@@ -164,78 +396,49 @@ async function loadOptions(): Promise<void> {
 
 async function submit(): Promise<void> {
   formError.value = ''
+  if (!allPreviewsReady.value) {
+    await generateMissingPreviews()
+    return
+  }
   const normalizedTitle = title.value.trim()
   if (!normalizedTitle) {
     formError.value = t('Enter a title')
     return
   }
-  const normalizedSpeakers = speakers.value.map((speaker) => ({
-    ...speaker,
-    name: speaker.name.trim(),
-    voiceId: Number(speaker.voiceId),
-  }))
-  const normalizedNames = normalizedSpeakers.map((speaker) =>
-    speaker.name.normalize('NFKC').toLocaleLowerCase(),
-  )
-  if (
-    normalizedSpeakers.some(
-      (speaker) => !speaker.name || !Number.isInteger(speaker.voiceId) || speaker.voiceId < 1,
-    ) || new Set(normalizedNames).size !== normalizedNames.length
-  ) {
-    formError.value = t('Complete each speaker with a unique name and voice')
-    return
-  }
-
-  const content = turns.value.map((turn) => {
-    const speaker = normalizedSpeakers.find((item) => item.key === turn.speakerKey)
-    return {
-      speakerKey: turn.speakerKey,
-      voiceId: speaker?.voiceId ?? 0,
-      speakerDisplayName: speaker?.name ?? '',
-      text: turn.text.trim(),
-    }
+  const content = validateContent()
+  if (!content) return
+  const utterances = content.map((item) => {
+    const preview = previewStates.value[item.turnKey]
+    return preview?.jobId
+      ? {
+          previewJobId: preview.jobId,
+          voiceId: item.voiceId,
+          speakerDisplayName: item.speakerDisplayName,
+          text: item.text,
+        }
+      : null
   })
-  if (
-    content.some(
-      (turn) =>
-        !Number.isInteger(turn.voiceId) ||
-        turn.voiceId < 1 ||
-        !turn.speakerDisplayName ||
-        !turn.text,
-    )
-  ) {
-    formError.value = t('Select a speaker and enter text for every item')
-    return
-  }
-
-  const speakerKeys = new Set(content.map((item) => item.speakerKey))
-  if (speakerKeys.size === 1) {
-    const item = content[0]
-    if (!item) return
-    await creation.submitSingle({
+  if (utterances.some((item) => item === null)) return
+  publishing.value = true
+  try {
+    const audio = await publishAudioFromPreviews({
       title: normalizedTitle,
-      text: content.map((turn) => turn.text).join('\n'),
-      voiceId: item.voiceId,
-      speakerDisplayName: item.speakerDisplayName,
+      utterances: utterances as NonNullable<(typeof utterances)[number]>[],
       tagIds: selectedTagIds.value,
       visibility: visibility.value,
     })
-    return
+    publishedAudioId.value = audio.id
+    previewStates.value = {}
+  } catch (error) {
+    formError.value =
+      error instanceof ApiError ? error.message : t('Audio could not be published')
+  } finally {
+    publishing.value = false
   }
-  await creation.submitDialogue({
-    title: normalizedTitle,
-    utterances: content.map((utterance) => ({
-      voiceId: utterance.voiceId,
-      speakerDisplayName: utterance.speakerDisplayName,
-      text: utterance.text,
-    })),
-    tagIds: selectedTagIds.value,
-    visibility: visibility.value,
-  })
 }
 
 function startAnother(): void {
-  creation.reset()
+  publishedAudioId.value = null
   title.value = ''
   speakers.value = [newSpeaker()]
   turns.value = [newTurn(speakers.value[0]?.key)]
@@ -244,19 +447,26 @@ function startAnother(): void {
   formError.value = ''
 }
 
-function leaveCreateView(): void {
-  if (creation.completed) {
-    creation.reset()
-    return
-  }
-  creation.stopPolling()
+async function cleanupPreviews(): Promise<void> {
+  clearTimeout(previewPollTimer)
+  const jobIds = [
+    ...new Set(
+      Object.values(previewStates.value)
+        .map((state) => state.jobId)
+        .filter((jobId): jobId is number => jobId !== null),
+    ),
+  ]
+  previewStates.value = {}
+  await Promise.allSettled(jobIds.map((jobId) => deleteAudioPreview(jobId)))
 }
 
 onMounted(() => {
-  creation.resume()
   void loadOptions()
 })
-onUnmounted(leaveCreateView)
+onBeforeRouteLeave(async () => {
+  if (!publishedAudioId.value) await cleanupPreviews()
+})
+onUnmounted(() => clearTimeout(previewPollTimer))
 </script>
 
 <template>
@@ -278,22 +488,11 @@ onUnmounted(leaveCreateView)
       </RouterLink>
     </div>
 
-    <div v-if="creation.active" class="mt-6 rounded-lg border border-line bg-surface px-5 py-8 shadow-panel">
-      <ActiveJobProgress
-        :progress="creation.job?.progress ?? 0"
-        :queued="creation.job?.status === 'queued'"
-        :queued-label="t('Waiting for processing')"
-        :stages="progressStages"
-        :task-label="t('Task {id}', { id: creation.jobId ?? '' })"
-        :progress-label="t('Audio generation progress')"
-      />
-    </div>
-
-    <div v-else-if="creation.completed && creation.audioId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
+    <div v-if="publishedAudioId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
       <p class="text-base font-semibold text-success">{{ t('Audio is ready') }}</p>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
-          :to="`/audio/${creation.audioId}`"
+          :to="`/audio/${publishedAudioId}`"
           class="inline-flex h-10 items-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent"
         >
           {{ t('View audio') }}
@@ -308,12 +507,6 @@ onUnmounted(leaveCreateView)
     </div>
 
     <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
-      <div v-if="creation.failed" class="border-b border-line px-5 py-4">
-        <p role="alert" class="break-words text-sm text-danger">
-          {{ failureMessage || t('Audio generation failed') }}
-        </p>
-      </div>
-
       <div class="border-b border-line px-5 py-6">
         <div class="min-w-0">
           <label for="audio-title" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
@@ -321,7 +514,6 @@ onUnmounted(leaveCreateView)
             id="audio-title"
             v-model="title"
             type="text"
-            required
             maxlength="200"
             class="h-10 w-full min-w-0 border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           />
@@ -345,6 +537,9 @@ onUnmounted(leaveCreateView)
         v-if="!loadingOptions && voices.length > 0"
         v-model="turns"
         :speakers="speakers"
+        :previews="previewPresentations"
+        @generate="generateTurnPreview"
+        @remove="removeTurnPreview"
       />
 
       <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
@@ -367,10 +562,11 @@ onUnmounted(leaveCreateView)
             <span class="text-sm font-medium">{{ t('Publish when ready') }}</span>
           </label>
           <div>
-            <p v-if="formError || creation.errorMessage" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError || creation.errorMessage }}</p>
-            <button type="submit" :disabled="creation.submitting || creation.active || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
-              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" /></svg>
-              {{ creation.submitting ? t('Submitting') : creation.failed ? t('Retry generation') : t('Generate audio') }}
+            <p v-if="formError" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError }}</p>
+            <button type="submit" :disabled="publishing || previewGenerationActive || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
+              <svg v-if="allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
+              <svg v-else viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M8 5v14l11-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+              {{ publishing ? t('Submitting') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
             </button>
           </div>
         </div>

@@ -12,6 +12,10 @@ from backend.app.integrations.llm import (
     ValidatingListeningContentGenerator,
 )
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audio_previews import (
+    AUDIO_PREVIEW_JOB_TYPE,
+    AudioPreviewService,
+)
 from backend.app.services.audio_synthesis import (
     AUDIO_SYNTHESIS_JOB_TYPE,
     AudioSynthesisService,
@@ -30,6 +34,7 @@ from backend.app.services.voice_uploads import (
     VoiceUploadService,
 )
 from backend.app.workers.audio_synthesis import AudioSynthesisJobHandler
+from backend.app.workers.audio_preview import AudioPreviewJobHandler
 from backend.app.workers.corpus_generation import CorpusGenerationJobHandler
 from backend.app.workers.jobs import JobHandler, JobWorker
 from backend.app.workers.paper_rendering import PaperRenderJobHandler
@@ -51,6 +56,12 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         voice_storage=voice_storage,
         integration=integration,
     )
+    audio_preview_service = AudioPreviewService(
+        job_storage=JobStorage(settings.data_dir),
+        voice_storage=voice_storage,
+        integration=integration,
+        synthesis_service=audio_service,
+    )
     corpus_service = CorpusGenerationService(
         generator=ValidatingListeningContentGenerator(
             PlaceholderListeningContentGenerator()
@@ -63,6 +74,7 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
     return {
         VOICE_UPLOAD_JOB_TYPE: VoiceUploadJobHandler(voice_service),
         AUDIO_SYNTHESIS_JOB_TYPE: AudioSynthesisJobHandler(audio_service),
+        AUDIO_PREVIEW_JOB_TYPE: AudioPreviewJobHandler(audio_preview_service),
         CORPUS_GENERATION_JOB_TYPE: CorpusGenerationJobHandler(corpus_service),
         PAPER_RENDER_JOB_TYPE: PaperRenderJobHandler(PaperRenderService(audio_storage)),
     }

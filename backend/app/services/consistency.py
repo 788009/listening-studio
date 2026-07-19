@@ -22,6 +22,7 @@ from backend.app.db.models.voice import (
     VoiceVisibility,
 )
 from backend.app.services.audio_storage import AudioStorage, StoredAudioMetadata
+from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 
 
@@ -343,6 +344,8 @@ class ConsistencyService:
                     JobStatus.FAILED,
                     JobStatus.CANCELLED,
                 }:
+                    if self._is_retained_audio_preview(job, entry):
+                        continue
                     issues.append(
                         ConsistencyIssue(
                             code="legacy_temporary",
@@ -358,6 +361,24 @@ class ConsistencyService:
                 continue
             issues.append(self._orphan_issue("job", None, entry))
         return issues
+
+    def _is_retained_audio_preview(self, job: Job, directory: Path) -> bool:
+        if job.type != AUDIO_PREVIEW_JOB_TYPE or job.status is not JobStatus.SUCCEEDED:
+            return False
+        entries = list(directory.iterdir())
+        matches_layout = (
+            len(entries) == 1
+            and entries[0].name == JobStorage.AUDIO_PREVIEW_FILENAME
+            and entries[0].is_file()
+            and not entries[0].is_symlink()
+        )
+        if not matches_layout:
+            return False
+        try:
+            self.audio_storage.inspect_file(entries[0])
+        except ConflictError:
+            return False
+        return True
 
     def _scan_voice_temporary_files(self, known_ids: set[int]) -> list[ConsistencyIssue]:
         issues: list[ConsistencyIssue] = []

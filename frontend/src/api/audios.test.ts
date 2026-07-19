@@ -1,15 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  audioPreviewMediaPath,
   audioMediaPath,
   autocompleteAudioTags,
+  createAudioPreview,
   createAudioTag,
   createDialogueAudio,
   createSingleAudio,
   deleteAudio,
+  deleteAudioPreview,
   getAudio,
   listAudios,
   listAudioCreationTags,
+  publishAudioFromPreviews,
   updateAudio,
 } from './audios'
 
@@ -104,6 +108,42 @@ describe('audio API', () => {
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual(
       expect.objectContaining({ visibility: 'public' }),
     )
+  })
+
+  it('creates, deletes, and publishes turn previews', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ jobId: 21, contentDigest: 'a'.repeat(64) }, 202),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(jsonResponse({ id: 9 }, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createAudioPreview({
+      voiceId: 2,
+      speakerDisplayName: 'Woman',
+      text: 'Hello',
+    })
+    await deleteAudioPreview(21)
+    await publishAudioFromPreviews({
+      title: 'Published',
+      utterances: [
+        {
+          previewJobId: 21,
+          voiceId: 2,
+          speakerDisplayName: 'Woman',
+          text: 'Hello',
+        },
+      ],
+      tagIds: [],
+      visibility: 'private',
+    })
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audio-previews')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/audio-previews/21')
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/audios/from-previews')
+    expect(audioPreviewMediaPath(21)).toBe('/media/audio-preview/21')
   })
 
   it('loads only topic and category creation tags', async () => {
