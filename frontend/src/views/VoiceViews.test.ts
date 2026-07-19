@@ -143,6 +143,9 @@ describe('voice views', () => {
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
     expect(wrapper.text()).toContain('Author')
+    expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
+      expect.arrayContaining(['Author', 'Gender']),
+    )
     const tagSearchLinks = wrapper
       .findAll('a')
       .filter((link) => link.attributes('href')?.includes('/voices?q='))

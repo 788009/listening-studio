@@ -138,6 +138,7 @@ describe('audio views', () => {
     await vi.advanceTimersByTimeAsync(160)
     await flushPromises()
     expect(wrapper.text()).toContain('Topic: 气候 变化')
+    expect(wrapper.find('.tag-chip').exists()).toBe(false)
     await wrapper.get('input').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.get('input').trigger('keydown', { key: 'Enter' })
     const updates = wrapper.emitted('update:modelValue') ?? []
@@ -194,6 +195,9 @@ describe('audio views', () => {
     expect(wrapper.text()).toContain('Author')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('气候 变化')
+    expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
+      expect.arrayContaining(['Author', 'Topic']),
+    )
     const tagSearchLinks = wrapper
       .findAll('a')
       .filter((link) => link.attributes('href')?.includes('?q='))

@@ -138,7 +138,7 @@ onBeforeUnmount(() => clearTimeout(debounceTimer))
             :class="{ 'bg-accent-soft': index === activeIndex }"
             @mousedown.prevent="choose(suggestion)"
           >
-            <span class="tag-chip">{{ displayValue(suggestion) }}</span>
+            {{ displayValue(suggestion) }}
           </button>
         </li>
       </ul>
