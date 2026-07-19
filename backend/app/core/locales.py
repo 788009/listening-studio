@@ -16,6 +16,8 @@ _ZH_ERROR_MESSAGES = {
     "conflict": "资源当前状态不允许此操作",
     "user_id_taken": "该用户 ID 已被占用，请选择其他 ID",
     "user_id_immutable": "用户 ID 已经设置，不能再次修改",
+    "audio_title_taken": "已存在同名音频，请使用其他名称",
+    "voice_title_taken": "已存在同名音色，请使用其他名称",
     "validation_error": "请求参数无效",
     "job_failed": "任务执行失败",
     "internal_error": "服务器内部错误",

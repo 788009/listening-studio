@@ -222,7 +222,7 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             first = self.user(session, "TeacherOne")
             second = self.user(session, "TeacherTwo")
             public_first = self.audio(session, first, "Shared search")
-            public_second = self.audio(session, second, "Shared search")
+            public_second = self.audio(session, second, "Shared search two")
             own_private = self.audio(
                 session,
                 first,

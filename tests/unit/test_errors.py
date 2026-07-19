@@ -17,6 +17,7 @@ from starlette.types import ASGIApp
 from backend.app.api.schemas import ResourceId
 from backend.app.core.config import Settings
 from backend.app.core.exceptions import (
+    AudioTitleTakenError,
     ConflictError,
     DomainError,
     DomainValidationError,
@@ -26,6 +27,7 @@ from backend.app.core.exceptions import (
     ProfileIncompleteError,
     UserIdImmutableError,
     UserIdTakenError,
+    VoiceTitleTakenError,
 )
 from backend.app.factory import create_app
 
@@ -75,6 +77,8 @@ class ErrorHandlingTest(unittest.TestCase):
             (ConflictError, 409, "conflict"),
             (UserIdTakenError, 409, "user_id_taken"),
             (UserIdImmutableError, 409, "user_id_immutable"),
+            (AudioTitleTakenError, 409, "audio_title_taken"),
+            (VoiceTitleTakenError, 409, "voice_title_taken"),
             (DomainValidationError, 422, "validation_error"),
             (JobFailedError, 500, "job_failed"),
         ]

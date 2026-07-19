@@ -66,7 +66,11 @@ class Voice(Base):
             "(sample_source = 'public_audio' AND sample_audio_id IS NOT NULL)",
             name="ck_voices_sample_source_consistency",
         ),
-        Index("ix_voices_normalized_title", "normalized_title"),
+        Index(
+            "ix_voices_normalized_title",
+            "normalized_title",
+            unique=True,
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

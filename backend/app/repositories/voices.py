@@ -14,6 +14,16 @@ class VoiceRepository:
     def get_by_id(self, session: Session, voice_id: int) -> Voice | None:
         return session.get(Voice, voice_id)
 
+    def get_by_normalized_title(
+        self,
+        session: Session,
+        normalized_title: str,
+    ) -> Voice | None:
+        statement = select(Voice).where(
+            Voice.normalized_title == normalized_title
+        )
+        return session.scalar(statement)
+
     def list_all(self, session: Session) -> list[Voice]:
         statement = (
             select(Voice)

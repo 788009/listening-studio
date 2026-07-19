@@ -37,4 +37,14 @@ describe('i18n', () => {
       '用户 ID 已经设置，不能再次修改',
     )
   })
+
+  it('translates duplicate resource title errors', () => {
+    setLocale('zh-CN')
+    expect(translateApiError('audio_title_taken', 'fallback')).toBe(
+      '已存在同名音频，请使用其他名称',
+    )
+    expect(translateApiError('voice_title_taken', 'fallback')).toBe(
+      '已存在同名音色，请使用其他名称',
+    )
+  })
 })

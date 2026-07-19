@@ -6,12 +6,17 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.auth import Principal
-from backend.app.core.exceptions import ConflictError, DomainValidationError
+from backend.app.core.exceptions import (
+    ConflictError,
+    DomainValidationError,
+    VoiceTitleTakenError,
+)
 from backend.app.db.models.user import User, UserStatus
-from backend.app.db.models.voice import VoiceStatus, VoiceVisibility
+from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTagType
 from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.services.authorization import AuthorizationService
@@ -71,6 +76,45 @@ class VoiceIntegrationTest(unittest.TestCase):
             self.assertEqual(len(voice.tags), 1)
             self.assertEqual(voice.tags[0].type, VoiceTagType.AUTHOR)
             self.assertEqual(voice.tags[0].value, "TeacherOne")
+
+    def test_voice_titles_are_globally_unique_after_normalization(self) -> None:
+        with self.session_factory() as session:
+            first_author = self.create_author(session, "TeacherOne")
+            second_author = self.create_author(session, "TeacherTwo")
+            first = self.service.create_voice(
+                session,
+                author=first_author,
+                title="Shared Voice",
+            )
+            other = self.service.create_voice(
+                session,
+                author=second_author,
+                title="Other Voice",
+            )
+
+            with self.assertRaises(VoiceTitleTakenError):
+                self.service.create_voice(
+                    session,
+                    author=second_author,
+                    title="  ＳＨＡＲＥＤ ＶＯＩＣＥ  ",
+                )
+            with self.assertRaises(VoiceTitleTakenError):
+                self.service.update_title(session, other, "shared voice")
+
+            self.service.update_title(session, first, "Ｓhared Ｖoice")
+            self.assertEqual(first.title, "Shared Voice")
+            self.assertEqual(other.title, "Other Voice")
+
+            session.commit()
+            session.add(
+                Voice(
+                    author_id=second_author.id,
+                    title="Database duplicate",
+                    normalized_title="shared voice",
+                )
+            )
+            with self.assertRaises(IntegrityError):
+                session.flush()
 
     def test_path_and_atomic_replacement_ignore_resource_text(self) -> None:
         model_temporary = self.storage.create_temporary_file(1, VoiceAsset.MODEL)

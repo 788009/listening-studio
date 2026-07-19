@@ -5,9 +5,11 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import (
+    AudioTitleTakenError,
     ConflictError,
     DomainValidationError,
     ProfileIncompleteError,
@@ -77,6 +79,8 @@ class AudioService:
                 details={"field": "sourceType"},
             )
         normalized_title, search_title = self._normalize_title(title)
+        if self.repository.get_by_normalized_title(session, search_title):
+            raise AudioTitleTakenError(details={"field": "title"})
         normalized_utterances = self._normalize_utterances(utterances)
         if source_type is AudioSourceType.MULTI_TURN and not normalized_utterances:
             raise DomainValidationError(
@@ -86,15 +90,21 @@ class AudioService:
         normalized_text = self._canonical_text(text, normalized_utterances)
         associated_tags = self._resolve_tags(session, author, tags)
 
-        audio = self.repository.create(
-            session,
-            author=author,
-            title=normalized_title,
-            normalized_title=search_title,
-            text=normalized_text,
-            source_type=source_type,
-            tags=associated_tags,
-        )
+        try:
+            audio = self.repository.create(
+                session,
+                author=author,
+                title=normalized_title,
+                normalized_title=search_title,
+                text=normalized_text,
+                source_type=source_type,
+                tags=associated_tags,
+            )
+        except IntegrityError as exc:
+            session.rollback()
+            if self.repository.get_by_normalized_title(session, search_title):
+                raise AudioTitleTakenError(details={"field": "title"}) from exc
+            raise
         for position, utterance in enumerate(normalized_utterances):
             self.repository.add_utterance(
                 session,
@@ -194,9 +204,22 @@ class AudioService:
 
     def update_title(self, session: Session, audio: Audio, title: str) -> Audio:
         value, normalized = self._normalize_title(title)
+        existing = self.repository.get_by_normalized_title(session, normalized)
+        if existing is not None and existing.id != audio.id:
+            raise AudioTitleTakenError(details={"field": "title"})
         audio.title = value
         audio.normalized_title = normalized
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            conflicting = self.repository.get_by_normalized_title(
+                session,
+                normalized,
+            )
+            if conflicting is not None and conflicting.id != audio.id:
+                raise AudioTitleTakenError(details={"field": "title"}) from exc
+            raise
         return audio
 
     def replace_user_tags(

@@ -8,9 +8,14 @@ from pathlib import Path
 from alembic import command
 from alembic.config import Config
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.app.core.exceptions import ConflictError, DomainValidationError
+from backend.app.core.exceptions import (
+    AudioTitleTakenError,
+    ConflictError,
+    DomainValidationError,
+)
 from backend.app.db.models.audio import (
     Audio,
     AudioSourceType,
@@ -111,6 +116,53 @@ class AudioIntegrationTest(unittest.TestCase):
                     (AudioTagType.AUTHOR, "TeacherOne"),
                 },
             )
+
+    def test_audio_titles_are_globally_unique_after_normalization(self) -> None:
+        with self.session_factory() as session:
+            first_author = self.create_author(session, "TeacherOne")
+            second_author = self.create_author(session, "TeacherTwo")
+            first = self.service.create_audio(
+                session,
+                author=first_author,
+                title="Shared Title",
+                source_type=AudioSourceType.CORPUS,
+                text="First",
+            )
+            other = self.service.create_audio(
+                session,
+                author=second_author,
+                title="Other Title",
+                source_type=AudioSourceType.CORPUS,
+                text="Second",
+            )
+
+            with self.assertRaises(AudioTitleTakenError):
+                self.service.create_audio(
+                    session,
+                    author=second_author,
+                    title="  ＳＨＡＲＥＤ ＴＩＴＬＥ  ",
+                    source_type=AudioSourceType.CORPUS,
+                    text="Duplicate",
+                )
+            with self.assertRaises(AudioTitleTakenError):
+                self.service.update_title(session, other, "shared title")
+
+            self.service.update_title(session, first, "Ｓhared Ｔitle")
+            self.assertEqual(first.title, "Shared Title")
+            self.assertEqual(other.title, "Other Title")
+
+            session.commit()
+            session.add(
+                Audio(
+                    author_id=second_author.id,
+                    title="Database duplicate",
+                    normalized_title="shared title",
+                    text="Duplicate",
+                    source_type=AudioSourceType.CORPUS,
+                )
+            )
+            with self.assertRaises(IntegrityError):
+                session.flush()
 
     def test_multi_turn_order_full_text_foreign_key_and_cascade(self) -> None:
         with self.session_factory() as session:

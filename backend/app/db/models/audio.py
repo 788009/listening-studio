@@ -66,7 +66,13 @@ audio_tag_associations = Table(
 
 class Audio(Base):
     __tablename__ = "audios"
-    __table_args__ = (Index("ix_audios_normalized_title", "normalized_title"),)
+    __table_args__ = (
+        Index(
+            "ix_audios_normalized_title",
+            "normalized_title",
+            unique=True,
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     author_id: Mapped[int] = mapped_column(

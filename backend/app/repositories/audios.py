@@ -36,6 +36,16 @@ class AudioRepository:
     def get_by_id(self, session: Session, audio_id: int) -> Audio | None:
         return session.get(Audio, audio_id)
 
+    def get_by_normalized_title(
+        self,
+        session: Session,
+        normalized_title: str,
+    ) -> Audio | None:
+        statement = select(Audio).where(
+            Audio.normalized_title == normalized_title
+        )
+        return session.scalar(statement)
+
     def list_by_ids(self, session: Session, audio_ids: list[int]) -> list[Audio]:
         if not audio_ids:
             return []

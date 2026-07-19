@@ -3,12 +3,14 @@ from __future__ import annotations
 import unicodedata
 from collections.abc import Mapping
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import (
     ConflictError,
     DomainValidationError,
     ProfileIncompleteError,
+    VoiceTitleTakenError,
 )
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import (
@@ -62,6 +64,8 @@ class VoiceService:
         if not author.is_profile_complete or author.user_id is None:
             raise ProfileIncompleteError()
         normalized_title, search_title = self._normalize_title(title)
+        if self.repository.get_by_normalized_title(session, search_title):
+            raise VoiceTitleTakenError(details={"field": "title"})
         self._validate_sample_source(sample_source, sample_audio_id)
 
         author_value = normalize_english_tag_value(author.user_id)
@@ -78,15 +82,25 @@ class VoiceService:
                 normalized_value=author_value.normalized_value,
             )
 
-        voice = self.repository.create(
-            session,
-            author=author,
-            title=normalized_title,
-            normalized_title=search_title,
-            sample_source=sample_source,
-            sample_audio_id=sample_audio_id,
-            author_tag=author_tag,
-        )
+        try:
+            voice = self.repository.create(
+                session,
+                author=author,
+                title=normalized_title,
+                normalized_title=search_title,
+                sample_source=sample_source,
+                sample_audio_id=sample_audio_id,
+                author_tag=author_tag,
+            )
+        except IntegrityError as exc:
+            session.rollback()
+            conflicting = self.repository.get_by_normalized_title(
+                session,
+                search_title,
+            )
+            if conflicting is not None and conflicting.id != voice.id:
+                raise VoiceTitleTakenError(details={"field": "title"}) from exc
+            raise
         self.storage.prepare_directory(voice.id)
         return voice
 
@@ -151,9 +165,18 @@ class VoiceService:
 
     def update_title(self, session: Session, voice: Voice, title: str) -> Voice:
         normalized_title, search_title = self._normalize_title(title)
+        existing = self.repository.get_by_normalized_title(session, search_title)
+        if existing is not None and existing.id != voice.id:
+            raise VoiceTitleTakenError(details={"field": "title"})
         voice.title = normalized_title
         voice.normalized_title = search_title
-        session.flush()
+        try:
+            session.flush()
+        except IntegrityError as exc:
+            session.rollback()
+            if self.repository.get_by_normalized_title(session, search_title):
+                raise VoiceTitleTakenError(details={"field": "title"}) from exc
+            raise
         return voice
 
     def replace_gender_tags(

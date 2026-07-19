@@ -56,6 +56,16 @@ class UserIdImmutableError(ConflictError):
     default_message = "User ID has already been set and cannot be changed."
 
 
+class AudioTitleTakenError(ConflictError):
+    code = "audio_title_taken"
+    default_message = "An audio with this title already exists."
+
+
+class VoiceTitleTakenError(ConflictError):
+    code = "voice_title_taken"
+    default_message = "A voice with this title already exists."
+
+
 class DomainValidationError(DomainError):
     code = "validation_error"
     status_code = 422
