@@ -73,7 +73,6 @@ async function loadPage(reset = false, syncUrl = false): Promise<void> {
       pageSize,
       query: query.value,
       status: 'ready',
-      visibility: 'public',
     })
     audios.value = response.items
     total.value = response.total
@@ -106,7 +105,7 @@ onMounted(async () => {
   <section class="page-shell" aria-labelledby="library-title">
     <div class="page-heading">
       <div>
-        <p class="eyebrow">{{ t('Public audio') }}</p>
+        <p class="eyebrow">{{ t('Available audio') }}</p>
         <h1 id="library-title" class="text-3xl font-semibold">{{ t('Listening library') }}</h1>
         <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">{{ t('Browse exercises by title, speaker, topic, or category.') }}</p>
       </div>

@@ -133,6 +133,11 @@ describe('audio views', () => {
         String(input).includes('q=topic%3Aclimate_change'),
       ),
     ).toBe(true)
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes('visibility=public'),
+      ),
+    ).toBe(false)
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.find('button').text()).toContain('Search')
     expect(wrapper.text()).not.toContain('Delete audio')

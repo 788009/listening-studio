@@ -29,8 +29,10 @@ from backend.app.repositories.users import UserRepository
 from backend.app.services.audio_management import AudioManagementService
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audio_tags import AudioTagService
-from backend.app.services.audios import AudioService
+from backend.app.services.audios import AudioService, AudioUtteranceInput
 from backend.app.services.tag_values import TagTranslationInput
+from backend.app.services.voice_storage import VoiceStorage
+from backend.app.services.voices import VoiceService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -285,6 +287,42 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             [own_private.id],
         )
         self.assertEqual(hidden_private.json()["total"], 0)
+
+    def test_speaker_search_matches_audio_voice_without_stored_speaker_tag(
+        self,
+    ) -> None:
+        with self.app.state.session_factory() as session:
+            first = self.user(session, "TeacherOne")
+            voice = VoiceService(VoiceStorage(self.settings.data_dir)).create_voice(
+                session,
+                author=first,
+                title="test",
+            )
+            audio = AudioService(self.storage).create_audio(
+                session,
+                author=first,
+                title="Legacy speaker audio",
+                source_type=AudioSourceType.SINGLE_SPEAKER,
+                utterances=[
+                    AudioUtteranceInput(
+                        voice_id=voice.id,
+                        speaker_display_name="Woman",
+                        text="Legacy content",
+                    )
+                ],
+            )
+            audio.status = AudioStatus.READY
+            audio.visibility = AudioVisibility.PUBLIC
+            self.storage.prepare_directory(audio.id)
+            self.storage.path(audio.id).write_bytes(b"legacy-speaker-audio")
+            session.commit()
+
+        response = self.send("GET", "/api/audios", params={"q": "speaker:test"})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.json()["items"]],
+            [audio.id],
+        )
 
     def test_basic_search_performance(self) -> None:
         with self.app.state.session_factory() as session:

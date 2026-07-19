@@ -48,6 +48,7 @@ const zhCN: Record<string, string> = {
   Subject: '主体标识',
   'Set up profile': '设置个人资料',
   'Public audio': '公开音频',
+  'Available audio': '可用音频',
   'Listening library': '听力资源库',
   '{count} exercises': '{count} 个练习',
   'Search audio': '搜索音频',

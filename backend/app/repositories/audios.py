@@ -21,6 +21,8 @@ from backend.app.db.models.audio_tag import (
     AudioTagType,
 )
 from backend.app.db.models.user import User
+from backend.app.db.models.voice import Voice
+from backend.app.services.speaker_tags import voice_speaker_tag_value
 from backend.app.services.tag_parser import ParsedQuery, ParsedTagTerm
 
 
@@ -77,8 +79,23 @@ class AudioRepository:
         if visibility is not None:
             statement = statement.where(Audio.visibility == visibility)
         if query is not None:
+            speaker_voice_ids: dict[str, list[int]] = {}
             for term in query.tag_terms:
-                statement = statement.where(self._tag_term_exists(term))
+                tag_match = self._tag_term_exists(term)
+                if term.type.value == AudioTagType.SPEAKER.value:
+                    voice_ids = speaker_voice_ids.get(term.normalized_value)
+                    if voice_ids is None:
+                        voice_ids = self._voice_ids_for_speaker_term(
+                            session,
+                            term.normalized_value,
+                        )
+                        speaker_voice_ids[term.normalized_value] = voice_ids
+                    if voice_ids:
+                        tag_match = or_(
+                            tag_match,
+                            self._speaker_voice_exists(voice_ids),
+                        )
+                statement = statement.where(tag_match)
             for keyword in query.keywords:
                 pattern = f"%{self._escape_like(keyword)}%"
                 statement = statement.where(
@@ -92,6 +109,31 @@ class AudioRepository:
             AudioSearchCandidate(audio_id=audio_id, author_id=author_id)
             for audio_id, author_id in session.execute(statement)
         ]
+
+    @staticmethod
+    def _voice_ids_for_speaker_term(
+        session: Session,
+        normalized_value: str,
+    ) -> list[int]:
+        voices = session.scalars(select(Voice)).all()
+        return [
+            voice.id
+            for voice in voices
+            if voice_speaker_tag_value(voice).normalized_value == normalized_value
+        ]
+
+    @staticmethod
+    def _speaker_voice_exists(voice_ids: list[int]) -> ColumnElement[bool]:
+        return (
+            select(1)
+            .select_from(AudioUtterance)
+            .where(
+                AudioUtterance.audio_id == Audio.id,
+                AudioUtterance.voice_id.in_(voice_ids),
+            )
+            .correlate(Audio)
+            .exists()
+        )
 
     @staticmethod
     def _tag_term_exists(term: ParsedTagTerm) -> ColumnElement[bool]:
