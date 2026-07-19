@@ -22,7 +22,7 @@ from backend.app.db.models.audio_tag import (
 )
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice
-from backend.app.services.speaker_tags import voice_speaker_tag_value
+from backend.app.services.audio_voice_tags import audio_voice_tag_value
 from backend.app.services.tag_parser import ParsedQuery, ParsedTagTerm
 
 
@@ -89,21 +89,21 @@ class AudioRepository:
         if visibility is not None:
             statement = statement.where(Audio.visibility == visibility)
         if query is not None:
-            speaker_voice_ids: dict[str, list[int]] = {}
+            voice_ids_by_tag: dict[str, list[int]] = {}
             for term in query.tag_terms:
                 tag_match = self._tag_term_exists(term)
-                if term.type.value == AudioTagType.SPEAKER.value:
-                    voice_ids = speaker_voice_ids.get(term.normalized_value)
+                if term.type.value == AudioTagType.VOICE.value:
+                    voice_ids = voice_ids_by_tag.get(term.normalized_value)
                     if voice_ids is None:
-                        voice_ids = self._voice_ids_for_speaker_term(
+                        voice_ids = self._voice_ids_for_tag_term(
                             session,
                             term.normalized_value,
                         )
-                        speaker_voice_ids[term.normalized_value] = voice_ids
+                        voice_ids_by_tag[term.normalized_value] = voice_ids
                     if voice_ids:
                         tag_match = or_(
                             tag_match,
-                            self._speaker_voice_exists(voice_ids),
+                            self._voice_exists(voice_ids),
                         )
                 statement = statement.where(tag_match)
             for keyword in query.keywords:
@@ -121,7 +121,7 @@ class AudioRepository:
         ]
 
     @staticmethod
-    def _voice_ids_for_speaker_term(
+    def _voice_ids_for_tag_term(
         session: Session,
         normalized_value: str,
     ) -> list[int]:
@@ -129,11 +129,11 @@ class AudioRepository:
         return [
             voice.id
             for voice in voices
-            if voice_speaker_tag_value(voice).normalized_value == normalized_value
+            if audio_voice_tag_value(voice).normalized_value == normalized_value
         ]
 
     @staticmethod
-    def _speaker_voice_exists(voice_ids: list[int]) -> ColumnElement[bool]:
+    def _voice_exists(voice_ids: list[int]) -> ColumnElement[bool]:
         return (
             select(1)
             .select_from(AudioUtterance)

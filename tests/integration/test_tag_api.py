@@ -248,7 +248,7 @@ class TagApiIntegrationTest(unittest.TestCase):
 
         voice = self.create_voice_tag("Female")
         first_audio = self.create_audio_tag("Climate")
-        second_audio = self.create_audio_tag("Teacher", tag_type="speaker")
+        second_audio = self.create_audio_tag("Teacher", tag_type="voice")
         wrong_voice_type = self.create_voice_tag("Climate", tag_type="topic")
         wrong_audio_type = self.create_audio_tag("Female", tag_type="gender")
         voice_author = self.create_voice_tag("TagTeacher", tag_type="author")
@@ -390,6 +390,7 @@ class TagApiIntegrationTest(unittest.TestCase):
         )
         self.create_audio_tag("Climate Policy", tag_type="category")
         self.create_audio_tag("Tropical Climate")
+        self.create_audio_tag("Anzu", tag_type="voice")
         self.create_voice_tag("Female Voice")
         self.assertEqual(climate.status_code, 201)
 
@@ -405,6 +406,14 @@ class TagApiIntegrationTest(unittest.TestCase):
         voice_alias = self.send(
             "GET",
             "/api/voice-tags/autocomplete?q=g:fem",
+        )
+        audio_voice_alias = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=v:anz",
+        )
+        old_speaker_alias = self.send(
+            "GET",
+            "/api/audio-tags/autocomplete?q=s:anz",
         )
         cross_domain = self.send(
             "GET",
@@ -425,6 +434,8 @@ class TagApiIntegrationTest(unittest.TestCase):
             ["category:climate_policy", "topic:climate_change"],
         )
         self.assertEqual(voice_alias.json(), ["gender:female_voice"])
+        self.assertEqual(audio_voice_alias.json(), ["voice:anzu"])
+        self.assertEqual(old_speaker_alias.status_code, 422)
         self.assertEqual(cross_domain.status_code, 422)
         self.assertEqual(excessive_limit.status_code, 422)
 

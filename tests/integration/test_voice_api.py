@@ -608,7 +608,7 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             {
                 "voiceId": referenced.id,
                 "voiceTitle": "Renamed",
-                "speakerTag": "speaker:Renamed",
+                "voiceTag": "voice:Renamed",
                 "speakerDisplayName": "Referenced",
                 "text": "Text",
                 "position": 0,

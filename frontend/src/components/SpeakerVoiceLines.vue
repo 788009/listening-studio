@@ -32,7 +32,7 @@ const pairs = computed(() => {
           <TagChip
             v-if="utterance.voiceTitle"
             :label="utterance.voiceTitle"
-            :to="utterance.speakerTag ? { path: '/audio', query: { q: utterance.speakerTag } } : undefined"
+            :to="utterance.voiceTag ? { path: '/audio', query: { q: utterance.voiceTag } } : undefined"
           />
         </li>
       </ul>

@@ -191,9 +191,9 @@ class AudioApiIntegrationTest(unittest.TestCase):
                 tag_type=AudioTagType.TOPIC,
                 english_value="Climate",
             )
-            speaker = AudioTagService().create_user_tag(
+            voice_tag = AudioTagService().create_user_tag(
                 session,
-                tag_type=AudioTagType.SPEAKER,
+                tag_type=AudioTagType.VOICE,
                 english_value="Host",
             )
             referenced = self.ready_audio(
@@ -202,7 +202,7 @@ class AudioApiIntegrationTest(unittest.TestCase):
             deletable = self.ready_audio(
                 session, user, "Deletable", AudioVisibility.PRIVATE
             )
-            deletable.tags.append(speaker)
+            deletable.tags.append(voice_tag)
             voice = VoiceService(VoiceStorage(self.settings.data_dir)).create_voice(
                 session,
                 author=user,
@@ -228,11 +228,11 @@ class AudioApiIntegrationTest(unittest.TestCase):
             headers=self.headers(),
             json={"title": "Ａfter", "tagIds": [topic.id]},
         )
-        speaker_update = self.send(
+        voice_tag_update = self.send(
             "PATCH",
             f"/api/audios/{deletable.id}",
             headers=self.headers(),
-            json={"tagIds": [speaker.id]},
+            json={"tagIds": [voice_tag.id]},
         )
         make_private = self.send(
             "PATCH",
@@ -254,9 +254,9 @@ class AudioApiIntegrationTest(unittest.TestCase):
         self.assertEqual(updated.json()["title"], "After")
         self.assertEqual(
             {tag["type"] for tag in updated.json()["tags"]},
-            {"author", "speaker", "topic"},
+            {"author", "voice", "topic"},
         )
-        self.assertEqual(speaker_update.status_code, 404)
+        self.assertEqual(voice_tag_update.status_code, 404)
         self.assertEqual(make_private.status_code, 409)
         self.assertEqual(make_private.json()["error"]["details"]["voiceIds"], [
             voice.id

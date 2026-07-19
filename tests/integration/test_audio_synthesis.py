@@ -208,7 +208,7 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in audio.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.SPEAKER, "Calm_voice"),
+                    (AudioTagType.VOICE, "Calm_voice"),
                     (AudioTagType.TOPIC, "Morning_Routine"),
                 },
             )
@@ -257,7 +257,7 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
         search = self.send(
             "GET",
             "/api/audios",
-            params={"q": "speaker:Calm_voice"},
+            params={"q": "voice:Calm_voice"},
         )
         self.assertEqual(search.status_code, 200)
         self.assertEqual(

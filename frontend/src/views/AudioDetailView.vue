@@ -320,7 +320,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
         <div class="space-y-5">
-          <AudioTagLines :tags="audio.tags" :include-speaker="false" search-path="/audio" grouped />
+          <AudioTagLines :tags="audio.tags" :include-voice="false" search-path="/audio" grouped />
           <dl>
             <SpeakerVoiceLines :utterances="audio.utterances" />
           </dl>

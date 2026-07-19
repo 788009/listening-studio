@@ -28,7 +28,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260719_0013")
+            self.assertEqual(revision, "20260719_0014")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -179,6 +179,73 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine.dispose()
 
         self.assertEqual(preserved_history, (None, "Current"))
+
+    def test_audio_voice_tag_migration_preserves_existing_links(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "audio-voice-tags.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260719_0013")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'subject', 'active', 'TeacherOne', "
+                        "'teacherone')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audios "
+                        "(author_id, title, normalized_title, text, source_type) "
+                        "VALUES (1, 'Audio', 'audio', 'Text', 'single_speaker')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_tags "
+                        "(type, value, normalized_value) "
+                        "VALUES ('speaker', 'Anzu', 'anzu')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_tag_associations (audio_id, tag_id) "
+                        "VALUES (1, 1)"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_tag_translations "
+                        "(tag_id, language, value, normalized_value) "
+                        "VALUES (1, 'zh-CN', '安祖', '安祖')"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.connect() as connection:
+                migrated = connection.execute(
+                    text(
+                        "SELECT audio_tags.type, audio_tags.value, "
+                        "audio_tag_translations.value "
+                        "FROM audio_tags "
+                        "JOIN audio_tag_associations "
+                        "ON audio_tag_associations.tag_id = audio_tags.id "
+                        "JOIN audio_tag_translations "
+                        "ON audio_tag_translations.tag_id = audio_tags.id"
+                    )
+                ).one()
+            self.assertEqual(migrated, ("voice", "Anzu", "安祖"))
+
+            command.downgrade(config, "20260719_0013")
+            with engine.connect() as connection:
+                restored = connection.scalar(text("SELECT type FROM audio_tags"))
+            engine.dispose()
+
+        self.assertEqual(restored, "speaker")
 
 
 if __name__ == "__main__":

@@ -263,8 +263,8 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                         (AudioTagType.TOPIC, "bulk_topic"),
                         (AudioTagType.TOPIC, "education"),
                         (AudioTagType.CATEGORY, "listening_practice"),
-                        (AudioTagType.SPEAKER, "Host_voice"),
-                        (AudioTagType.SPEAKER, "Guest_voice"),
+                        (AudioTagType.VOICE, "Host_voice"),
+                        (AudioTagType.VOICE, "Guest_voice"),
                     },
                 )
             self.assertEqual(
@@ -302,8 +302,8 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                     {
                         (AudioTagType.AUTHOR, "TeacherOne"),
                         (AudioTagType.TOPIC, "bulk_topic"),
-                        (AudioTagType.SPEAKER, "Host_voice"),
-                        (AudioTagType.SPEAKER, "Guest_voice"),
+                        (AudioTagType.VOICE, "Host_voice"),
+                        (AudioTagType.VOICE, "Guest_voice"),
                     },
                 )
         delete_mapping_voice = self.send(

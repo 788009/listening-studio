@@ -32,7 +32,7 @@ from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audios import AudioService, AudioUtteranceInput
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.jobs import JobService
-from backend.app.services.speaker_tags import voice_speaker_tag_value
+from backend.app.services.audio_voice_tags import audio_voice_tag_value
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -97,7 +97,7 @@ class AudioSynthesisService:
                 text=text,
             )
         ]
-        tags.extend(self._speaker_tags(session, utterances))
+        tags.extend(self._voice_tags(session, utterances))
         return self._create_submission(
             session,
             author=author,
@@ -135,7 +135,7 @@ class AudioSynthesisService:
                 )
             self._authorized_voice(session, author, utterance.voice_id)
         tags = self._tags(session, tag_ids)
-        tags.extend(self._speaker_tags(session, utterances))
+        tags.extend(self._voice_tags(session, utterances))
         return self._create_submission(
             session,
             author=author,
@@ -386,7 +386,7 @@ class AudioSynthesisService:
             tags.append(tag)
         return tags
 
-    def _speaker_tags(
+    def _voice_tags(
         self,
         session: Session,
         utterances: list[AudioUtteranceInput],
@@ -397,16 +397,16 @@ class AudioSynthesisService:
             voice = self.voice_repository.get_by_id(session, utterance.voice_id)
             if voice is None:
                 raise NotFoundError("Voice not found")
-            value = voice_speaker_tag_value(voice)
+            value = audio_voice_tag_value(voice)
             tag = self.tag_repository.get_by_normalized_value(
                 session,
-                AudioTagType.SPEAKER,
+                AudioTagType.VOICE,
                 value.normalized_value,
             )
             if tag is None:
                 tag = self.tag_repository.create(
                     session,
-                    tag_type=AudioTagType.SPEAKER,
+                    tag_type=AudioTagType.VOICE,
                     value=value.value,
                     normalized_value=value.normalized_value,
                 )

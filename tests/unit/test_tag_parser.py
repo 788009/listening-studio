@@ -60,7 +60,7 @@ class TagParserTest(unittest.TestCase):
             ("AUTHOR", TagDomain.VOICE, TagType.AUTHOR),
             ("a", TagDomain.AUDIO, TagType.AUTHOR),
             ("Gender", TagDomain.VOICE, TagType.GENDER),
-            ("S", TagDomain.AUDIO, TagType.SPEAKER),
+            ("V", TagDomain.AUDIO, TagType.VOICE),
             ("topic", TagDomain.AUDIO, TagType.TOPIC),
             ("C", TagDomain.AUDIO, TagType.CATEGORY),
         ]
@@ -71,7 +71,9 @@ class TagParserTest(unittest.TestCase):
 
     def test_domain_rejects_types_from_other_tag_system(self) -> None:
         for token, domain in (
-            ("speaker:teacher", TagDomain.VOICE),
+            ("voice:teacher", TagDomain.VOICE),
+            ("speaker:teacher", TagDomain.AUDIO),
+            ("s:teacher", TagDomain.AUDIO),
             ("g:male", TagDomain.AUDIO),
             ("topic:climate", TagDomain.VOICE),
         ):
@@ -98,7 +100,7 @@ class TagParserTest(unittest.TestCase):
 
     def test_query_is_split_into_tag_terms_and_keywords(self) -> None:
         query = parse_search_query(
-            "  topic:Climate_Change   SPEAKER:Teacher  Arctic   气候  ",
+            "  topic:Climate_Change   VOICE:Teacher  Arctic   气候  ",
             TagDomain.AUDIO,
         )
 
@@ -107,7 +109,7 @@ class TagParserTest(unittest.TestCase):
             ParsedQuery(
                 tag_terms=(
                     ParsedTagTerm(TagType.TOPIC, "climate_change"),
-                    ParsedTagTerm(TagType.SPEAKER, "teacher"),
+                    ParsedTagTerm(TagType.VOICE, "teacher"),
                 ),
                 keywords=("arctic", "气候"),
             ),

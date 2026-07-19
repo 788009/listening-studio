@@ -70,7 +70,7 @@ onMounted(async () => {
               v-model="query"
               type="search"
               maxlength="1024"
-              :placeholder="t('Search by title, topic, or speaker')"
+              :placeholder="t('Search by title, topic, or voice')"
               class="h-12 w-full border border-line bg-surface pl-10 pr-3 text-sm shadow-panel focus:border-accent focus:outline-none focus:shadow-focus"
             />
           </div>

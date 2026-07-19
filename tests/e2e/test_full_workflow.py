@@ -621,7 +621,7 @@ class FullWorkflowTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in single_record.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.SPEAKER, "Host_voice"),
+                    (AudioTagType.VOICE, "Host_voice"),
                     (AudioTagType.TOPIC, "climate_change"),
                 },
             )
@@ -638,8 +638,8 @@ class FullWorkflowTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in dialogue_record.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.SPEAKER, "Host_voice"),
-                    (AudioTagType.SPEAKER, "Guest_voice"),
+                    (AudioTagType.VOICE, "Host_voice"),
+                    (AudioTagType.VOICE, "Guest_voice"),
                     (AudioTagType.TOPIC, "climate_change"),
                 },
             )

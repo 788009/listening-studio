@@ -8,7 +8,7 @@ from backend.app.services.tag_values import (
 )
 
 
-def voice_speaker_tag_value(voice: Voice) -> NormalizedTagValue:
+def audio_voice_tag_value(voice: Voice) -> NormalizedTagValue:
     try:
         return normalize_english_tag_value(voice.title)
     except DomainValidationError:

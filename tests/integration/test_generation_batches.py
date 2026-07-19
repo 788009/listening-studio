@@ -61,9 +61,9 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
                 tag_type=AudioTagType.CATEGORY,
                 english_value="lecture",
             )
-            self.speaker = service.create_user_tag(
+            self.voice_tag = service.create_user_tag(
                 session,
-                tag_type=AudioTagType.SPEAKER,
+                tag_type=AudioTagType.VOICE,
                 english_value="host",
             )
             session.commit()
@@ -242,8 +242,12 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             ("binary", self.text_form("text\x00data", count="1")),
             ("count", self.text_form("Valid corpus", count="4")),
             (
-                "speaker-tag",
-                self.text_form("Valid corpus", count="1", tag_ids=[self.speaker.id]),
+                "voice-tag",
+                self.text_form(
+                    "Valid corpus",
+                    count="1",
+                    tag_ids=[self.voice_tag.id],
+                ),
             ),
             (
                 "file-type",

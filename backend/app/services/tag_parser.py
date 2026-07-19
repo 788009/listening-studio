@@ -21,7 +21,7 @@ class TagDomain(str, Enum):
 class TagType(str, Enum):
     AUTHOR = "author"
     GENDER = "gender"
-    SPEAKER = "speaker"
+    VOICE = "voice"
     TOPIC = "topic"
     CATEGORY = "category"
 
@@ -31,8 +31,8 @@ _TYPE_ALIASES = {
     "a": TagType.AUTHOR,
     "gender": TagType.GENDER,
     "g": TagType.GENDER,
-    "speaker": TagType.SPEAKER,
-    "s": TagType.SPEAKER,
+    "voice": TagType.VOICE,
+    "v": TagType.VOICE,
     "topic": TagType.TOPIC,
     "t": TagType.TOPIC,
     "category": TagType.CATEGORY,
@@ -42,7 +42,7 @@ _DOMAIN_TYPES = {
     TagDomain.VOICE: {TagType.AUTHOR, TagType.GENDER},
     TagDomain.AUDIO: {
         TagType.AUTHOR,
-        TagType.SPEAKER,
+        TagType.VOICE,
         TagType.TOPIC,
         TagType.CATEGORY,
     },

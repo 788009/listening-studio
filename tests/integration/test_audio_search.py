@@ -142,13 +142,13 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             )
             teacher = tags.create_user_tag(
                 session,
-                tag_type=AudioTagType.SPEAKER,
+                tag_type=AudioTagType.VOICE,
                 english_value="Teacher",
                 translations=[TagTranslationInput("fr", "Professeur")],
             )
             scientist = tags.create_user_tag(
                 session,
-                tag_type=AudioTagType.SPEAKER,
+                tag_type=AudioTagType.VOICE,
                 english_value="Scientist",
             )
             news = tags.create_user_tag(
@@ -167,9 +167,9 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             session.commit()
 
         cases = (
-            ("ARCTIC t:气候_变化 s:teacher", [target.id]),
+            ("ARCTIC t:气候_变化 v:teacher", [target.id]),
             ("arctic professeur", [target.id]),
-            ("s:scientist topic:climate_change", [target.id]),
+            ("v:scientist topic:climate_change", [target.id]),
             ("c:news", [target.id]),
             (r"100%_report\draft", [target.id]),
             ("exclusive_body_phrase", []),
@@ -183,6 +183,11 @@ class AudioSearchIntegrationTest(unittest.TestCase):
                     [item["id"] for item in response.json()["items"]],
                     expected_ids,
                 )
+
+        for query in ("speaker:teacher", "s:teacher"):
+            with self.subTest(query=query):
+                response = self.send("GET", "/api/audios", params={"q": query})
+                self.assertEqual(response.status_code, 422)
 
         captured: list[tuple[str, object]] = []
 
@@ -288,7 +293,7 @@ class AudioSearchIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(hidden_private.json()["total"], 0)
 
-    def test_speaker_search_matches_audio_voice_without_stored_speaker_tag(
+    def test_voice_search_matches_utterance_without_stored_voice_tag(
         self,
     ) -> None:
         with self.app.state.session_factory() as session:
@@ -301,7 +306,7 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             audio = AudioService(self.storage).create_audio(
                 session,
                 author=first,
-                title="Legacy speaker audio",
+                title="Legacy voice-tag audio",
                 source_type=AudioSourceType.SINGLE_SPEAKER,
                 utterances=[
                     AudioUtteranceInput(
@@ -314,10 +319,10 @@ class AudioSearchIntegrationTest(unittest.TestCase):
             audio.status = AudioStatus.READY
             audio.visibility = AudioVisibility.PUBLIC
             self.storage.prepare_directory(audio.id)
-            self.storage.path(audio.id).write_bytes(b"legacy-speaker-audio")
+            self.storage.path(audio.id).write_bytes(b"legacy-voice-tag-audio")
             session.commit()
 
-        response = self.send("GET", "/api/audios", params={"q": "speaker:test"})
+        response = self.send("GET", "/api/audios", params={"q": "voice:test"})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             [item["id"] for item in response.json()["items"]],

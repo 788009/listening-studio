@@ -13,7 +13,7 @@ export type AudioSourceType =
   | 'multi_turn'
   | 'corpus'
   | 'assembly'
-export type AudioTagType = 'author' | 'speaker' | 'topic' | 'category'
+export type AudioTagType = 'author' | 'voice' | 'topic' | 'category'
 
 export interface AudioTag {
   id: number
@@ -33,7 +33,7 @@ export interface AudioTagCreationInput {
 export interface AudioUtterance {
   voiceId?: number | null
   voiceTitle?: string | null
-  speakerTag?: string | null
+  voiceTag?: string | null
   speakerDisplayName: string
   text: string
   position: number

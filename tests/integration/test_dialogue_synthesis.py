@@ -211,7 +211,7 @@ class DialogueSynthesisIntegrationTest(unittest.TestCase):
             poll_interval_seconds=0.01,
         )
 
-    def test_dialogue_preserves_order_silence_format_and_speaker_tags(self) -> None:
+    def test_dialogue_preserves_order_silence_format_and_voice_tags(self) -> None:
         first_voice = self.create_voice("TeacherOne", "First voice")
         second_voice = self.create_voice(
             "TeacherTwo",
@@ -244,8 +244,8 @@ class DialogueSynthesisIntegrationTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in audio.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.SPEAKER, "First_voice"),
-                    (AudioTagType.SPEAKER, "Second_voice"),
+                    (AudioTagType.VOICE, "First_voice"),
+                    (AudioTagType.VOICE, "Second_voice"),
                 },
             )
             self.assertEqual(job.input_summary["silenceMilliseconds"], 50)

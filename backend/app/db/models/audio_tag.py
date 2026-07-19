@@ -11,7 +11,7 @@ from backend.app.db.base import Base
 
 class AudioTagType(str, Enum):
     AUTHOR = "author"
-    SPEAKER = "speaker"
+    VOICE = "voice"
     TOPIC = "topic"
     CATEGORY = "category"
 

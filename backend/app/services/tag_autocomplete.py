@@ -15,7 +15,7 @@ MAX_AUTOCOMPLETE_RESULTS = 20
 _TYPE_ABBREVIATIONS = {
     "author": "a",
     "gender": "g",
-    "speaker": "s",
+    "voice": "v",
     "topic": "t",
     "category": "c",
 }

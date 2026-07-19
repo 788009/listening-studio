@@ -38,7 +38,7 @@ from backend.app.services.audios import AudioUtteranceInput
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.tag_values import normalize_english_tag_value
-from backend.app.services.speaker_tags import voice_speaker_tag_value
+from backend.app.services.audio_voice_tags import audio_voice_tag_value
 from backend.app.services.voice_storage import VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -358,8 +358,8 @@ class CorpusGenerationService:
             tags.append(
                 self._tag(
                     session,
-                    AudioTagType.SPEAKER,
-                    voice_speaker_tag_value(voice).value,
+                    AudioTagType.VOICE,
+                    audio_voice_tag_value(voice).value,
                 )
             )
         return list({tag.id: tag for tag in tags}.values())

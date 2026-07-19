@@ -255,7 +255,7 @@ class AudioService:
         preserved = [
             tag
             for tag in audio.tags
-            if tag.type in {AudioTagType.AUTHOR, AudioTagType.SPEAKER}
+            if tag.type in {AudioTagType.AUTHOR, AudioTagType.VOICE}
         ]
         audio.tags = preserved + list(dict.fromkeys(tags))
         session.flush()

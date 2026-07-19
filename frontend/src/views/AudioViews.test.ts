@@ -42,7 +42,7 @@ const audio: Audio = {
     {
       voiceId: 1,
       voiceTitle: 'test',
-      speakerTag: 'speaker:test',
+      voiceTag: 'voice:test',
       speakerDisplayName: 'Woman',
       text: 'First line',
       position: 0,
@@ -50,7 +50,7 @@ const audio: Audio = {
     {
       voiceId: 2,
       voiceTitle: 'Second voice',
-      speakerTag: 'speaker:Second_voice',
+      voiceTag: 'voice:Second_voice',
       speakerDisplayName: 'Student',
       text: 'Second line',
       position: 1,
@@ -120,9 +120,16 @@ describe('audio views', () => {
 
     expect(wrapper.text()).toContain('Climate briefing')
     expect(wrapper.text()).not.toContain('Author')
-    expect(wrapper.text()).toContain('Speaker')
-    expect(wrapper.text()).toContain('Teacher')
-    expect(wrapper.text()).toContain('Student')
+    expect(wrapper.text()).not.toContain('Speaker')
+    expect(wrapper.text()).not.toContain('Woman')
+    expect(wrapper.text()).not.toContain('Student')
+    expect(wrapper.text()).toContain('Voice')
+    expect(wrapper.text()).toContain('Second voice')
+    expect(
+      wrapper
+        .findAll('a')
+        .map((link) => decodeURIComponent(link.attributes('href') ?? '')),
+    ).toContain('/audio?q=voice:test')
     expect(wrapper.findAll('.tag-chip').length).toBeGreaterThanOrEqual(3)
     expect(wrapper.get('input[role="combobox"]').element).toHaveProperty(
       'value',
@@ -283,7 +290,7 @@ describe('audio views', () => {
       tagSearchLinks.map((link) =>
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
-    ).toContain('/audio?q=speaker:test')
+    ).toContain('/audio?q=voice:test')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
   })
@@ -313,16 +320,16 @@ describe('audio views', () => {
     wrapper.unmount()
   })
 
-  it('edits topic and category tags without exposing speaker tags', async () => {
-    const speakerTag = {
+  it('edits topic and category tags without exposing voice tags', async () => {
+    const voiceTag = {
       id: 3,
-      type: 'speaker' as const,
+      type: 'voice' as const,
       englishValue: 'host',
       displayValue: 'host',
-      fullTag: 'speaker:host',
+      fullTag: 'voice:host',
       translations: [],
     }
-    const editableAudio = { ...audio, tags: [...audio.tags, speakerTag] }
+    const editableAudio = { ...audio, tags: [...audio.tags, voiceTag] }
     const categoryTag = {
       id: 4,
       type: 'category' as const,
@@ -336,12 +343,12 @@ describe('audio views', () => {
       const path = String(input)
       if (path.startsWith('/api/audios/5?')) return Promise.resolve(jsonResponse(editableAudio))
       if (path.startsWith('/api/audio-tags?')) {
-        return Promise.resolve(jsonResponse([...audio.tags, speakerTag, categoryTag]))
+        return Promise.resolve(jsonResponse([...audio.tags, voiceTag, categoryTag]))
       }
       if (path === '/api/audios/5' && init?.method === 'PATCH') {
         updateBody = JSON.parse(String(init.body))
         return Promise.resolve(
-          jsonResponse({ ...audio, tags: [audio.tags[0], speakerTag, categoryTag] }),
+          jsonResponse({ ...audio, tags: [audio.tags[0], voiceTag, categoryTag] }),
         )
       }
       throw new Error(`Unexpected request: ${path}`)

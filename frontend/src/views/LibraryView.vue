@@ -44,18 +44,35 @@ function formatDuration(seconds: number | null): string {
   return `${minutes}:${String(rounded % 60).padStart(2, '0')}`
 }
 
-function speakerNames(audio: Audio): string[] {
-  const utteranceNames = audio.utterances.map((utterance) => utterance.speakerDisplayName)
-  const names = utteranceNames.length > 0
-    ? utteranceNames
-    : audio.tags
-        .filter((tag) => tag.type === 'speaker')
-        .map((tag) => tag.displayValue.replace(/_/g, ' '))
-  return [...new Set(names)]
+interface AudioVoiceLink {
+  label: string
+  query: string
+}
+
+function audioVoices(audio: Audio): AudioVoiceLink[] {
+  const voices = new Map<string, AudioVoiceLink>()
+  for (const tag of audio.tags) {
+    if (tag.type !== 'voice') continue
+    voices.set(tag.fullTag, {
+      label: tag.displayValue.replace(/_/g, ' '),
+      query: tag.fullTag,
+    })
+  }
+  const liveVoices = audio.utterances.filter(
+    (utterance) => utterance.voiceTitle && utterance.voiceTag,
+  )
+  if (liveVoices.length > 0) voices.clear()
+  for (const utterance of liveVoices) {
+    voices.set(utterance.voiceTag!, {
+      label: utterance.voiceTitle!,
+      query: utterance.voiceTag!,
+    })
+  }
+  return [...voices.values()]
 }
 
 function contentTags(audio: Audio): AudioTag[] {
-  return audio.tags.filter((tag) => tag.type !== 'author' && tag.type !== 'speaker')
+  return audio.tags.filter((tag) => tag.type !== 'author' && tag.type !== 'voice')
 }
 
 async function loadPage(reset = false, syncUrl = false): Promise<void> {
@@ -107,7 +124,7 @@ onMounted(async () => {
       <div>
         <p class="eyebrow">{{ t('Available audio') }}</p>
         <h1 id="library-title" class="text-3xl font-semibold">{{ t('Listening library') }}</h1>
-        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">{{ t('Browse exercises by title, speaker, topic, or category.') }}</p>
+        <p class="mt-2 max-w-2xl text-sm leading-6 text-muted">{{ t('Browse exercises by title, voice, topic, or category.') }}</p>
       </div>
       <span class="rounded-md bg-raised px-3 py-1.5 text-sm tabular-nums text-muted">{{ t('{count} exercises', { count: total }) }}</span>
     </div>
@@ -169,12 +186,16 @@ onMounted(async () => {
             {{ audio.author.username || audio.author.userId }}
           </RouterLink>
           <div
-            v-if="speakerNames(audio).length > 0 || contentTags(audio).length > 0"
+            v-if="audioVoices(audio).length > 0 || contentTags(audio).length > 0"
             class="mt-4 space-y-2 border-t border-line pt-4"
           >
-            <ul v-if="speakerNames(audio).length > 0" class="flex min-w-0 flex-wrap gap-2">
-              <li v-for="speaker in speakerNames(audio)" :key="speaker" class="flex min-w-0 max-w-full">
-                <TagChip :label="speaker" :type-label="t('Speaker')" />
+            <ul v-if="audioVoices(audio).length > 0" class="flex min-w-0 flex-wrap gap-2">
+              <li v-for="voice in audioVoices(audio)" :key="voice.query" class="flex min-w-0 max-w-full">
+                <TagChip
+                  :label="voice.label"
+                  :type-label="t('Voice')"
+                  :to="{ path: '/audio', query: { q: voice.query } }"
+                />
               </li>
             </ul>
             <AudioTagLines

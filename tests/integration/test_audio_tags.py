@@ -49,7 +49,7 @@ class AudioTagIntegrationTest(unittest.TestCase):
             )
             audio_tag = self.service.create_tag(
                 session,
-                tag_type=AudioTagType.SPEAKER,
+                tag_type=AudioTagType.VOICE,
                 english_value="male",
             )
             session.commit()
@@ -139,7 +139,7 @@ class AudioTagIntegrationTest(unittest.TestCase):
     def test_translation_foreign_key_and_language_uniqueness(self) -> None:
         with self.session_factory() as session:
             tag = AudioTag(
-                type=AudioTagType.SPEAKER,
+                type=AudioTagType.VOICE,
                 value="Teacher",
                 normalized_value="teacher",
             )
