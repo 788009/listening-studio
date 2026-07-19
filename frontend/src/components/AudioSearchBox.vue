@@ -23,11 +23,14 @@ const open = ref(false)
 const activeIndex = ref(-1)
 let debounceTimer: ReturnType<typeof setTimeout> | undefined
 let suggestionRequest = 0
+let pendingUserValue: string | undefined
 
-const currentToken = computed(() => {
-  const tokens = props.modelValue.trimStart().split(/\s+/)
+function tokenFor(value: string): string {
+  const tokens = value.trimStart().split(/\s+/)
   return tokens[tokens.length - 1] ?? ''
-})
+}
+
+const currentToken = computed(() => tokenFor(props.modelValue))
 
 function displayValue(value: string): string {
   const tag = props.tags.find((item) => item.fullTag === value)
@@ -36,8 +39,8 @@ function displayValue(value: string): string {
   return `${type}: ${tag.displayValue.replace(/_/g, ' ')}`
 }
 
-async function loadSuggestions(): Promise<void> {
-  const token = currentToken.value
+async function loadSuggestions(inputValue: string): Promise<void> {
+  const token = tokenFor(inputValue)
   const request = ++suggestionRequest
   if (!token) {
     suggestions.value = []
@@ -46,9 +49,9 @@ async function loadSuggestions(): Promise<void> {
   }
   try {
     const results = await autocompleteAudioTags(token)
-    if (request !== suggestionRequest || token !== currentToken.value) return
+    if (request !== suggestionRequest || inputValue !== props.modelValue) return
     const existingTerms = new Set(
-      props.modelValue
+      inputValue
         .trim()
         .split(/\s+/)
         .slice(0, -1)
@@ -66,17 +69,33 @@ async function loadSuggestions(): Promise<void> {
   }
 }
 
+function clearSuggestions(): void {
+  clearTimeout(debounceTimer)
+  suggestionRequest += 1
+  suggestions.value = []
+  activeIndex.value = -1
+  open.value = false
+}
+
+function handleInput(event: Event): void {
+  const value = (event.target as HTMLInputElement).value
+  pendingUserValue = value
+  emit('update:modelValue', value)
+  clearSuggestions()
+  if (tokenFor(value)) {
+    debounceTimer = setTimeout(() => loadSuggestions(value), 150)
+  }
+}
+
 watch(
   () => props.modelValue,
-  () => {
-    clearTimeout(debounceTimer)
-    suggestionRequest += 1
-    if (!currentToken.value) {
-      suggestions.value = []
-      open.value = false
+  (value) => {
+    if (value === pendingUserValue) {
+      pendingUserValue = undefined
       return
     }
-    debounceTimer = setTimeout(loadSuggestions, 150)
+    pendingUserValue = undefined
+    clearSuggestions()
   },
 )
 
@@ -108,7 +127,7 @@ function handleKeydown(event: KeyboardEvent): void {
 }
 
 function submit(): void {
-  open.value = false
+  clearSuggestions()
   emit('submit')
 }
 
@@ -140,7 +159,7 @@ onBeforeUnmount(() => {
         aria-controls="audio-search-suggestions"
         :aria-activedescendant="activeIndex >= 0 ? `audio-suggestion-${activeIndex}` : undefined"
         class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
-        @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+        @input="handleInput"
         @keydown="handleKeydown"
         @focus="suggestions.length > 0 && (open = true)"
         @blur="closeLater"

@@ -201,19 +201,42 @@ describe('audio views', () => {
       'fetch',
       vi.fn().mockResolvedValue(jsonResponse(['topic:climate_change'])),
     )
-    const wrapper = mount(AudioSearchBox, {
-      props: { modelValue: '', tags: audio.tags, busy: false },
+    const wrapper = mount({
+      components: { AudioSearchBox },
+      data: () => ({ query: '' }),
+      template: '<AudioSearchBox v-model="query" :tags="tags" />',
+      computed: { tags: () => audio.tags },
     })
 
-    await wrapper.setProps({ modelValue: 'clim' })
+    await wrapper.get('input').setValue('clim')
     await vi.advanceTimersByTimeAsync(160)
     await flushPromises()
     expect(wrapper.text()).toContain('Topic: 气候 变化')
     expect(wrapper.find('.tag-chip').exists()).toBe(false)
     await wrapper.get('input').trigger('keydown', { key: 'ArrowDown' })
     await wrapper.get('input').trigger('keydown', { key: 'Enter' })
-    const updates = wrapper.emitted('update:modelValue') ?? []
-    expect(updates[updates.length - 1]?.[0]).toBe('topic:climate_change ')
+    expect(wrapper.get('input').element).toHaveProperty(
+      'value',
+      'topic:climate_change ',
+    )
+  })
+
+  it('does not load suggestions when the model is updated externally', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(['other:with_questions']),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const wrapper = mount(AudioSearchBox, {
+      props: { modelValue: '', tags: audio.tags, busy: false },
+    })
+
+    await wrapper.setProps({ modelValue: 'other:with_questions' })
+    await vi.advanceTimersByTimeAsync(160)
+    await flushPromises()
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(wrapper.find('[role="option"]').exists()).toBe(false)
   })
 
   it('keeps the latest suggestions when an older request finishes later', async () => {
@@ -229,13 +252,15 @@ describe('audio views', () => {
         : Promise.resolve(jsonResponse(['category:single']))
     })
     vi.stubGlobal('fetch', fetchMock)
-    const wrapper = mount(AudioSearchBox, {
-      props: { modelValue: '', tags: [], busy: false },
+    const wrapper = mount({
+      components: { AudioSearchBox },
+      data: () => ({ query: '' }),
+      template: '<AudioSearchBox v-model="query" :tags="[]" />',
     })
 
-    await wrapper.setProps({ modelValue: 's' })
+    await wrapper.get('input').setValue('s')
     await vi.advanceTimersByTimeAsync(160)
-    await wrapper.setProps({ modelValue: 'si' })
+    await wrapper.get('input').setValue('si')
     await vi.advanceTimersByTimeAsync(160)
     await flushPromises()
     expect(wrapper.text()).toContain('category:single')
@@ -254,11 +279,14 @@ describe('audio views', () => {
         jsonResponse(['topic:climate_change', 'topic:climate_policy']),
       ),
     )
-    const wrapper = mount(AudioSearchBox, {
-      props: { modelValue: '', tags: audio.tags, busy: false },
+    const wrapper = mount({
+      components: { AudioSearchBox },
+      data: () => ({ query: '' }),
+      template: '<AudioSearchBox v-model="query" :tags="tags" />',
+      computed: { tags: () => audio.tags },
     })
 
-    await wrapper.setProps({ modelValue: 'topic:climate_change clim' })
+    await wrapper.get('input').setValue('topic:climate_change clim')
     await vi.advanceTimersByTimeAsync(160)
     await flushPromises()
 
