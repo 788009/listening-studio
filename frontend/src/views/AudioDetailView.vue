@@ -329,15 +329,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Text') }}</h2>
-        <p class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6">{{ audio.text }}</p>
-      </div>
-
-      <div
-        v-if="orderedUtterances.length > 0"
-        class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]"
-      >
-        <h2 class="text-sm font-semibold">{{ t('Speakers') }}</h2>
-        <ol class="min-w-0 space-y-4">
+        <ol v-if="orderedUtterances.length > 0" class="min-w-0 space-y-4">
           <li
             v-for="utterance in orderedUtterances"
             :key="utterance.position"
@@ -347,6 +339,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <p class="min-w-0 break-words text-sm leading-6">{{ utterance.text }}</p>
           </li>
         </ol>
+        <p v-else class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6">{{ audio.text }}</p>
       </div>
 
       <div v-if="isOwner && audio.errorSummary" class="border-b border-line py-6">

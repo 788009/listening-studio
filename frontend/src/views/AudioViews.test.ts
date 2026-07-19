@@ -258,7 +258,7 @@ describe('audio views', () => {
     expect(localizedAudio.tags[1]?.fullTag).toBe('topic:climate_change')
   })
 
-  it('renders public detail text, speakers, tags, and playback for a student', async () => {
+  it('renders speaker-formatted text, tags, and playback for a student', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(audio)))
     const pinia = setupAuth()
     const router = testRouter()
@@ -268,8 +268,9 @@ describe('audio views', () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('A readable listening transcript.')
+    expect(wrapper.text()).not.toContain('A readable listening transcript.')
     expect(wrapper.text()).toContain('Author')
+    expect(wrapper.text()).toContain('First line')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('Woman')
     expect(wrapper.text()).toContain('test')
@@ -291,6 +292,8 @@ describe('audio views', () => {
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
     ).toContain('/audio?q=voice:test')
+    expect(wrapper.findAll('h2').map((item) => item.text())).toContain('Text')
+    expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
   })
@@ -318,6 +321,20 @@ describe('audio views', () => {
     await flushPromises()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  it('renders the normalized text when an audio has no utterances', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...audio, utterances: [] })))
+    const pinia = setupAuth()
+    const router = testRouter()
+    await router.push('/audio/5')
+    const wrapper = mount(AudioDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('A readable listening transcript.')
+    expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
   })
 
   it('edits topic and category tags without exposing voice tags', async () => {
