@@ -12,11 +12,14 @@ import {
   type Audio,
   type AudioTag,
   type AudioTagType,
+  type AudioQuestionInput,
   type ResourceVisibility,
 } from '@/api/audios'
 import type { TagTranslation } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import AudioTagLines from '@/components/AudioTagLines.vue'
+import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
+import AudioQuestionsEditor from '@/components/AudioQuestionsEditor.vue'
 import SpeakerVoiceLines from '@/components/SpeakerVoiceLines.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
@@ -41,6 +44,7 @@ const title = ref('')
 const visibility = ref<ResourceVisibility>('private')
 const tags = ref<AudioTag[]>([])
 const selectedTagIds = ref<number[]>([])
+const questions = ref<AudioQuestionInput[]>([])
 const tagsLoading = ref(false)
 const creatingTagType = ref<EditableAudioTagType | null>(null)
 const tagDialogType = ref<EditableAudioTagType | null>(null)
@@ -69,6 +73,32 @@ function resetForm(current: Audio): void {
   selectedTagIds.value = current.tags
     .filter((tag) => tag.type === 'topic' || tag.type === 'category')
     .map((tag) => tag.id)
+  questions.value = (current.questions ?? []).map((question) => ({
+    prompt: question.prompt,
+    correctAnswers: [...question.correctAnswers],
+    incorrectAnswers: [...question.incorrectAnswers],
+  }))
+}
+
+function normalizedQuestions(): AudioQuestionInput[] | null {
+  if (
+    questions.value.some(
+      (question) =>
+        !question.prompt.trim() ||
+        question.correctAnswers.length === 0 ||
+        question.incorrectAnswers.length === 0 ||
+        question.correctAnswers.some((answer) => !answer.trim()) ||
+        question.incorrectAnswers.some((answer) => !answer.trim()),
+    )
+  ) {
+    formError.value = t('Complete every question and answer')
+    return null
+  }
+  return questions.value.map((question) => ({
+    prompt: question.prompt.trim(),
+    correctAnswers: question.correctAnswers.map((answer) => answer.trim()),
+    incorrectAnswers: question.incorrectAnswers.map((answer) => answer.trim()),
+  }))
 }
 
 async function loadAudio(): Promise<void> {
@@ -151,6 +181,8 @@ async function createAndAddTag(input: {
 
 async function saveAudio(): Promise<void> {
   if (!audio.value) return
+  const normalizedQuestionValues = normalizedQuestions()
+  if (!normalizedQuestionValues) return
   saving.value = true
   formError.value = ''
   try {
@@ -158,6 +190,7 @@ async function saveAudio(): Promise<void> {
       title: title.value,
       visibility: visibility.value,
       tagIds: selectedTagIds.value,
+      questions: normalizedQuestionValues,
     })
     editing.value = false
     resetForm(audio.value)
@@ -267,6 +300,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
               @create="openTagDialog(group.type, $event)"
             />
           </div>
+          <AudioQuestionsEditor v-model="questions" embedded class="sm:col-span-2" />
         </div>
         <p v-if="formError" role="alert" class="mt-4 text-sm text-danger">{{ formError }}</p>
         <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-5">
@@ -325,6 +359,14 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <SpeakerVoiceLines :utterances="audio.utterances" />
           </dl>
         </div>
+      </div>
+
+      <div
+        v-if="(audio.questions?.length ?? 0) > 0"
+        class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]"
+      >
+        <h2 class="text-sm font-semibold">{{ t('Questions') }}</h2>
+        <AudioQuestionsDisplay :questions="audio.questions ?? []" />
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">

@@ -2,6 +2,8 @@
 
 from backend.app.db.models.audio import (
     Audio,
+    AudioQuestion,
+    AudioQuestionAnswer,
     AudioSourceType,
     AudioStatus,
     AudioUtterance,
@@ -38,6 +40,8 @@ from backend.app.db.models.voice_tag import (
 
 __all__ = [
     "Audio",
+    "AudioQuestion",
+    "AudioQuestionAnswer",
     "AudioSourceType",
     "AudioStatus",
     "AudioTag",

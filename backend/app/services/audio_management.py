@@ -11,7 +11,7 @@ from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.audios import AudioRepository
 from backend.app.services.audio_storage import AudioStorage
-from backend.app.services.audios import AudioService
+from backend.app.services.audios import AudioQuestionInput, AudioService
 from backend.app.services.authorization import (
     AuthorizationPrincipal,
     AuthorizationService,
@@ -95,6 +95,7 @@ class AudioManagementService:
         title: str | None,
         tag_ids: list[int] | None,
         visibility: AudioVisibility | None,
+        questions: list[AudioQuestionInput] | None = None,
     ) -> Audio:
         audio = self.repository.get_by_id(session, audio_id)
         if audio is None:
@@ -109,6 +110,8 @@ class AudioManagementService:
                 audio,
                 self._tags(session, tag_ids),
             )
+        if questions is not None:
+            self.audio_service.replace_questions(session, audio, questions)
         if visibility is not None:
             if visibility is AudioVisibility.PUBLIC:
                 self.authorization.require_publish(principal, descriptor)

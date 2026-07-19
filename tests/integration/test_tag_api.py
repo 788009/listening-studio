@@ -27,7 +27,7 @@ from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.users import UserRepository
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.services.audio_storage import AudioStorage
-from backend.app.services.audios import AudioService
+from backend.app.services.audios import AudioQuestionInput, AudioService
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -341,6 +341,47 @@ class TagApiIntegrationTest(unittest.TestCase):
             headers=self.headers(),
         )
         self.assertEqual(protected.status_code, 409)
+
+    def test_other_tags_are_managed_only_by_audio_questions(self) -> None:
+        self.complete_profile()
+        rejected = self.create_audio_tag("manual", tag_type="other")
+        self.assertEqual(rejected.status_code, 422)
+
+        with self.app.state.session_factory() as session:
+            user = UserRepository().get_by_user_id(session, "TagTeacher")
+            assert user is not None
+            audio = AudioService(AudioStorage(self.settings.data_dir)).create_audio(
+                session,
+                author=user,
+                title="Question audio",
+                source_type=AudioSourceType.CORPUS,
+                text="Question text",
+                questions=[
+                    AudioQuestionInput(
+                        "Question?",
+                        ("Correct",),
+                        ("Incorrect",),
+                    )
+                ],
+            )
+            other_tag_id = next(
+                tag.id for tag in audio.tags if tag.type.value == "other"
+            )
+            session.commit()
+
+        translation = self.send(
+            "PUT",
+            f"/api/audio-tags/{other_tag_id}/translations/en",
+            headers=self.headers(),
+            json={"value": "Changed"},
+        )
+        deletion = self.send(
+            "DELETE",
+            f"/api/audio-tags/{other_tag_id}",
+            headers=self.headers(),
+        )
+        self.assertEqual(translation.status_code, 409)
+        self.assertEqual(deletion.status_code, 409)
 
     def test_concurrent_normalized_create_has_one_recoverable_conflict(self) -> None:
         self.complete_profile()

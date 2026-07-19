@@ -9,6 +9,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from backend.app.db.models.audio import (
     Audio,
+    AudioQuestion,
     AudioSourceType,
     AudioStatus,
     AudioUtterance,
@@ -55,6 +56,7 @@ class AudioRepository:
                 selectinload(Audio.author),
                 selectinload(Audio.tags).selectinload(AudioTag.translations),
                 selectinload(Audio.utterances).selectinload(AudioUtterance.voice),
+                selectinload(Audio.questions).selectinload(AudioQuestion.answers),
             )
             .where(Audio.id.in_(audio_ids))
             .order_by(Audio.id.desc())

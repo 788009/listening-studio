@@ -10,6 +10,7 @@ import {
   listAudioCreationTags,
   publishAudioFromPreviews,
   type AudioTag,
+  type AudioQuestionInput,
   type AudioPreviewInput,
   type ResourceVisibility,
 } from '@/api/audios'
@@ -17,6 +18,7 @@ import { getJob, type JobStatus } from '@/api/jobs'
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
+import AudioQuestionsEditor from '@/components/AudioQuestionsEditor.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import DialogueTurnsEditor from '@/components/DialogueTurnsEditor.vue'
 import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
@@ -40,6 +42,7 @@ const visibility = ref<ResourceVisibility>('private')
 const selectedTagIds = ref<number[]>([])
 const voices = ref<Voice[]>([])
 const tags = ref<AudioTag[]>([])
+const questions = ref<AudioQuestionInput[]>([])
 const creatingTagType = ref<CreationTagType | null>(null)
 const tagDialogType = ref<CreationTagType | null>(null)
 const tagDialogInitialEnglishValue = ref('')
@@ -198,6 +201,27 @@ function validateContent(): TurnContent[] | null {
     return null
   }
   return content as TurnContent[]
+}
+
+function normalizedQuestions(): AudioQuestionInput[] | null {
+  if (
+    questions.value.some(
+      (question) =>
+        !question.prompt.trim() ||
+        question.correctAnswers.length === 0 ||
+        question.incorrectAnswers.length === 0 ||
+        question.correctAnswers.some((answer) => !answer.trim()) ||
+        question.incorrectAnswers.some((answer) => !answer.trim()),
+    )
+  ) {
+    formError.value = t('Complete every question and answer')
+    return null
+  }
+  return questions.value.map((question) => ({
+    prompt: question.prompt.trim(),
+    correctAnswers: question.correctAnswers.map((answer) => answer.trim()),
+    incorrectAnswers: question.incorrectAnswers.map((answer) => answer.trim()),
+  }))
 }
 
 function schedulePreviewPoll(): void {
@@ -478,6 +502,8 @@ async function publishGeneratedAudio(): Promise<void> {
     formError.value = t('Enter a title')
     return
   }
+  const normalizedQuestionValues = normalizedQuestions()
+  if (!normalizedQuestionValues) return
   const utterances = turns.value.map((turn) => {
     const generated = previewStates.value[turn.key]?.generated
     return generated
@@ -497,6 +523,7 @@ async function publishGeneratedAudio(): Promise<void> {
       utterances: utterances as NonNullable<(typeof utterances)[number]>[],
       tagIds: selectedTagIds.value,
       visibility: visibility.value,
+      questions: normalizedQuestionValues,
     })
     publishedAudioId.value = audio.id
     previewStates.value = {}
@@ -520,6 +547,7 @@ function startAnother(): void {
   speakers.value = [newSpeaker()]
   turns.value = [newTurn(speakers.value[0]?.key)]
   selectedTagIds.value = []
+  questions.value = []
   visibility.value = 'private'
   formError.value = ''
   discardChangesDialogOpen.value = false
@@ -620,7 +648,8 @@ onUnmounted(() => clearTimeout(previewPollTimer))
         @remove="removeTurnPreview"
       />
 
-      <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div class="min-w-0 border-b border-line px-5 py-6">
+        <h2 class="mb-5 text-sm font-semibold">{{ t('Tags') }}</h2>
         <div class="grid min-w-0 gap-5 sm:grid-cols-2">
           <ResourceTagPicker
             v-for="group in tagGroups"
@@ -634,7 +663,13 @@ onUnmounted(() => clearTimeout(previewPollTimer))
             @create="openTagDialog(group.type, $event)"
           />
         </div>
-        <div class="flex flex-col justify-between gap-6">
+      </div>
+
+      <AudioQuestionsEditor v-model="questions" />
+
+      <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div></div>
+        <div class="flex flex-col gap-6">
           <label class="flex items-start gap-3">
             <input type="checkbox" class="mt-0.5 h-4 w-4 accent-accent" :checked="visibility === 'public'" @change="visibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'" />
             <span class="text-sm font-medium">{{ t('Publish when ready') }}</span>

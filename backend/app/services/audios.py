@@ -16,6 +16,8 @@ from backend.app.core.exceptions import (
 )
 from backend.app.db.models.audio import (
     Audio,
+    AudioQuestion,
+    AudioQuestionAnswer,
     AudioSourceType,
     AudioStatus,
     AudioVisibility,
@@ -31,7 +33,11 @@ from backend.app.services.authorization import (
     ResourceStatus,
     ResourceVisibility,
 )
-from backend.app.services.tag_values import normalize_english_tag_value
+from backend.app.services.tag_values import (
+    TagTranslationInput,
+    normalize_english_tag_value,
+    normalize_tag_translations,
+)
 
 
 _ALLOWED_STATUS_TRANSITIONS: Mapping[AudioStatus, frozenset[AudioStatus]] = {
@@ -47,6 +53,20 @@ class AudioUtteranceInput:
     voice_id: int
     speaker_display_name: str
     text: str
+
+
+@dataclass(frozen=True)
+class AudioQuestionInput:
+    prompt: str
+    correct_answers: tuple[str, ...]
+    incorrect_answers: tuple[str, ...]
+
+
+_WITH_QUESTIONS_TAG_VALUE = "with_questions"
+_WITH_QUESTIONS_TRANSLATION = TagTranslationInput(
+    language="zh-CN",
+    value="有题目",
+)
 
 
 class AudioService:
@@ -69,6 +89,7 @@ class AudioService:
         source_type: AudioSourceType,
         text: str | None = None,
         utterances: Iterable[AudioUtteranceInput] = (),
+        questions: Iterable[AudioQuestionInput] = (),
         tags: Iterable[AudioTag] = (),
     ) -> Audio:
         if not author.is_profile_complete or author.user_id is None:
@@ -82,6 +103,7 @@ class AudioService:
         if self.repository.get_by_normalized_title(session, search_title):
             raise AudioTitleTakenError(details={"field": "title"})
         normalized_utterances = self._normalize_utterances(utterances)
+        normalized_questions = self._normalize_questions(questions)
         if source_type is AudioSourceType.MULTI_TURN and not normalized_utterances:
             raise DomainValidationError(
                 "Multi-turn audio requires at least one utterance",
@@ -89,6 +111,8 @@ class AudioService:
             )
         normalized_text = self._canonical_text(text, normalized_utterances)
         associated_tags = self._resolve_tags(session, author, tags)
+        if normalized_questions:
+            associated_tags.append(self._with_questions_tag(session))
 
         try:
             audio = self.repository.create(
@@ -114,6 +138,7 @@ class AudioService:
                 text=utterance.text,
                 position=position,
             )
+        self._add_questions(session, audio, normalized_questions)
         session.flush()
         self.storage.prepare_directory(audio.id)
         return audio
@@ -228,13 +253,19 @@ class AudioService:
         audio: Audio,
         tags: list[AudioTag],
     ) -> Audio:
-        if any(tag.type is AudioTagType.AUTHOR for tag in tags):
+        if any(
+            tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER} for tag in tags
+        ):
             raise DomainValidationError(
-                "Author tags are managed by the system",
+                "System tags cannot be assigned directly",
                 details={"field": "tagIds"},
             )
-        author_tags = [tag for tag in audio.tags if tag.type is AudioTagType.AUTHOR]
-        audio.tags = author_tags + list(dict.fromkeys(tags))
+        system_tags = [
+            tag
+            for tag in audio.tags
+            if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}
+        ]
+        audio.tags = system_tags + list(dict.fromkeys(tags))
         session.flush()
         return audio
 
@@ -255,9 +286,24 @@ class AudioService:
         preserved = [
             tag
             for tag in audio.tags
-            if tag.type in {AudioTagType.AUTHOR, AudioTagType.VOICE}
+            if tag.type
+            in {AudioTagType.AUTHOR, AudioTagType.VOICE, AudioTagType.OTHER}
         ]
         audio.tags = preserved + list(dict.fromkeys(tags))
+        session.flush()
+        return audio
+
+    def replace_questions(
+        self,
+        session: Session,
+        audio: Audio,
+        questions: Iterable[AudioQuestionInput],
+    ) -> Audio:
+        normalized = self._normalize_questions(questions)
+        audio.questions.clear()
+        session.flush()
+        self._add_questions(session, audio, normalized)
+        self._sync_questions_tag(session, audio, has_questions=bool(normalized))
         session.flush()
         return audio
 
@@ -289,15 +335,113 @@ class AudioService:
                     "Audio tag is invalid",
                     details={"field": "tags"},
                 )
-            if tag.type is AudioTagType.AUTHOR:
+            if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
                 raise DomainValidationError(
-                    "Author tags are managed by the system",
+                    "System tags cannot be assigned directly",
                     details={"field": "tags"},
                 )
             if tag.id not in seen_ids:
                 result.append(tag)
                 seen_ids.add(tag.id)
         return result
+
+    def _with_questions_tag(self, session: Session) -> AudioTag:
+        tag = self.tag_repository.get_by_normalized_value(
+            session,
+            AudioTagType.OTHER,
+            _WITH_QUESTIONS_TAG_VALUE,
+        )
+        if tag is None:
+            try:
+                with session.begin_nested():
+                    tag = self.tag_repository.create(
+                        session,
+                        tag_type=AudioTagType.OTHER,
+                        value=_WITH_QUESTIONS_TAG_VALUE,
+                        normalized_value=_WITH_QUESTIONS_TAG_VALUE,
+                    )
+            except IntegrityError:
+                tag = self.tag_repository.get_by_normalized_value(
+                    session,
+                    AudioTagType.OTHER,
+                    _WITH_QUESTIONS_TAG_VALUE,
+                )
+                if tag is None:
+                    raise
+        translation = self.tag_repository.get_translation(
+            session,
+            tag_id=tag.id,
+            language=_WITH_QUESTIONS_TRANSLATION.language,
+        )
+        if translation is None:
+            normalized = normalize_tag_translations(
+                [_WITH_QUESTIONS_TRANSLATION]
+            )[0]
+            try:
+                with session.begin_nested():
+                    self.tag_repository.add_translation(
+                        session,
+                        tag=tag,
+                        language=normalized.language,
+                        value=normalized.value.value,
+                        normalized_value=normalized.value.normalized_value,
+                    )
+            except IntegrityError:
+                if (
+                    self.tag_repository.get_translation(
+                        session,
+                        tag_id=tag.id,
+                        language=normalized.language,
+                    )
+                    is None
+                ):
+                    raise
+        return tag
+
+    def _sync_questions_tag(
+        self,
+        session: Session,
+        audio: Audio,
+        *,
+        has_questions: bool,
+    ) -> None:
+        audio.tags = [
+            tag
+            for tag in audio.tags
+            if not (
+                tag.type is AudioTagType.OTHER
+                and tag.normalized_value == _WITH_QUESTIONS_TAG_VALUE
+            )
+        ]
+        if has_questions:
+            audio.tags.append(self._with_questions_tag(session))
+
+    @staticmethod
+    def _add_questions(
+        session: Session,
+        audio: Audio,
+        questions: list[AudioQuestionInput],
+    ) -> None:
+        for question_position, item in enumerate(questions):
+            question = AudioQuestion(
+                audio=audio,
+                prompt=item.prompt,
+                position=question_position,
+            )
+            session.add(question)
+            for is_correct, answers in (
+                (True, item.correct_answers),
+                (False, item.incorrect_answers),
+            ):
+                for answer_position, answer in enumerate(answers):
+                    session.add(
+                        AudioQuestionAnswer(
+                            question=question,
+                            text=answer,
+                            is_correct=is_correct,
+                            position=answer_position,
+                        )
+                    )
 
     @staticmethod
     def _normalize_title(title: str) -> tuple[str, str]:
@@ -343,6 +487,35 @@ class AudioService:
             )
             text = cls._normalize_text(utterance.text, "utterances.text")
             result.append(AudioUtteranceInput(utterance.voice_id, speaker, text))
+        return result
+
+    @classmethod
+    def _normalize_questions(
+        cls,
+        questions: Iterable[AudioQuestionInput],
+    ) -> list[AudioQuestionInput]:
+        result: list[AudioQuestionInput] = []
+        for item in questions:
+            if not isinstance(item, AudioQuestionInput):
+                raise DomainValidationError(
+                    "Audio question is invalid",
+                    details={"field": "questions"},
+                )
+            prompt = cls._normalize_text(item.prompt, "questions.prompt")
+            correct = tuple(
+                cls._normalize_text(answer, "questions.correctAnswers")
+                for answer in item.correct_answers
+            )
+            incorrect = tuple(
+                cls._normalize_text(answer, "questions.incorrectAnswers")
+                for answer in item.incorrect_answers
+            )
+            if not correct or not incorrect:
+                raise DomainValidationError(
+                    "Each question requires correct and incorrect answers",
+                    details={"field": "questions"},
+                )
+            result.append(AudioQuestionInput(prompt, correct, incorrect))
         return result
 
     @classmethod

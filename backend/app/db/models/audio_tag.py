@@ -14,6 +14,7 @@ class AudioTagType(str, Enum):
     VOICE = "voice"
     TOPIC = "topic"
     CATEGORY = "category"
+    OTHER = "other"
 
 
 class AudioTag(Base):

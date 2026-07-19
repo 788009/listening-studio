@@ -37,6 +37,14 @@ const audio: Audio = {
       fullTag: 'topic:climate_change',
       translations: [{ language: 'zh-CN', value: '气候_变化' }],
     },
+    {
+      id: 3,
+      type: 'other',
+      englishValue: 'with_questions',
+      displayValue: '有题目',
+      fullTag: 'other:with_questions',
+      translations: [{ language: 'zh-CN', value: '有题目' }],
+    },
   ],
   utterances: [
     {
@@ -54,6 +62,15 @@ const audio: Audio = {
       speakerDisplayName: 'Student',
       text: 'Second line',
       position: 1,
+    },
+  ],
+  questions: [
+    {
+      id: 1,
+      prompt: 'Who spoke first?',
+      correctAnswers: ['Woman'],
+      incorrectAnswers: ['Student'],
+      position: 0,
     },
   ],
 }
@@ -251,6 +268,7 @@ describe('audio views', () => {
 
     expect(wrapper.text()).toContain('听力资源库')
     expect(wrapper.text()).toContain('气候 变化')
+    expect(wrapper.text()).toContain('有题目')
     expect(wrapper.text()).toContain('environment')
     expect(wrapper.get('a[href="/audio/5"]').attributes('href')).toBe('/audio/5')
     expect(document.documentElement.lang).toBe('zh-CN')
@@ -275,13 +293,16 @@ describe('audio views', () => {
     expect(wrapper.text()).toContain('Woman')
     expect(wrapper.text()).toContain('test')
     expect(wrapper.text()).toContain('气候 变化')
+    expect(wrapper.text()).toContain('有题目')
+    expect(wrapper.text()).toContain('Who spoke first?')
+    expect(wrapper.text()).toContain('Correct answers')
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
       expect.arrayContaining(['Author', 'Speakers', 'Topic']),
     )
     const tagSearchLinks = wrapper
       .findAll('a')
       .filter((link) => link.attributes('href')?.includes('?q='))
-    expect(tagSearchLinks).toHaveLength(4)
+    expect(tagSearchLinks).toHaveLength(5)
     expect(
       tagSearchLinks.map((link) =>
         decodeURIComponent(link.attributes('href') ?? ''),
@@ -292,6 +313,11 @@ describe('audio views', () => {
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
     ).toContain('/audio?q=voice:test')
+    expect(
+      tagSearchLinks.map((link) =>
+        decodeURIComponent(link.attributes('href') ?? ''),
+      ),
+    ).toContain('/audio?q=other:with_questions')
     expect(wrapper.findAll('h2').map((item) => item.text())).toContain('Text')
     expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
@@ -339,7 +365,7 @@ describe('audio views', () => {
 
   it('edits topic and category tags without exposing voice tags', async () => {
     const voiceTag = {
-      id: 3,
+      id: 30,
       type: 'voice' as const,
       englishValue: 'host',
       displayValue: 'host',
@@ -355,7 +381,7 @@ describe('audio views', () => {
       fullTag: 'category:practice',
       translations: [],
     }
-    let updateBody: { tagIds?: number[] } | undefined
+    let updateBody: { tagIds?: number[]; questions?: unknown[] } | undefined
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
       if (path.startsWith('/api/audios/5?')) return Promise.resolve(jsonResponse(editableAudio))
@@ -365,7 +391,11 @@ describe('audio views', () => {
       if (path === '/api/audios/5' && init?.method === 'PATCH') {
         updateBody = JSON.parse(String(init.body))
         return Promise.resolve(
-          jsonResponse({ ...audio, tags: [audio.tags[0], voiceTag, categoryTag] }),
+          jsonResponse({
+            ...audio,
+            questions: [],
+            tags: [audio.tags[0], voiceTag, categoryTag],
+          }),
         )
       }
       throw new Error(`Unexpected request: ${path}`)
@@ -382,6 +412,7 @@ describe('audio views', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'Edit')?.trigger('click')
     await flushPromises()
     expect(wrapper.findAll('input[placeholder="Search tags"]')).toHaveLength(2)
+    await wrapper.get('button[aria-label="Remove question 1"]').trigger('click')
 
     await wrapper.get('button[title="Remove tag"]').trigger('click')
     const searchInputs = wrapper.findAll('input[placeholder="Search tags"]')
@@ -391,6 +422,7 @@ describe('audio views', () => {
     await flushPromises()
 
     expect(updateBody?.tagIds).toEqual([4])
+    expect(updateBody?.questions).toEqual([])
     expect(wrapper.text()).toContain('test')
     expect(wrapper.text()).toContain('practice')
   })

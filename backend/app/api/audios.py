@@ -8,6 +8,7 @@ from starlette.responses import StreamingResponse
 from backend.app.api.audio_schemas import (
     AudioAuthorResponse,
     AudioListResponse,
+    AudioQuestionResponse,
     AudioResponse,
     AudioSynthesisAccepted,
     AudioSynthesisRequest,
@@ -27,7 +28,7 @@ from backend.app.db.session import get_db_session
 from backend.app.services.audio_management import AudioManagementService
 from backend.app.services.audio_synthesis import AudioSynthesisService
 from backend.app.services.audio_storage import AudioStorage
-from backend.app.services.audios import AudioUtteranceInput
+from backend.app.services.audios import AudioQuestionInput, AudioUtteranceInput
 from backend.app.services.audio_voice_tags import audio_voice_tag_value
 from backend.app.services.tag_values import select_tag_display_value
 from backend.app.services.voice_storage import VoiceStorage
@@ -88,6 +89,20 @@ def _response(audio: Audio, principal: Principal, language: str) -> AudioRespons
             )
             for item in audio.utterances
         ],
+        questions=[
+            AudioQuestionResponse(
+                id=question.id,
+                prompt=question.prompt,
+                correct_answers=[
+                    answer.text for answer in question.answers if answer.is_correct
+                ],
+                incorrect_answers=[
+                    answer.text for answer in question.answers if not answer.is_correct
+                ],
+                position=question.position,
+            )
+            for question in audio.questions
+        ],
     )
 
 
@@ -114,6 +129,14 @@ async def create_audio(
         voice_id=payload.voice_id,
         speaker_display_name=payload.speaker_display_name,
         tag_ids=payload.tag_ids,
+        questions=[
+            AudioQuestionInput(
+                item.prompt,
+                tuple(item.correct_answers),
+                tuple(item.incorrect_answers),
+            )
+            for item in payload.questions
+        ],
         target_visibility=payload.visibility,
     )
     logger.bind(
@@ -157,6 +180,14 @@ async def create_dialogue(
             for item in payload.utterances
         ],
         tag_ids=payload.tag_ids,
+        questions=[
+            AudioQuestionInput(
+                item.prompt,
+                tuple(item.correct_answers),
+                tuple(item.incorrect_answers),
+            )
+            for item in payload.questions
+        ],
         target_visibility=payload.visibility,
         silence_milliseconds=settings.dialogue_silence_milliseconds,
     )
@@ -240,6 +271,18 @@ async def update_audio(
         title=payload.title,
         tag_ids=payload.tag_ids,
         visibility=payload.visibility,
+        questions=(
+            [
+                AudioQuestionInput(
+                    item.prompt,
+                    tuple(item.correct_answers),
+                    tuple(item.incorrect_answers),
+                )
+                for item in payload.questions
+            ]
+            if payload.questions is not None
+            else None
+        ),
     )
     return _response(audio, principal, user.locale)
 

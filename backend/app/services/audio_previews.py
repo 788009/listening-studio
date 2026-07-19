@@ -26,7 +26,11 @@ from backend.app.integrations.cosyvoice import CosyVoiceIntegration
 from backend.app.services.audio_combiner import AudioCombiner
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audio_synthesis import AudioSynthesisService
-from backend.app.services.audios import AudioService, AudioUtteranceInput
+from backend.app.services.audios import (
+    AudioQuestionInput,
+    AudioService,
+    AudioUtteranceInput,
+)
 from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.jobs import JobService
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
@@ -230,6 +234,7 @@ class AudioPreviewService:
         title: str,
         utterances: list[PublishedAudioUtterance],
         tag_ids: list[int],
+        questions: list[AudioQuestionInput],
         visibility: AudioVisibility,
         silence_milliseconds: int,
     ) -> Audio:
@@ -287,6 +292,7 @@ class AudioPreviewService:
                 title=title,
                 source_type=source_type,
                 utterances=utterance_inputs,
+                questions=questions,
                 tags=tags,
             )
             self.audio_service.transition_status(session, audio, AudioStatus.PROCESSING)

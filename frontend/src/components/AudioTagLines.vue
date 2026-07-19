@@ -23,12 +23,14 @@ const rows = computed(() => {
     voice: t('Voice'),
     topic: t('Topic'),
     category: t('Category'),
+    other: t('Other'),
   }
   const types: AudioTagType[] = [
     ...(props.includeAuthor ? (['author'] as const) : []),
     ...(props.includeVoice ? (['voice'] as const) : []),
     'topic',
     'category',
+    'other',
   ]
   return types
     .map((type) => ({

@@ -18,6 +18,7 @@ _TYPE_ABBREVIATIONS = {
     "voice": "v",
     "topic": "t",
     "category": "c",
+    "other": "o",
 }
 
 

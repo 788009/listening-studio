@@ -195,6 +195,10 @@ describe('direct creation view', () => {
     await button(wrapper, 'Add turn').trigger('click')
     await wrapper.get('#turn-speaker-2').setValue('2')
     await wrapper.get('#turn-text-2').setValue('Second line.')
+    await button(wrapper, 'Add question').trigger('click')
+    await wrapper.get('#question-prompt-0').setValue('Who spoke first?')
+    await wrapper.get('#question-0-correctAnswers-0').setValue('Man')
+    await wrapper.get('#question-0-incorrectAnswers-0').setValue('Woman')
 
     await wrapper.findAll('button').find((item) => item.text() === 'Generate preview')?.trigger('click')
     await flushPromises()
@@ -254,6 +258,13 @@ describe('direct creation view', () => {
       ],
       tagIds: [],
       visibility: 'private',
+      questions: [
+        {
+          prompt: 'Who spoke first?',
+          correctAnswers: ['Man'],
+          incorrectAnswers: ['Woman'],
+        },
+      ],
     })
     expect(wrapper.get('a[href="/audio/8"]').attributes('href')).toBe('/audio/8')
     wrapper.unmount()
@@ -310,6 +321,7 @@ describe('direct creation view', () => {
       ],
       tagIds: [],
       visibility: 'private',
+      questions: [],
     })
     expect(wrapper.get('a[href="/audio/9"]').attributes('href')).toBe('/audio/9')
     wrapper.unmount()

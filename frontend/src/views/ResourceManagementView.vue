@@ -141,9 +141,7 @@ async function loadTags(): Promise<void> {
       values = await listVoiceGenderTags()
     } else if (kind.value === 'audio' || kind.value === 'generation_batch') {
       values = (await listAudioTags()).filter(
-        (tag) =>
-          tag.type !== 'author' &&
-          (kind.value === 'audio' || tag.type === 'topic' || tag.type === 'category'),
+        (tag) => tag.type === 'topic' || tag.type === 'category',
       )
     }
     tagOptions.value = values.map((tag) => ({

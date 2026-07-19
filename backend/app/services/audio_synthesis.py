@@ -29,7 +29,11 @@ from backend.app.repositories.audios import AudioRepository
 from backend.app.repositories.voices import VoiceRepository
 from backend.app.services.audio_combiner import AudioCombiner
 from backend.app.services.audio_storage import AudioStorage
-from backend.app.services.audios import AudioService, AudioUtteranceInput
+from backend.app.services.audios import (
+    AudioQuestionInput,
+    AudioService,
+    AudioUtteranceInput,
+)
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.jobs import JobService
 from backend.app.services.audio_voice_tags import audio_voice_tag_value
@@ -85,6 +89,7 @@ class AudioSynthesisService:
         voice_id: int,
         speaker_display_name: str | None = None,
         tag_ids: list[int],
+        questions: list[AudioQuestionInput],
         target_visibility: AudioVisibility,
     ) -> AudioSynthesisSubmission:
         self.validate_visibility(target_visibility)
@@ -105,6 +110,7 @@ class AudioSynthesisService:
             source_type=AudioSourceType.SINGLE_SPEAKER,
             utterances=utterances,
             tags=tags,
+            questions=questions,
             target_visibility=target_visibility,
             silence_milliseconds=0,
         )
@@ -117,6 +123,7 @@ class AudioSynthesisService:
         title: str,
         utterances: list[AudioUtteranceInput],
         tag_ids: list[int],
+        questions: list[AudioQuestionInput],
         target_visibility: AudioVisibility,
         silence_milliseconds: int,
     ) -> AudioSynthesisSubmission:
@@ -143,6 +150,7 @@ class AudioSynthesisService:
             source_type=AudioSourceType.MULTI_TURN,
             utterances=utterances,
             tags=tags,
+            questions=questions,
             target_visibility=target_visibility,
             silence_milliseconds=silence_milliseconds,
         )
@@ -156,6 +164,7 @@ class AudioSynthesisService:
         source_type: AudioSourceType,
         utterances: list[AudioUtteranceInput],
         tags: list[AudioTag],
+        questions: list[AudioQuestionInput],
         target_visibility: AudioVisibility,
         silence_milliseconds: int,
     ) -> AudioSynthesisSubmission:
@@ -168,6 +177,7 @@ class AudioSynthesisService:
                 source_type=source_type,
                 utterances=utterances,
                 tags=tags,
+                questions=questions,
             )
             summary: dict[str, object] = {
                 "audioId": audio.id,
@@ -384,7 +394,10 @@ class AudioSynthesisService:
         tags: list[AudioTag] = []
         for tag_id in dict.fromkeys(tag_ids):
             tag = self.tag_repository.get_by_id(session, tag_id)
-            if tag is None or tag.type is AudioTagType.AUTHOR:
+            if tag is None or tag.type in {
+                AudioTagType.AUTHOR,
+                AudioTagType.OTHER,
+            }:
                 raise NotFoundError("Audio tag not found")
             tags.append(tag)
         return tags

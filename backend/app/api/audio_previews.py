@@ -23,6 +23,7 @@ from backend.app.services.audio_previews import (
     AudioPreviewService,
     PublishedAudioUtterance,
 )
+from backend.app.services.audios import AudioQuestionInput
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.job_storage import JobStorage
 from backend.app.services.voice_storage import VoiceStorage
@@ -108,6 +109,14 @@ async def publish_audio_from_previews(
             for item in payload.utterances
         ],
         tag_ids=payload.tag_ids,
+        questions=[
+            AudioQuestionInput(
+                item.prompt,
+                tuple(item.correct_answers),
+                tuple(item.incorrect_answers),
+            )
+            for item in payload.questions
+        ],
         visibility=payload.visibility,
         silence_milliseconds=request.app.state.settings.dialogue_silence_milliseconds,
     )

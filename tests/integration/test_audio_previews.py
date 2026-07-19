@@ -217,6 +217,18 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
                         "text": "First line.",
                     },
                 ],
+                "questions": [
+                    {
+                        "prompt": "Who spoke first?",
+                        "correctAnswers": ["Man"],
+                        "incorrectAnswers": ["Woman", "Narrator"],
+                    },
+                    {
+                        "prompt": "How many lines were there?",
+                        "correctAnswers": ["Two", "2"],
+                        "incorrectAnswers": ["One"],
+                    },
+                ],
                 "tagIds": [],
                 "visibility": "public",
             },
@@ -230,6 +242,35 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
         self.assertEqual(body["sourceType"], AudioSourceType.MULTI_TURN.value)
         self.assertEqual(body["status"], AudioStatus.READY.value)
         self.assertEqual(body["visibility"], AudioVisibility.PUBLIC.value)
+        self.assertEqual(
+            [question["prompt"] for question in body["questions"]],
+            ["Who spoke first?", "How many lines were there?"],
+        )
+        self.assertEqual(body["questions"][1]["correctAnswers"], ["Two", "2"])
+        self.assertIn(
+            ("other", "with_questions"),
+            {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
+        )
+        found = self.send("GET", "/api/audios?q=o:with_questions")
+        localized = self.send(
+            "GET",
+            f"/api/audios/{body['id']}?language=zh-CN",
+        )
+        self.assertEqual([item["id"] for item in found.json()["items"]], [body["id"]])
+        self.assertIn(
+            "有题目",
+            [tag["displayValue"] for tag in localized.json()["tags"]],
+        )
+
+        updated = self.send(
+            "PATCH",
+            f"/api/audios/{body['id']}",
+            headers=self.headers("first"),
+            json={"questions": []},
+        )
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["questions"], [])
+        self.assertNotIn("other", [tag["type"] for tag in updated.json()["tags"]])
         self.assertFalse(self.job_storage.directory(first_id).exists())
         self.assertFalse(self.job_storage.directory(second_id).exists())
         with self.app.state.session_factory() as session:

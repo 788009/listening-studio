@@ -88,9 +88,9 @@ class AudioTagService:
         english_value: object,
         translations: Iterable[TagTranslationInput] = (),
     ) -> AudioTag:
-        if tag_type is AudioTagType.AUTHOR:
+        if tag_type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
             raise DomainValidationError(
-                "Author tags are managed by the system",
+                "System tags are managed by the system",
                 details={"field": "type"},
             )
         return self.create_tag(
@@ -121,8 +121,8 @@ class AudioTagService:
         translation: TagTranslationInput,
     ) -> AudioTag:
         tag = self.get_tag(session, tag_id)
-        if tag.type is AudioTagType.AUTHOR:
-            raise ConflictError("Author tags are managed by the system")
+        if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
+            raise ConflictError("System tags are managed by the system")
         normalized = normalize_tag_translations([translation])[0]
         existing = self.repository.get_translation(
             session,
@@ -151,8 +151,8 @@ class AudioTagService:
         tag = self.repository.get_by_id_for_update(session, tag_id)
         if tag is None:
             raise NotFoundError("Audio tag not found")
-        if tag.type is AudioTagType.AUTHOR:
-            raise ConflictError("Author tags are managed by the system")
+        if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
+            raise ConflictError("System tags are managed by the system")
         usage_count = self.repository.count_usage(session, tag.id)
         if usage_count:
             raise ConflictError(

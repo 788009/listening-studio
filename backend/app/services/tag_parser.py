@@ -24,6 +24,7 @@ class TagType(str, Enum):
     VOICE = "voice"
     TOPIC = "topic"
     CATEGORY = "category"
+    OTHER = "other"
 
 
 _TYPE_ALIASES = {
@@ -37,6 +38,8 @@ _TYPE_ALIASES = {
     "t": TagType.TOPIC,
     "category": TagType.CATEGORY,
     "c": TagType.CATEGORY,
+    "other": TagType.OTHER,
+    "o": TagType.OTHER,
 }
 _DOMAIN_TYPES = {
     TagDomain.VOICE: {TagType.AUTHOR, TagType.GENDER},
@@ -45,6 +48,7 @@ _DOMAIN_TYPES = {
         TagType.VOICE,
         TagType.TOPIC,
         TagType.CATEGORY,
+        TagType.OTHER,
     },
 }
 

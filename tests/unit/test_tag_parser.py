@@ -63,6 +63,8 @@ class TagParserTest(unittest.TestCase):
             ("V", TagDomain.AUDIO, TagType.VOICE),
             ("topic", TagDomain.AUDIO, TagType.TOPIC),
             ("C", TagDomain.AUDIO, TagType.CATEGORY),
+            ("other", TagDomain.AUDIO, TagType.OTHER),
+            ("O", TagDomain.AUDIO, TagType.OTHER),
         ]
 
         for prefix, domain, expected in cases:
@@ -76,6 +78,7 @@ class TagParserTest(unittest.TestCase):
             ("s:teacher", TagDomain.AUDIO),
             ("g:male", TagDomain.AUDIO),
             ("topic:climate", TagDomain.VOICE),
+            ("other:with_questions", TagDomain.VOICE),
         ):
             with self.subTest(token=token), self.assertRaises(
                 DomainValidationError
@@ -95,6 +98,13 @@ class TagParserTest(unittest.TestCase):
             ParsedTagTerm(
                 type=TagType.TOPIC,
                 normalized_value="气候_变化",
+            ),
+        )
+        self.assertEqual(
+            parse_tag_term("o:with_questions", "audio"),
+            ParsedTagTerm(
+                type=TagType.OTHER,
+                normalized_value="with_questions",
             ),
         )
 

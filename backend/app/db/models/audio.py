@@ -144,6 +144,12 @@ class Audio(Base):
         passive_deletes=True,
         order_by="AudioUtterance.position",
     )
+    questions: Mapped[list["AudioQuestion"]] = relationship(
+        back_populates="audio",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AudioQuestion.position",
+    )
     tags: Mapped[list["AudioTag"]] = relationship(
         secondary=audio_tag_associations,
         order_by="AudioTag.id",
@@ -179,3 +185,56 @@ class AudioUtterance(Base):
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     audio: Mapped["Audio"] = relationship(back_populates="utterances")
     voice: Mapped["Voice"] = relationship()
+
+
+class AudioQuestion(Base):
+    __tablename__ = "audio_questions"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="ck_audio_questions_position"),
+        UniqueConstraint(
+            "audio_id",
+            "position",
+            name="uq_audio_questions_audio_position",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    audio_id: Mapped[int] = mapped_column(
+        ForeignKey("audios.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    audio: Mapped["Audio"] = relationship(back_populates="questions")
+    answers: Mapped[list["AudioQuestionAnswer"]] = relationship(
+        back_populates="question",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="AudioQuestionAnswer.id",
+    )
+
+
+class AudioQuestionAnswer(Base):
+    __tablename__ = "audio_question_answers"
+    __table_args__ = (
+        CheckConstraint(
+            "position >= 0",
+            name="ck_audio_question_answers_position",
+        ),
+        UniqueConstraint(
+            "question_id",
+            "is_correct",
+            "position",
+            name="uq_audio_question_answers_kind_position",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    question_id: Mapped[int] = mapped_column(
+        ForeignKey("audio_questions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    is_correct: Mapped[bool] = mapped_column(nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    question: Mapped["AudioQuestion"] = relationship(back_populates="answers")

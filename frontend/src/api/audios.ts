@@ -13,7 +13,7 @@ export type AudioSourceType =
   | 'multi_turn'
   | 'corpus'
   | 'assembly'
-export type AudioTagType = 'author' | 'voice' | 'topic' | 'category'
+export type AudioTagType = 'author' | 'voice' | 'topic' | 'category' | 'other'
 
 export interface AudioTag {
   id: number
@@ -39,6 +39,17 @@ export interface AudioUtterance {
   position: number
 }
 
+export interface AudioQuestionInput {
+  prompt: string
+  correctAnswers: string[]
+  incorrectAnswers: string[]
+}
+
+export interface AudioQuestion extends AudioQuestionInput {
+  id: number
+  position: number
+}
+
 export interface Audio {
   id: number
   author: VoiceAuthor
@@ -52,6 +63,7 @@ export interface Audio {
   errorSummary?: string
   tags: AudioTag[]
   utterances: AudioUtterance[]
+  questions?: AudioQuestion[]
 }
 
 export interface AudioList {
@@ -74,6 +86,7 @@ export interface AudioUpdate {
   title?: string
   visibility?: ResourceVisibility
   tagIds?: number[]
+  questions?: AudioQuestionInput[]
 }
 
 export interface AudioCreationAccepted {
@@ -88,6 +101,7 @@ export interface SingleAudioCreationInput {
   speakerDisplayName: string
   tagIds: number[]
   visibility: ResourceVisibility
+  questions?: AudioQuestionInput[]
 }
 
 export interface DialogueCreationUtterance {
@@ -101,6 +115,7 @@ export interface DialogueAudioCreationInput {
   utterances: DialogueCreationUtterance[]
   tagIds: number[]
   visibility: ResourceVisibility
+  questions?: AudioQuestionInput[]
 }
 
 export interface AudioPreviewInput {
@@ -123,6 +138,7 @@ export interface PublishAudioFromPreviewsInput {
   utterances: PreviewAudioUtterance[]
   tagIds: number[]
   visibility: ResourceVisibility
+  questions?: AudioQuestionInput[]
 }
 
 export function listAudios(options: AudioListOptions = {}): Promise<AudioList> {

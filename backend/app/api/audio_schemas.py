@@ -25,6 +25,17 @@ class AudioUtteranceResponse(TagApiModel):
     position: int
 
 
+class AudioQuestionRequest(TagApiModel):
+    prompt: str = Field(min_length=1)
+    correct_answers: list[str] = Field(min_length=1)
+    incorrect_answers: list[str] = Field(min_length=1)
+
+
+class AudioQuestionResponse(AudioQuestionRequest):
+    id: int
+    position: int
+
+
 class AudioResponse(TagApiModel):
     id: int
     author: AudioAuthorResponse
@@ -38,6 +49,7 @@ class AudioResponse(TagApiModel):
     error_summary: str | None = None
     tags: list[AudioTagResponse]
     utterances: list[AudioUtteranceResponse]
+    questions: list[AudioQuestionResponse]
 
 
 class AudioListResponse(TagApiModel):
@@ -53,6 +65,7 @@ class AudioSynthesisRequest(TagApiModel):
     voice_id: ResourceId
     speaker_display_name: str | None = Field(default=None, min_length=1, max_length=200)
     tag_ids: list[ResourceId] = Field(default_factory=list)
+    questions: list[AudioQuestionRequest] = Field(default_factory=list)
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 
 
@@ -71,6 +84,7 @@ class DialogueSynthesisRequest(TagApiModel):
     title: Title
     utterances: list[DialogueUtteranceRequest] = Field(min_length=1)
     tag_ids: list[ResourceId] = Field(default_factory=list)
+    questions: list[AudioQuestionRequest] = Field(default_factory=list)
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 
 
@@ -93,6 +107,7 @@ class AudioPublishFromPreviewsRequest(TagApiModel):
     title: Title
     utterances: list[PreviewAudioUtteranceRequest] = Field(min_length=1)
     tag_ids: list[ResourceId] = Field(default_factory=list)
+    questions: list[AudioQuestionRequest] = Field(default_factory=list)
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 
 
@@ -100,12 +115,13 @@ class AudioUpdateRequest(TagApiModel):
     title: Title | None = None
     tag_ids: list[ResourceId] | None = None
     visibility: AudioVisibility | None = None
+    questions: list[AudioQuestionRequest] | None = None
 
     @model_validator(mode="after")
     def require_update(self) -> AudioUpdateRequest:
         if not self.model_fields_set:
             raise ValueError("At least one audio field is required")
-        for name in ("title", "tag_ids", "visibility"):
+        for name in ("title", "tag_ids", "visibility", "questions"):
             if name in self.model_fields_set and getattr(self, name) is None:
                 raise ValueError(f"{name} cannot be null")
         return self
