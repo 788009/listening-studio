@@ -74,6 +74,10 @@ describe('create voice view', () => {
     vi.stubGlobal('fetch', fetchMock)
     const wrapper = await mountView()
     await flushPromises()
+    expect(wrapper.get('input[type="checkbox"]').element).toHaveProperty(
+      'checked',
+      true,
+    )
     await wrapper.get('#voice-title').setValue('Classroom voice')
     await wrapper.get('#voice-new-gender').setValue('female')
     await wrapper.findAll('button').find((button) => button.text() === 'Add tag')?.trigger('click')
@@ -92,6 +96,7 @@ describe('create voice view', () => {
     expect(fetchMock.mock.calls.filter(([path]) => path === '/api/voices')).toHaveLength(1)
     const uploadRequest = fetchMock.mock.calls.find(([path]) => path === '/api/voices')?.[1]
     expect((uploadRequest?.body as FormData).get('genderTagId')).toBe('4')
+    expect((uploadRequest?.body as FormData).get('visibility')).toBe('public')
     wrapper.unmount()
   })
 

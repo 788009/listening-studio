@@ -18,7 +18,7 @@ const creation = useVoiceCreationStore()
 const title = ref('')
 const file = ref<File | null>(null)
 const genderTagId = ref('')
-const visibility = ref<ResourceVisibility>('private')
+const visibility = ref<ResourceVisibility>('public')
 const genderTags = ref<VoiceTag[]>([])
 const newGenderTag = ref('')
 const tagsLoading = ref(true)
@@ -99,7 +99,7 @@ function startAnother(): void {
   file.value = null
   genderTagId.value = ''
   newGenderTag.value = ''
-  visibility.value = 'private'
+  visibility.value = 'public'
   formError.value = ''
 }
 

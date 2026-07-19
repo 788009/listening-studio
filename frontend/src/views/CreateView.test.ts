@@ -152,6 +152,10 @@ describe('direct creation view', () => {
     expect(wrapper.get('#turn-speaker-1').text()).toContain('Speaker 1')
     expect(button(wrapper, 'Generate preview').exists()).toBe(true)
     expect(button(wrapper, 'Generate audio').exists()).toBe(true)
+    expect(wrapper.get('input[type="checkbox"]').element).toHaveProperty(
+      'checked',
+      true,
+    )
     wrapper.unmount()
   })
 
@@ -257,7 +261,7 @@ describe('direct creation view', () => {
         },
       ],
       tagIds: [],
-      visibility: 'private',
+      visibility: 'public',
       questions: [
         {
           prompt: 'Who spoke first?',
@@ -320,7 +324,7 @@ describe('direct creation view', () => {
         },
       ],
       tagIds: [],
-      visibility: 'private',
+      visibility: 'public',
       questions: [],
     })
     expect(wrapper.get('a[href="/audio/9"]').attributes('href')).toBe('/audio/9')

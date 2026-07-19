@@ -38,7 +38,7 @@ const { locale, t } = useI18n()
 const title = ref('')
 const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
-const visibility = ref<ResourceVisibility>('private')
+const visibility = ref<ResourceVisibility>('public')
 const selectedTagIds = ref<number[]>([])
 const voices = ref<Voice[]>([])
 const tags = ref<AudioTag[]>([])
@@ -548,7 +548,7 @@ function startAnother(): void {
   turns.value = [newTurn(speakers.value[0]?.key)]
   selectedTagIds.value = []
   questions.value = []
-  visibility.value = 'private'
+  visibility.value = 'public'
   formError.value = ''
   discardChangesDialogOpen.value = false
 }
