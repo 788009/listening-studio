@@ -22,9 +22,10 @@ async function mountView() {
   })
   await router.push('/voices/create')
   await router.isReady()
-  return mount(CreateVoiceView, {
+  const wrapper = mount({ template: '<router-view />' }, {
     global: { plugins: [createPinia(), router] },
   })
+  return { router, wrapper }
 }
 
 describe('create voice view', () => {
@@ -72,7 +73,7 @@ describe('create voice view', () => {
       throw new Error(`Unexpected request: ${path}`)
     })
     vi.stubGlobal('fetch', fetchMock)
-    const wrapper = await mountView()
+    const { router, wrapper } = await mountView()
     await flushPromises()
     expect(wrapper.get('input[type="checkbox"]').element).toHaveProperty(
       'checked',
@@ -97,6 +98,12 @@ describe('create voice view', () => {
     const uploadRequest = fetchMock.mock.calls.find(([path]) => path === '/api/voices')?.[1]
     expect((uploadRequest?.body as FormData).get('genderTagId')).toBe('4')
     expect((uploadRequest?.body as FormData).get('visibility')).toBe('public')
+    await wrapper.get('a[href="/voice/8"]').trigger('click')
+    await flushPromises()
+    expect(localStorage.getItem('listening.voiceCreation')).toBeNull()
+    await router.push('/voices/create')
+    await flushPromises()
+    expect(wrapper.find('#voice-title').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -131,7 +138,7 @@ describe('create voice view', () => {
       }),
     )
 
-    const wrapper = await mountView()
+    const { wrapper } = await mountView()
     await flushPromises()
 
     expect(wrapper.text()).toContain('Voice creation failed')

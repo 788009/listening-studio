@@ -77,5 +77,6 @@ describe('voice creation store', () => {
 
     expect(getJob).toHaveBeenCalledWith(13)
     expect(store.voiceId).toBe(8)
+    expect(localStorage.getItem('listening.voiceCreation')).toBeNull()
   })
 })

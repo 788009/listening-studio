@@ -77,7 +77,11 @@ export const useVoiceCreationStore = defineStore('voiceCreation', () => {
         voiceId.value = job.value.result.id
         persist()
       }
-      if (active.value) schedulePoll()
+      if (active.value) {
+        schedulePoll()
+      } else {
+        localStorage.removeItem(STORAGE_KEY)
+      }
     } catch (error) {
       errorMessage.value =
         error instanceof ApiError ? error.message : 'Task status could not be loaded'

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { onBeforeRouteLeave, RouterLink } from 'vue-router'
 
 import {
   createVoiceGenderTag,
@@ -106,6 +106,13 @@ function startAnother(): void {
 onMounted(() => {
   creation.resume()
   void loadGenderTags()
+})
+onBeforeRouteLeave(() => {
+  if (creation.completed || creation.failed) {
+    creation.reset()
+  } else {
+    creation.stopPolling()
+  }
 })
 onUnmounted(creation.stopPolling)
 </script>
