@@ -12,6 +12,7 @@ const QUESTION_TYPE_CATEGORIES: Record<QuestionType, string> = {
 }
 
 export interface ListeningDraftUtterance {
+  speakerKey: number
   speakerDisplayName: string
   voiceId: number
   text: string
@@ -53,6 +54,7 @@ export const useListeningDraftsStore = defineStore('listeningDrafts', () => {
       item.draft
         ? [{
             ...item.draft,
+            utterances: assignSpeakerKeys(item.draft.utterances),
             tagIds: [
               ...topicTagIds,
               ...[
@@ -127,9 +129,43 @@ function restore(): StoredDraftBatch | null {
     ) {
       return null
     }
-    return parsed
+    return {
+      ...parsed,
+      drafts: parsed.drafts.map((draft) => ({
+        ...draft,
+        utterances: assignSpeakerKeys(draft.utterances),
+      })),
+    }
   } catch {
     sessionStorage.removeItem(STORAGE_KEY)
     return null
   }
+}
+
+function assignSpeakerKeys(
+  utterances: Array<Omit<ListeningDraftUtterance, 'speakerKey'> & { speakerKey?: number }>,
+): ListeningDraftUtterance[] {
+  const keysBySpeaker = new Map<string, number>()
+  const usedKeys = new Set<number>()
+  let nextKey = 1
+  return utterances.map((utterance) => {
+    const identity = utterance.speakerDisplayName.normalize('NFKC').toLocaleLowerCase()
+    let speakerKey = keysBySpeaker.get(identity)
+    if (speakerKey === undefined) {
+      const preferredKey = Number(utterance.speakerKey)
+      if (
+        Number.isInteger(preferredKey) &&
+        preferredKey > 0 &&
+        !usedKeys.has(preferredKey)
+      ) {
+        speakerKey = preferredKey
+      } else {
+        while (usedKeys.has(nextKey)) nextKey += 1
+        speakerKey = nextKey
+      }
+      keysBySpeaker.set(identity, speakerKey)
+      usedKeys.add(speakerKey)
+    }
+    return { ...utterance, speakerKey }
+  })
 }

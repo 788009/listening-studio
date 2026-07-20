@@ -275,7 +275,56 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
-  it('confirms and publishes the last generated snapshot when edits are not regenerated', async () => {
+  it('publishes a renamed speaker without requiring regeneration', async () => {
+    let publishBody: unknown
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if (path === '/api/audio-previews' && init?.method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({ jobId: 29, contentDigest: 'c'.repeat(64) }, 202),
+          )
+        }
+        if (path === '/api/jobs/29') {
+          return Promise.resolve(jobResponse(29, 'succeeded'))
+        }
+        if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+          publishBody = JSON.parse(String(init.body))
+          return Promise.resolve(jsonResponse(publishedAudio(9), 201))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const wrapper = await mountView()
+    await flushPromises()
+    await wrapper.get('#audio-title').setValue('Renamed speaker')
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue('Generated text.')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    await wrapper.get('#speaker-name-1').setValue('Narrator')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(publishBody).toMatchObject({
+      utterances: [
+        {
+          previewJobId: 29,
+          voiceId: 2,
+          speakerDisplayName: 'Narrator',
+          text: 'Generated text.',
+        },
+      ],
+    })
+    wrapper.unmount()
+  })
+
+  it('confirms when selecting another speaker with the same voice', async () => {
     let publishBody: unknown
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input)
@@ -304,7 +353,9 @@ describe('direct creation view', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    await wrapper.get('#turn-text-1').setValue('Edited but not generated.')
+    await button(wrapper, 'Add speaker').trigger('click')
+    await wrapper.get('#speaker-name-2').setValue('Man')
+    await wrapper.get('#turn-speaker-1').setValue('2')
     expect(wrapper.findAll('audio')).toHaveLength(1)
     expect(button(wrapper, 'Publish').exists()).toBe(true)
     await wrapper.get('form').trigger('submit')

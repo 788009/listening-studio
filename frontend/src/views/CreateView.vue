@@ -60,12 +60,14 @@ const batchFailures = ref<string[]>([])
 interface GeneratedTurnPreview {
   signature: string
   jobId: number
+  speakerKey: number
   content: AudioPreviewInput
 }
 
 interface TurnPreviewState {
   requestId: number
   pendingSignature: string
+  pendingSpeakerKey: number
   pendingContent: AudioPreviewInput
   pendingJobId: number | null
   status: 'submitting' | JobStatus
@@ -152,7 +154,10 @@ const batchHasUnpublishedTurnChanges = computed(() =>
   draftStore.drafts.some((draft, draftIndex) =>
     draft.utterances.some((utterance, turnIndex) => {
       const generated = batchPreviewStates.value[draftIndex]?.[turnIndex + 1]?.generated
-      return Boolean(generated && generated.signature !== contentSignature(utterance))
+      return Boolean(
+        generated &&
+        generated.signature !== contentSignature(utterance, utterance.speakerKey),
+      )
     }),
   ),
 )
@@ -227,7 +232,7 @@ function applyDraft(draft: ListeningDraft): void {
     const identity = utterance.speakerDisplayName.normalize('NFKC').toLocaleLowerCase()
     let speakerKey = speakerKeys.get(identity)
     if (speakerKey === undefined) {
-      speakerKey = nextSpeakers.length + 1
+      speakerKey = utterance.speakerKey
       speakerKeys.set(identity, speakerKey)
       nextSpeakers.push({
         key: speakerKey,
@@ -250,6 +255,7 @@ function currentDraft(): ListeningDraft | null {
   const utterances = turns.value.map((turn) => {
     const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
     return {
+      speakerKey: Number(turn.speakerKey),
       speakerDisplayName: speaker?.name ?? '',
       voiceId: Number(speaker?.voiceId),
       text: turn.text,
@@ -328,14 +334,17 @@ function turnContent(turnKey: number): TurnContent | null {
 }
 
 function turnSignature(turnKey: number): string | null {
+  const turn = turns.value.find((item) => item.key === turnKey)
   const content = turnContent(turnKey)
-  return content ? contentSignature(content) : null
+  return content && turn
+    ? contentSignature(content, Number(turn.speakerKey))
+    : null
 }
 
-function contentSignature(content: AudioPreviewInput): string {
+function contentSignature(content: AudioPreviewInput, speakerKey: number): string {
   return JSON.stringify([
+    speakerKey,
     content.voiceId,
-    content.speakerDisplayName.trim(),
     content.text.trim(),
   ])
 }
@@ -418,6 +427,7 @@ async function refreshPreviewJobs(): Promise<void> {
               generated: {
                 signature: current.pendingSignature,
                 jobId,
+                speakerKey: current.pendingSpeakerKey,
                 content: current.pendingContent,
               },
               errorMessage: undefined,
@@ -465,16 +475,24 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
     formError.value = t('Select a speaker and enter text for every item')
     return
   }
-  await generatePreview(turnKey, content, draftStore.currentIndex)
+  const turn = turns.value.find((item) => item.key === turnKey)
+  if (!turn) return
+  await generatePreview(
+    turnKey,
+    content,
+    Number(turn.speakerKey),
+    draftStore.currentIndex,
+  )
 }
 
 async function generatePreview(
   turnKey: number,
   content: AudioPreviewInput,
+  speakerKey: number,
   draftIndex: number,
   refreshAfterSubmit = true,
 ): Promise<void> {
-  const signature = contentSignature(content)
+  const signature = contentSignature(content, speakerKey)
   const states = previewBucket(draftIndex)
   const previous = states[turnKey]
   const requestId = ++nextPreviewRequestId
@@ -483,6 +501,7 @@ async function generatePreview(
     [turnKey]: {
       requestId,
       pendingSignature: signature,
+      pendingSpeakerKey: speakerKey,
       pendingContent: {
         voiceId: content.voiceId,
         speakerDisplayName: content.speakerDisplayName,
@@ -509,6 +528,7 @@ async function generatePreview(
       [turnKey]: {
         requestId,
         pendingSignature: signature,
+        pendingSpeakerKey: speakerKey,
         pendingContent: {
           voiceId: content.voiceId,
           speakerDisplayName: content.speakerDisplayName,
@@ -535,6 +555,7 @@ async function generatePreview(
       [turnKey]: {
         requestId,
         pendingSignature: signature,
+        pendingSpeakerKey: speakerKey,
         pendingContent: {
           voiceId: content.voiceId,
           speakerDisplayName: content.speakerDisplayName,
@@ -777,6 +798,7 @@ async function generateAllDraftPreviews(): Promise<void> {
               speakerDisplayName: utterance.speakerDisplayName.trim(),
               text: utterance.text.trim(),
             },
+            utterance.speakerKey,
             index,
             false,
           ),
@@ -807,13 +829,16 @@ async function publishDraftBatchFromPreviews(): Promise<void> {
   try {
     for (const [index, draft] of draftStore.drafts.entries()) {
       const states = batchPreviewStates.value[index] ?? {}
-      const utterances = draft.utterances.map((_, turnIndex) => {
+      const utterances = draft.utterances.map((utterance, turnIndex) => {
         const generated = states[turnIndex + 1]?.generated
         return generated
           ? {
               previewJobId: generated.jobId,
               voiceId: generated.content.voiceId,
-              speakerDisplayName: generated.content.speakerDisplayName,
+              speakerDisplayName:
+                utterance.speakerKey === generated.speakerKey
+                  ? utterance.speakerDisplayName.trim()
+                  : generated.content.speakerDisplayName,
               text: generated.content.text,
             }
           : null
@@ -869,11 +894,15 @@ async function publishGeneratedAudio(): Promise<void> {
   if (!normalizedQuestionValues) return
   const utterances = turns.value.map((turn) => {
     const generated = previewStates.value[turn.key]?.generated
+    const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
     return generated
       ? {
           previewJobId: generated.jobId,
           voiceId: generated.content.voiceId,
-          speakerDisplayName: generated.content.speakerDisplayName,
+          speakerDisplayName:
+            Number(turn.speakerKey) === generated.speakerKey
+              ? speaker?.name.trim() || generated.content.speakerDisplayName
+              : generated.content.speakerDisplayName,
           text: generated.content.text,
         }
       : null
