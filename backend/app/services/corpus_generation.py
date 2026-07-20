@@ -26,7 +26,9 @@ from backend.app.integrations.llm import (
     TopicTagSuggester,
 )
 from backend.app.repositories.audio_tags import AudioTagRepository
+from backend.app.repositories.audios import AudioRepository
 from backend.app.repositories.generation_batches import GenerationBatchRepository
+from backend.app.services.audios import normalize_audio_title
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.tag_values import (
     TagTranslationInput,
@@ -60,12 +62,14 @@ class CorpusGenerationService:
         corpus_storage: CorpusStorage,
         batch_repository: GenerationBatchRepository | None = None,
         tag_repository: AudioTagRepository | None = None,
+        audio_repository: AudioRepository | None = None,
     ) -> None:
         self.generator = generator
         self.tag_suggester = tag_suggester
         self.corpus_storage = corpus_storage
         self.batch_repository = batch_repository or GenerationBatchRepository()
         self.tag_repository = tag_repository or AudioTagRepository()
+        self.audio_repository = audio_repository or AudioRepository()
 
     def process(
         self,
@@ -103,6 +107,7 @@ class CorpusGenerationService:
                     call_id=request_id,
                 )
             )
+            generated_items = self._deduplicate_titles(session, result.items)
             checkpoint(55)
             topic_tags = self._suggest_topics(
                 session,
@@ -110,11 +115,11 @@ class CorpusGenerationService:
                 language=owner.locale,
                 request_id=request_id,
             )
-            category_tags = self._question_type_categories(session, result.items)
+            category_tags = self._question_type_categories(session, generated_items)
             batch.tags = [*topic_tags, *category_tags]
-            speaker_mapping = self._assign_speakers(batch, result.items)
+            speaker_mapping = self._assign_speakers(batch, generated_items)
             drafts = [
-                self._draft(content, speaker_mapping) for content in result.items
+                self._draft(content, speaker_mapping) for content in generated_items
             ]
             self.batch_repository.replace_items(session, batch=batch, drafts=drafts)
             batch.status = GenerationBatchStatus.COMPLETED
@@ -222,6 +227,33 @@ class CorpusGenerationService:
             seen.add(question_type)
             tags.append(self._question_type_category(session, question_type))
         return tags
+
+    def _deduplicate_titles(
+        self,
+        session: Session,
+        contents: list[GeneratedListeningContent],
+    ) -> list[GeneratedListeningContent]:
+        reserved_titles: set[str] = set()
+        result: list[GeneratedListeningContent] = []
+        for content in contents:
+            base_title, normalized_title = normalize_audio_title(content.title)
+            title = base_title
+            suffix_number = 2
+            while (
+                normalized_title in reserved_titles
+                or self.audio_repository.get_by_normalized_title(
+                    session,
+                    normalized_title,
+                )
+                is not None
+            ):
+                suffix = f" {suffix_number}"
+                title = f"{base_title[: 200 - len(suffix)].rstrip()}{suffix}"
+                title, normalized_title = normalize_audio_title(title)
+                suffix_number += 1
+            reserved_titles.add(normalized_title)
+            result.append(content.model_copy(update={"title": title}))
+        return result
 
     def _question_type_category(
         self,

@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings
-from backend.app.db.models.audio import Audio
+from backend.app.db.models.audio import Audio, AudioSourceType
 from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.generation_batch import GenerationBatch, GenerationBatchStatus
 from backend.app.db.models.job import Job, JobStatus
@@ -25,6 +25,8 @@ from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT
 from backend.app.integrations.llm import (
     PlaceholderListeningContentGenerator,
     PlaceholderTopicTagSuggester,
+    ListeningGenerationRequest,
+    ListeningGenerationResult,
     ValidatingListeningContentGenerator,
     ValidatingTopicTagSuggester,
 )
@@ -41,6 +43,24 @@ from backend.app.workers.jobs import JobWorker
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class DuplicateTitleGenerator:
+    def __init__(self) -> None:
+        self.delegate = PlaceholderListeningContentGenerator()
+
+    def generate(
+        self,
+        request: ListeningGenerationRequest,
+        *,
+        call_id: str,
+    ) -> ListeningGenerationResult:
+        result = self.delegate.generate(request, call_id=call_id)
+        items = list(result.items)
+        items[1] = items[1].model_copy(
+            update={"title": "Ｆinding a Parking Space"}
+        )
+        return result.model_copy(update={"items": items})
 
 
 class CorpusGenerationIntegrationTest(unittest.TestCase):
@@ -169,9 +189,28 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         batch_id = response.json()["batchId"]
         job_id = response.json()["jobId"]
+        with self.app.state.session_factory() as session:
+            owner = UserRepository().get_by_user_id(session, "TeacherOne")
+            assert owner is not None
+            session.add_all(
+                [
+                    Audio(
+                        author=owner,
+                        title=title,
+                        normalized_title=title.casefold(),
+                        text="Existing audio",
+                        source_type=AudioSourceType.CORPUS,
+                    )
+                    for title in (
+                        "Finding a Parking Space",
+                        "Finding a Parking Space 2",
+                    )
+                ]
+            )
+            session.commit()
         service = CorpusGenerationService(
             generator=ValidatingListeningContentGenerator(
-                PlaceholderListeningContentGenerator()
+                DuplicateTitleGenerator()
             ),
             tag_suggester=ValidatingTopicTagSuggester(
                 PlaceholderTopicTagSuggester(random.Random(1))
@@ -192,7 +231,7 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             self.assertEqual(batch.status, GenerationBatchStatus.COMPLETED)
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
             self.assertEqual(len(batch.items), 4)
-            self.assertEqual(session.query(Audio).count(), 0)
+            self.assertEqual(session.query(Audio).count(), 2)
             self.assertEqual(
                 [(tag.type, tag.value) for tag in batch.tags],
                 [
@@ -218,8 +257,11 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 },
             )
             first = batch.items[0].generated_content
-            assert first is not None
+            second = batch.items[1].generated_content
+            assert first is not None and second is not None
             self.assertEqual(first["question_type"], "short_dialogue")
+            self.assertEqual(first["title"], "Finding a Parking Space 3")
+            self.assertEqual(second["title"], "Finding a Parking Space 4")
             utterances = first["utterances"]
             assert isinstance(utterances, list)
             self.assertEqual(utterances[0]["speaker_display_name"], "Man speaker")

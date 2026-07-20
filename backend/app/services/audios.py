@@ -69,6 +69,22 @@ _WITH_QUESTIONS_TRANSLATION = TagTranslationInput(
 )
 
 
+def normalize_audio_title(title: object) -> tuple[str, str]:
+    if not isinstance(title, str):
+        raise DomainValidationError(
+            "Audio title is required",
+            details={"field": "title"},
+        )
+    value = unicodedata.normalize("NFKC", title.strip())
+    normalized_value = value.casefold()
+    if not value or len(value) > 200 or len(normalized_value) > 200:
+        raise DomainValidationError(
+            "Audio title must contain between 1 and 200 characters",
+            details={"field": "title"},
+        )
+    return value, normalized_value
+
+
 class AudioService:
     def __init__(
         self,
@@ -99,7 +115,7 @@ class AudioService:
                 "Audio source type is invalid",
                 details={"field": "sourceType"},
             )
-        normalized_title, search_title = self._normalize_title(title)
+        normalized_title, search_title = normalize_audio_title(title)
         if self.repository.get_by_normalized_title(session, search_title):
             raise AudioTitleTakenError(details={"field": "title"})
         normalized_utterances = self._normalize_utterances(utterances)
@@ -228,7 +244,7 @@ class AudioService:
         )
 
     def update_title(self, session: Session, audio: Audio, title: str) -> Audio:
-        value, normalized = self._normalize_title(title)
+        value, normalized = normalize_audio_title(title)
         existing = self.repository.get_by_normalized_title(session, normalized)
         if existing is not None and existing.id != audio.id:
             raise AudioTitleTakenError(details={"field": "title"})
@@ -442,22 +458,6 @@ class AudioService:
                             position=answer_position,
                         )
                     )
-
-    @staticmethod
-    def _normalize_title(title: str) -> tuple[str, str]:
-        if not isinstance(title, str):
-            raise DomainValidationError(
-                "Audio title is required",
-                details={"field": "title"},
-            )
-        value = unicodedata.normalize("NFKC", title.strip())
-        normalized_value = value.casefold()
-        if not value or len(value) > 200 or len(normalized_value) > 200:
-            raise DomainValidationError(
-                "Audio title must contain between 1 and 200 characters",
-                details={"field": "title"},
-            )
-        return value, normalized_value
 
     @classmethod
     def _normalize_utterances(
