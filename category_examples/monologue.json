@@ -1,0 +1,84 @@
+[
+    {
+        "title": "Welcoming a Guest Speaker",
+        "utterances": [
+            {
+                "speaker": "Woman",
+                "text": "Hi, everyone. This is the monthly meeting of our club. We’ve been fortunate to have got good advice from some famous athletes on how to improve our skills and build up our body. Today, we’ll hear something different. We’re honored to have Emma Wilson here. Emma is a health expert and lecturer from UBC, the University of British Columbia. Emma worked for a football team in Manchester, then for a very successful rugby team in Dublin, and finally ended up working here in Vancouver. Emma says it’s challenging to be a health expert, because people can be easily influenced by advertisements that lack scientific support. Also, people aren’t willing to change their views about food and nutrition as there is so much confusing information online. It’s really important to hear what experts say, and that’s why we’ve invited Emma here. She isn’t going to tell us about everything we should eat. But, she will teach us to make better choices. Let’s welcome Emma Wilson."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "Who is the speaker talking to?",
+                "correctAnswers": [
+                    "Sports club members."
+                ],
+                "wrongAnswers": [
+                    "International tourists.",
+                    "University students."
+                ]
+            },
+            {
+                "prompt": "Where did Emma work for a rugby team?",
+                "correctAnswers": [
+                    "In Dublin."
+                ],
+                "wrongAnswers": [
+                    "In Manchester.",
+                    "In Vancouver."
+                ]
+            },
+            {
+                "prompt": "What can be a challenge to Emma's work?",
+                "correctAnswers": [
+                    "Influence of misinformation on the public."
+                ],
+                "wrongAnswers": [
+                    "Competition in the health care industry.",
+                    "Discrimination gains female scientists."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Workout Tips at Star Fitness Club",
+        "utterances": [
+            {
+                "speaker": "Woman",
+                "text": "Welcome to Star Fitness Club. I’m Tina Harrison. Before you start, I’d like to offer you some tips. We all know that regular exercise is important, but few of us know how to exercise properly. I’ve seen many people make the same workout mistakes in this place. One mistake people often make is sticking to the same routine. It is not good for building up your muscles. I’d like to suggest that you change your routine every other month. What’s more, you can try different kinds of workouts, such as jogging, biking, or swimming. This can help keep your whole body in shape. Another mistake most people make is to workout intensely almost every day. You need to give your body a break, and allow time for the muscles to grow. It is not the harder the better. Two hard workout days every week is enough. If you really hate to skip a day, you can plan easy exercises on other days. However, experts’ suggestion is that you take one day off completely each week."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What does the speaker probably do?",
+                "correctAnswers": [
+                    "She's a fitness instructor."
+                ],
+                "wrongAnswers": [
+                    "She's a medical doctor.",
+                    "She's a swimming coach."
+                ]
+            },
+            {
+                "prompt": "What is a common workout mistake?",
+                "correctAnswers": [
+                    "Doing the same routine all the time."
+                ],
+                "wrongAnswers": [
+                    "Focusing only on building muscles.",
+                    "Taking too many types of exercises."
+                ]
+            },
+            {
+                "prompt": "How often does the speaker suggest people do hard workouts?",
+                "correctAnswers": [
+                    "Twice a week."
+                ],
+                "wrongAnswers": [
+                    "Once a week.",
+                    "Three times a week."
+                ]
+            }
+        ]
+    }
+]

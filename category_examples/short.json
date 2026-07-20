@@ -1,0 +1,151 @@
+[
+    {
+        "title": "Finding a Parking Space",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "We have to find a parking space. Let’s drive around the block one more time. Did you say the restaurant has no off-street parking at all?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "None. I checked it. Look, there is a space!"
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What will the speakers do next?",
+                "correctAnswers": [
+                    "Park the car."
+                ],
+                "wrongAnswers": [
+                    "Check the map.",
+                    "Leave the restaurant."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Leaving for the Airport",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "You have to go now, Judy, or you’ll miss your flight. It’s an hour’s drive to the airport."
+            },
+            {
+                "speaker": "Woman",
+                "text": "I’m leaving. Don’t forget to water my flowers. Just a minute. Where is my ticket, Dad?"
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "Where are the speakers?",
+                "correctAnswers": [
+                    "At home."
+                ],
+                "wrongAnswers": [
+                    "At a bus stop.",
+                    "At the airport."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "A Note from the Neighbor",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "Laura, what’s in the mailbox?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "It’s a thank-you note from our neighbour. They thank us for visiting them last week when the baby was born. They also invite us to have dinner next Friday."
+            },
+            {
+                "speaker": "Man",
+                "text": "Are they back home now?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Should be."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What did the speakers do last week?",
+                "correctAnswers": [
+                    "They went to see a newborn baby."
+                ],
+                "wrongAnswers": [
+                    "They had a celebration dinner.",
+                    "They sent a mail to their neighbors."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Checking Museum Hours",
+        "utterances": [
+            {
+                "speaker": "Woman",
+                "text": "Good afternoon, Paper Museum."
+            },
+            {
+                "speaker": "Man",
+                "text": "Hello. Could you tell me your opening hours for Saturday?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Yeah. We’re open from ten in the morning to five in the afternoon."
+            },
+            {
+                "speaker": "Man",
+                "text": "Thanks."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "Why does the man make the phone call?",
+                "correctAnswers": [
+                    "To get some information."
+                ],
+                "wrongAnswers": [
+                    "To cancel a weekend trip.",
+                    "To make an appointment."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Locating the Hotel Gym",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "Excuse me, where is the hotel gym, please?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "It’s on the top floor. You can take the lift over there."
+            },
+            {
+                "speaker": "Man",
+                "text": "Do I have to pay extra?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "No, sir, you just need to take your room key with you."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What does the man probably want to do?",
+                "correctAnswers": [
+                    "Do some exercise."
+                ],
+                "wrongAnswers": [
+                    "Get an extra key.",
+                    "Order room service."
+                ]
+            }
+        ]
+    }
+]

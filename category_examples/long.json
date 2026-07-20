@@ -1,0 +1,270 @@
+[
+    {
+        "title": "Planning a School Field Trip",
+        "utterances": [
+            {
+                "speaker": "Woman",
+                "text": "Mr. Wilson, students from Class 2 want to visit the history museum. Will it be all right if I take them there this weekend?"
+            },
+            {
+                "speaker": "Man",
+                "text": "How about their revision test? Are they through with it?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Yes, they are."
+            },
+            {
+                "speaker": "Man",
+                "text": "In that case, you can go ahead. Try to finish it within one day, so that the students still have a whole day to rest on Sunday."
+            },
+            {
+                "speaker": "Woman",
+                "text": "All right. I’ll manage."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "Why does the woman come to the man?",
+                "correctAnswers": [
+                    "To ask for permission."
+                ],
+                "wrongAnswers": [
+                    "To extend an invitation.",
+                    "To express thanks."
+                ]
+            },
+            {
+                "prompt": "When are the students going to the museum?",
+                "correctAnswers": [
+                    "On Saturday."
+                ],
+                "wrongAnswers": [
+                    "On Friday.",
+                    "On Sunday."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Choosing a Birthday Gift",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "Hi, Linda. Fancy seeing you here. How long have you been shopping?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Almost an hour. I have a lot to buy. My daughter Melissa’s birthday is coming. I’m trying to get her a good gift, but I don’t know what to choose. She seems to have everything she loves."
+            },
+            {
+                "speaker": "Man",
+                "text": "Yeah, the same as Clara. We’ve already had bags of toys she’s no longer playing with. So this year, we didn’t buy her material things. We gave her an experience gift."
+            },
+            {
+                "speaker": "Woman",
+                "text": "What’s that?"
+            },
+            {
+                "speaker": "Man",
+                "text": "A city pass, with which she can visit 12 different attractions, including the national history museum, the science museum, the zoo, and more."
+            },
+            {
+                "speaker": "Woman",
+                "text": "How much is it?"
+            },
+            {
+                "speaker": "Man",
+                "text": "Fifty dollars per person, for a year-long pass. I bought three for the whole family."
+            },
+            {
+                "speaker": "Woman",
+                "text": "So you can have a different outing every month for the entire year. What a great idea!"
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What are the speakers talking about?",
+                "correctAnswers": [
+                    "Choosing gifts."
+                ],
+                "wrongAnswers": [
+                    "Buying groceries.",
+                    "Seeing friends."
+                ]
+            },
+            {
+                "prompt": "Who is Clara?",
+                "correctAnswers": [
+                    "The man’s daughter."
+                ],
+                "wrongAnswers": [
+                    "The man’s wife.",
+                    "The man’s sister."
+                ]
+            },
+            {
+                "prompt": "How much did the man spend on the city passes?",
+                "correctAnswers": [
+                    "$150."
+                ],
+                "wrongAnswers": [
+                    "$36.",
+                    "$50."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "Preparing a Library Presentation",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "Helen, busy doing anything?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Oh Kevin, I’m preparing a presentation for the city library. It’s about a girl named Tracy Woods."
+            },
+            {
+                "speaker": "Man",
+                "text": "What’s special about her?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "It was an amazing story. She brought specially-trained dogs to special education schools and helped children to build confidence. She believes that dogs can help children in ways we can’t. Dogs don’t judge, and they don’t care who you are or what you look like."
+            },
+            {
+                "speaker": "Man",
+                "text": "But putting dogs into a school? Aren’t they going to mess up the school?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "Don’t worry. All the dogs are assessed and trained properly. There are now 40 dogs working with children aged from 6 to 18."
+            },
+            {
+                "speaker": "Man",
+                "text": "I hope the children love them."
+            },
+            {
+                "speaker": "Woman",
+                "text": "Of course they do. I’ve got some pictures. I’ll show them at my presentation tomorrow morning."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "Why did Tracy bring dogs to the children?",
+                "correctAnswers": [
+                    "To help them gain confidence"
+                ],
+                "wrongAnswers": [
+                    "To teach them to love animals.",
+                    "To protect them from dangers."
+                ]
+            },
+            {
+                "prompt": "What is Kevin’s concern about the dog?",
+                "correctAnswers": [
+                    "They may misbehave."
+                ],
+                "wrongAnswers": [
+                    "They may get hurt.",
+                    "They may carry diseases."
+                ]
+            },
+            {
+                "prompt": "What will Helen do tomorrow morning?",
+                "correctAnswers": [
+                    "Give a talk."
+                ],
+                "wrongAnswers": [
+                    "Meet the children.",
+                    "Take some photos."
+                ]
+            }
+        ]
+    },
+    {
+        "title": "An Interview with Emily",
+        "utterances": [
+            {
+                "speaker": "Man",
+                "text": "Emily, thank you for taking time out of your busy schedule to answer a few questions."
+            },
+            {
+                "speaker": "Woman",
+                "text": "It’s my pleasure."
+            },
+            {
+                "speaker": "Man",
+                "text": "People say you’re doing unpaid work in the new season of My Fair Lady. Is this what the show business has become?"
+            },
+            {
+                "speaker": "Woman",
+                "text": "No, not really. All of my acting in the new season is unpaid. But the crew is paid. This is to raise money for the post-production of the show."
+            },
+            {
+                "speaker": "Man",
+                "text": "I notice you’re tried many different kinds of things: film, TV, and even theater."
+            },
+            {
+                "speaker": "Woman",
+                "text": "Yeah, that’s how I was trained at university. I work on anything that excites me."
+            },
+            {
+                "speaker": "Man",
+                "text": "Tell us about the six months you recently spent at the workshop of the Film Center."
+            },
+            {
+                "speaker": "Woman",
+                "text": "It was an unbelievable experience, teaching young actors and actresses, and working with some great acting artists. It was also great to work in various labs, such as directors, writers and so on. It’s very helpful for making you a really well-rounded and active member of the film and television industry."
+            },
+            {
+                "speaker": "Man",
+                "text": "Thank you very much, Emily. We look forward to your new season."
+            }
+        ],
+        "questions": [
+            {
+                "prompt": "What is the man doing?",
+                "correctAnswers": [
+                    "Conducting an interview."
+                ],
+                "wrongAnswers": [
+                    "Attending a lecture.",
+                    "Hosting a workshop."
+                ]
+            },
+            {
+                "prompt": "Why is Emily doing unpaid work in the new season of the show?",
+                "correctAnswers": [
+                    "To support the post-production."
+                ],
+                "wrongAnswers": [
+                    "To follow the latest trend.",
+                    "To help raise the crew's pay."
+                ]
+            },
+            {
+                "prompt": "What enables Emily to try different things in her field?",
+                "correctAnswers": [
+                    "Her college education."
+                ],
+                "wrongAnswers": [
+                    "Her teaching experience.",
+                    "Her family tradition."
+                ]
+            },
+            {
+                "prompt": "What does Emily think of her work at the Film Centre?",
+                "correctAnswers": [
+                    "Rewarding."
+                ],
+                "wrongAnswers": [
+                    "Boring.",
+                    "Demanding"
+                ]
+            }
+        ]
+    }
+]
