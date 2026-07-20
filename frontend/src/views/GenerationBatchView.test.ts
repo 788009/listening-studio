@@ -47,7 +47,11 @@ function completedBatch() {
     questionTypeCounts: { short_dialogue: 1, monologue: 1 },
     status: 'completed',
     progress: 100,
-    tags: [{ id: 4, type: 'topic', englishValue: 'travel' }],
+    tags: [
+      { id: 4, type: 'topic', englishValue: 'travel' },
+      { id: 5, type: 'category', englishValue: 'short' },
+      { id: 6, type: 'category', englishValue: 'monologue' },
+    ],
     speakerVoices: [
       { speaker: 'Man', voiceId: 2 },
       { speaker: 'Woman', voiceId: 3 },
@@ -174,8 +178,9 @@ describe('corpus generation view', () => {
     expect(router.currentRoute.value.fullPath).toBe('/create?batch=7')
     expect(store.drafts).toHaveLength(2)
     expect(store.drafts[0]?.title).toBe('Travel plans')
-    expect(store.drafts[0]?.tagIds).toEqual([4])
+    expect(store.drafts[0]?.tagIds).toEqual([4, 5])
     expect(store.drafts[1]?.questionType).toBe('monologue')
+    expect(store.drafts[1]?.tagIds).toEqual([4, 6])
     wrapper.unmount()
   })
 

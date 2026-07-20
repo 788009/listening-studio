@@ -11,7 +11,7 @@ export type GenerationBatchStatus =
 
 export interface GenerationBatchTag {
   id: number
-  type: 'topic'
+  type: 'topic' | 'category'
   englishValue: string
 }
 

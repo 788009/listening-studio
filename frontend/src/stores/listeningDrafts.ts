@@ -5,6 +5,11 @@ import type { AudioQuestionInput } from '@/api/audios'
 import type { GenerationBatch, QuestionType } from '@/api/generationBatches'
 
 const STORAGE_KEY = 'listening-draft-batch-v1'
+const QUESTION_TYPE_CATEGORIES: Record<QuestionType, string> = {
+  short_dialogue: 'short',
+  long_dialogue: 'long',
+  monologue: 'monologue',
+}
 
 export interface ListeningDraftUtterance {
   speakerDisplayName: string
@@ -34,11 +39,28 @@ export const useListeningDraftsStore = defineStore('listeningDrafts', () => {
   const activeDraft = computed(() => drafts.value[currentIndex.value] ?? null)
 
   function setBatch(batch: GenerationBatch): void {
-    const tagIds = batch.tags.map((tag) => tag.id)
+    const topicTagIds = batch.tags
+      .filter((tag) => tag.type === 'topic')
+      .map((tag) => tag.id)
+    const categoryTagIds = new Map(
+      batch.tags
+        .filter((tag) => tag.type === 'category')
+        .map((tag) => [tag.englishValue.normalize('NFKC').toLocaleLowerCase(), tag.id]),
+    )
     sourceBatchId.value = batch.id
     currentIndex.value = 0
     drafts.value = batch.items.flatMap((item) =>
-      item.draft ? [{ ...item.draft, tagIds: [...tagIds] }] : [],
+      item.draft
+        ? [{
+            ...item.draft,
+            tagIds: [
+              ...topicTagIds,
+              ...[
+                categoryTagIds.get(QUESTION_TYPE_CATEGORIES[item.draft.questionType]),
+              ].filter((tagId): tagId is number => tagId !== undefined),
+            ],
+          }]
+        : [],
     )
     persist()
   }

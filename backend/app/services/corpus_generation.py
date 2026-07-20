@@ -19,6 +19,7 @@ from backend.app.integrations.llm import (
     ListeningContentGenerator,
     ListeningGenerationRequest,
     ListeningGenerationResult,
+    QuestionType,
     TopicSuggestionRequest,
     TopicSuggestionResult,
     TopicTagSuggester,
@@ -31,6 +32,13 @@ from backend.app.services.tag_values import (
     normalize_english_tag_value,
     normalize_tag_translations,
 )
+
+
+_QUESTION_TYPE_CATEGORY_VALUES = {
+    QuestionType.SHORT_DIALOGUE: "short",
+    QuestionType.LONG_DIALOGUE: "long",
+    QuestionType.MONOLOGUE: "monologue",
+}
 
 
 class CorpusGenerationService:
@@ -86,12 +94,14 @@ class CorpusGenerationService:
                 )
             )
             checkpoint(55)
-            batch.tags = self._suggest_topics(
+            topic_tags = self._suggest_topics(
                 session,
                 corpus=corpus,
                 language=owner.locale,
                 request_id=request_id,
             )
+            category_tags = self._question_type_categories(session, result.items)
+            batch.tags = [*topic_tags, *category_tags]
             speaker_mapping = self._assign_speakers(batch, result.items)
             drafts = [
                 self._draft(content, speaker_mapping) for content in result.items
@@ -109,10 +119,11 @@ class CorpusGenerationService:
                 resource_id=batch.id,
             ).info(
                 "Corpus draft generation completed batch_id={} draft_count={} "
-                "topic_count={}",
+                "topic_count={} category_count={}",
                 batch.id,
                 len(drafts),
-                len(batch.tags),
+                len(topic_tags),
+                len(category_tags),
             )
             return batch
         except JobFailedError:
@@ -184,6 +195,35 @@ class CorpusGenerationService:
                         value=translation.value.value,
                         normalized_value=translation.value.normalized_value,
                     )
+            tags.append(tag)
+        return tags
+
+    def _question_type_categories(
+        self,
+        session: Session,
+        contents: list[GeneratedListeningContent],
+    ) -> list[AudioTag]:
+        tags: list[AudioTag] = []
+        seen: set[QuestionType] = set()
+        for content in contents:
+            question_type = content.question_type
+            if question_type in seen:
+                continue
+            seen.add(question_type)
+            value = _QUESTION_TYPE_CATEGORY_VALUES[question_type]
+            normalized = normalize_english_tag_value(value)
+            tag = self.tag_repository.get_by_normalized_value(
+                session,
+                AudioTagType.CATEGORY,
+                normalized.normalized_value,
+            )
+            if tag is None:
+                tag = self.tag_repository.create(
+                    session,
+                    tag_type=AudioTagType.CATEGORY,
+                    value=normalized.value,
+                    normalized_value=normalized.normalized_value,
+                )
             tags.append(tag)
         return tags
 

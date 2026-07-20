@@ -430,7 +430,11 @@ describe('direct creation view', () => {
       questionTypeCounts: { short_dialogue: 1, monologue: 1 },
       status: 'completed',
       progress: 100,
-      tags: [{ id: 4, type: 'topic', englishValue: 'travel' }],
+      tags: [
+        { id: 4, type: 'topic', englishValue: 'travel' },
+        { id: 5, type: 'category', englishValue: 'short' },
+        { id: 6, type: 'category', englishValue: 'monologue' },
+      ],
       speakerVoices: [],
       items: [
         {
@@ -510,7 +514,7 @@ describe('direct creation view', () => {
     expect(publishBodies).toHaveLength(2)
     expect(publishBodies[0]).toMatchObject({
       title: 'Dialogue draft',
-      tagIds: [4],
+      tagIds: [4, 5],
       visibility: 'public',
       utterances: [
         { previewJobId: 40, text: 'First.' },
@@ -519,6 +523,7 @@ describe('direct creation view', () => {
     })
     expect(publishBodies[1]).toMatchObject({
       title: 'Monologue draft',
+      tagIds: [4, 6],
       utterances: [{ previewJobId: 42, text: 'Report.' }],
     })
     expect(store.drafts).toHaveLength(1)

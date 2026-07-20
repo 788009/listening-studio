@@ -127,7 +127,7 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
         service.transition_status(session, voice, VoiceStatus.READY)
         return voice.id
 
-    def test_worker_returns_editable_drafts_with_gender_mapping_and_topic(self) -> None:
+    def test_worker_returns_drafts_with_speakers_topics_and_type_categories(self) -> None:
         response = self.send(
             "POST",
             "/api/generation-batches",
@@ -135,7 +135,16 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             files=[
                 (
                     "questionTypeCounts",
-                    (None, json.dumps({"short_dialogue": 2, "monologue": 1})),
+                    (
+                        None,
+                        json.dumps(
+                            {
+                                "short_dialogue": 2,
+                                "long_dialogue": 1,
+                                "monologue": 1,
+                            }
+                        ),
+                    ),
                 ),
                 ("corpus", (None, "A source corpus about a journey.")),
                 (
@@ -177,9 +186,17 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             assert batch is not None and job is not None
             self.assertEqual(batch.status, GenerationBatchStatus.COMPLETED)
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
-            self.assertEqual(len(batch.items), 3)
+            self.assertEqual(len(batch.items), 4)
             self.assertEqual(session.query(Audio).count(), 0)
-            self.assertEqual([(tag.type, tag.value) for tag in batch.tags], [(AudioTagType.TOPIC, "travel")])
+            self.assertEqual(
+                [(tag.type, tag.value) for tag in batch.tags],
+                [
+                    (AudioTagType.TOPIC, "travel"),
+                    (AudioTagType.CATEGORY, "short"),
+                    (AudioTagType.CATEGORY, "long"),
+                    (AudioTagType.CATEGORY, "monologue"),
+                ],
+            )
             first = batch.items[0].generated_content
             assert first is not None
             self.assertEqual(first["question_type"], "short_dialogue")
@@ -200,9 +217,17 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
         self.assertEqual(payload["progress"], 100)
         self.assertEqual(
             payload["questionTypeCounts"],
-            {"short_dialogue": 2, "monologue": 1},
+            {"short_dialogue": 2, "long_dialogue": 1, "monologue": 1},
         )
-        self.assertEqual(payload["tags"][0]["englishValue"], "travel")
+        self.assertEqual(
+            [(tag["type"], tag["englishValue"]) for tag in payload["tags"]],
+            [
+                ("topic", "travel"),
+                ("category", "short"),
+                ("category", "long"),
+                ("category", "monologue"),
+            ],
+        )
         self.assertEqual(payload["items"][0]["draft"]["questions"][0]["correctAnswers"], ["Park the car."])
         self.assertFalse((self.root / "data" / "jobs" / str(job_id)).exists())
 
