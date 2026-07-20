@@ -4,10 +4,8 @@ import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 
 import {
   audioPreviewMediaPath,
-  createDialogueAudio,
   createAudioPreview,
   createAudioTag,
-  createSingleAudio,
   deleteAudioPreview,
   listAudioCreationTags,
   publishAudioFromPreviews,
@@ -80,7 +78,8 @@ interface TurnContent extends AudioPreviewInput {
   turnKey: number
 }
 
-const previewStates = ref<Record<number, TurnPreviewState>>({})
+const standalonePreviewStates = ref<Record<number, TurnPreviewState>>({})
+const batchPreviewStates = ref<Record<number, Record<number, TurnPreviewState>>>({})
 let previewPollTimer: ReturnType<typeof setTimeout> | undefined
 let nextPreviewRequestId = 0
 
@@ -88,6 +87,12 @@ const batchMode = computed(
   () =>
     draftStore.drafts.length > 0 &&
     String(draftStore.sourceBatchId) === String(route.query.batch ?? ''),
+)
+
+const previewStates = computed(() =>
+  batchMode.value
+    ? batchPreviewStates.value[draftStore.currentIndex] ?? {}
+    : standalonePreviewStates.value,
 )
 
 const tagGroups = computed(() => [
@@ -126,6 +131,16 @@ const allPreviewsReady = computed(
     turns.value.every((turn) => Boolean(previewStates.value[turn.key]?.generated)),
 )
 
+const allBatchPreviewsReady = computed(
+  () =>
+    draftStore.drafts.length > 0 &&
+    draftStore.drafts.every((draft, draftIndex) =>
+      draft.utterances.every((_, turnIndex) =>
+        Boolean(batchPreviewStates.value[draftIndex]?.[turnIndex + 1]?.generated),
+      ),
+    ),
+)
+
 const hasUnpublishedTurnChanges = computed(() =>
   turns.value.some((turn) => {
     const generated = previewStates.value[turn.key]?.generated
@@ -133,11 +148,58 @@ const hasUnpublishedTurnChanges = computed(() =>
   }),
 )
 
-const previewGenerationActive = computed(() =>
-  Object.values(previewPresentations.value).some((preview) =>
-    ['submitting', 'queued', 'running'].includes(preview.status),
+const batchHasUnpublishedTurnChanges = computed(() =>
+  draftStore.drafts.some((draft, draftIndex) =>
+    draft.utterances.some((utterance, turnIndex) => {
+      const generated = batchPreviewStates.value[draftIndex]?.[turnIndex + 1]?.generated
+      return Boolean(generated && generated.signature !== contentSignature(utterance))
+    }),
   ),
 )
+
+const previewGenerationActive = computed(() =>
+  previewStateEntries().some(({ state }) =>
+    ['submitting', 'queued', 'running'].includes(state.status),
+  ),
+)
+
+function previewBucket(draftIndex = draftStore.currentIndex): Record<number, TurnPreviewState> {
+  return batchMode.value
+    ? batchPreviewStates.value[draftIndex] ?? {}
+    : standalonePreviewStates.value
+}
+
+function replacePreviewBucket(
+  states: Record<number, TurnPreviewState>,
+  draftIndex = draftStore.currentIndex,
+): void {
+  if (batchMode.value) {
+    batchPreviewStates.value = { ...batchPreviewStates.value, [draftIndex]: states }
+  } else {
+    standalonePreviewStates.value = states
+  }
+}
+
+function previewStateEntries(): Array<{
+  draftIndex: number
+  turnKey: number
+  state: TurnPreviewState
+}> {
+  if (!batchMode.value) {
+    return Object.entries(standalonePreviewStates.value).map(([turnKey, state]) => ({
+      draftIndex: 0,
+      turnKey: Number(turnKey),
+      state,
+    }))
+  }
+  return Object.entries(batchPreviewStates.value).flatMap(([draftIndex, states]) =>
+    Object.entries(states).map(([turnKey, state]) => ({
+      draftIndex: Number(draftIndex),
+      turnKey: Number(turnKey),
+      state,
+    })),
+  )
+}
 
 function newSpeaker(voiceId?: string): SpeakerDraft {
   const nextKey = Math.max(0, ...speakers.value.map((speaker) => speaker.key)) + 1
@@ -181,28 +243,24 @@ function applyDraft(draft: ListeningDraft): void {
   questions.value = cloneQuestions(draft.questions)
   selectedTagIds.value = [...draft.tagIds]
   visibility.value = 'public'
-  previewStates.value = {}
   formError.value = ''
 }
 
 function currentDraft(): ListeningDraft | null {
   const utterances = turns.value.map((turn) => {
     const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
-    const voiceId = Number(speaker?.voiceId)
-    if (!speaker || !Number.isInteger(voiceId) || voiceId < 1) return null
     return {
-      speakerDisplayName: speaker.name,
-      voiceId,
+      speakerDisplayName: speaker?.name ?? '',
+      voiceId: Number(speaker?.voiceId),
       text: turn.text,
     }
   })
-  if (utterances.some((item) => item === null)) return null
   const original = draftStore.activeDraft
   if (!original) return null
   return {
     title: title.value,
     questionType: original.questionType,
-    utterances: utterances as NonNullable<(typeof utterances)[number]>[],
+    utterances,
     questions: cloneQuestions(questions.value),
     tagIds: [...selectedTagIds.value],
   }
@@ -218,16 +276,28 @@ function cloneQuestions(values: AudioQuestionInput[]): AudioQuestionInput[] {
 
 function saveActiveDraft(): void {
   const draft = currentDraft()
-  if (draft) draftStore.updateDraft(draftStore.currentIndex, draft)
+  if (!draft) return
+  if (batchMode.value) {
+    const currentStates = previewBucket()
+    const normalizedStates: Record<number, TurnPreviewState> = {}
+    turns.value.forEach((turn, index) => {
+      const state = currentStates[turn.key]
+      if (state) normalizedStates[index + 1] = state
+    })
+    replacePreviewBucket(normalizedStates)
+    turns.value = turns.value.map((turn, index) => ({ ...turn, key: index + 1 }))
+  }
+  draftStore.updateDraft(draftStore.currentIndex, draft)
 }
 
 async function selectDraft(index: number): Promise<void> {
   if (index < 0 || index >= draftStore.drafts.length || index === draftStore.currentIndex) return
   saveActiveDraft()
-  await cleanupPreviews()
+  clearTimeout(previewPollTimer)
   draftStore.currentIndex = index
   const draft = draftStore.activeDraft
   if (draft) applyDraft(draft)
+  schedulePreviewPoll()
 }
 
 function removeSpeaker(speakerKey: number): void {
@@ -259,9 +329,15 @@ function turnContent(turnKey: number): TurnContent | null {
 
 function turnSignature(turnKey: number): string | null {
   const content = turnContent(turnKey)
-  return content
-    ? JSON.stringify([content.voiceId, content.speakerDisplayName, content.text])
-    : null
+  return content ? contentSignature(content) : null
+}
+
+function contentSignature(content: AudioPreviewInput): string {
+  return JSON.stringify([
+    content.voiceId,
+    content.speakerDisplayName.trim(),
+    content.text.trim(),
+  ])
 }
 
 function validateContent(): TurnContent[] | null {
@@ -311,29 +387,29 @@ function normalizedQuestions(): AudioQuestionInput[] | null {
 
 function schedulePreviewPoll(): void {
   clearTimeout(previewPollTimer)
-  const hasActiveJob = Object.values(previewStates.value).some((state) =>
+  const hasActiveJob = previewStateEntries().some(({ state }) =>
     ['queued', 'running'].includes(state.status),
   )
   if (hasActiveJob) previewPollTimer = setTimeout(refreshPreviewJobs, 1000)
 }
 
 async function refreshPreviewJobs(): Promise<void> {
-  const active = Object.entries(previewStates.value).filter(
-    ([, state]) => state.pendingJobId && ['queued', 'running'].includes(state.status),
+  const active = previewStateEntries().filter(
+    ({ state }) => state.pendingJobId && ['queued', 'running'].includes(state.status),
   )
   await Promise.all(
-    active.map(async ([turnKeyValue, state]) => {
-      const turnKey = Number(turnKeyValue)
+    active.map(async ({ draftIndex, turnKey, state }) => {
       const jobId = state.pendingJobId
       if (!jobId) return
       try {
         const job = await getJob(jobId)
-        const current = previewStates.value[turnKey]
+        const states = previewBucket(draftIndex)
+        const current = states[turnKey]
         if (!current || current.pendingJobId !== jobId) return
         if (job.status === 'succeeded') {
           const previousJobId = current.generated?.jobId
-          previewStates.value = {
-            ...previewStates.value,
+          replacePreviewBucket({
+            ...states,
             [turnKey]: {
               ...current,
               pendingJobId: null,
@@ -346,26 +422,27 @@ async function refreshPreviewJobs(): Promise<void> {
               },
               errorMessage: undefined,
             },
-          }
+          }, draftIndex)
           if (previousJobId && previousJobId !== jobId) {
             void deleteAudioPreview(previousJobId).catch(() => undefined)
           }
           return
         }
-        previewStates.value = {
-          ...previewStates.value,
+        replacePreviewBucket({
+          ...states,
           [turnKey]: {
             ...current,
             status: job.status,
             progress: job.progress,
             errorMessage: job.errorSummary,
           },
-        }
+        }, draftIndex)
       } catch (error) {
-        const current = previewStates.value[turnKey]
+        const states = previewBucket(draftIndex)
+        const current = states[turnKey]
         if (!current || current.pendingJobId !== jobId) return
-        previewStates.value = {
-          ...previewStates.value,
+        replacePreviewBucket({
+          ...states,
           [turnKey]: {
             ...current,
             status: 'failed',
@@ -374,7 +451,7 @@ async function refreshPreviewJobs(): Promise<void> {
                 ? error.message
                 : t('Preview status could not be loaded'),
           },
-        }
+        }, draftIndex)
       }
     }),
   )
@@ -388,15 +465,21 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
     formError.value = t('Select a speaker and enter text for every item')
     return
   }
-  const signature = JSON.stringify([
-    content.voiceId,
-    content.speakerDisplayName,
-    content.text,
-  ])
-  const previous = previewStates.value[turnKey]
+  await generatePreview(turnKey, content, draftStore.currentIndex)
+}
+
+async function generatePreview(
+  turnKey: number,
+  content: AudioPreviewInput,
+  draftIndex: number,
+  refreshAfterSubmit = true,
+): Promise<void> {
+  const signature = contentSignature(content)
+  const states = previewBucket(draftIndex)
+  const previous = states[turnKey]
   const requestId = ++nextPreviewRequestId
-  previewStates.value = {
-    ...previewStates.value,
+  replacePreviewBucket({
+    ...states,
     [turnKey]: {
       requestId,
       pendingSignature: signature,
@@ -410,19 +493,19 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
       progress: 0,
       generated: previous?.generated,
     },
-  }
+  }, draftIndex)
   try {
     const accepted = await createAudioPreview({
       voiceId: content.voiceId,
       speakerDisplayName: content.speakerDisplayName,
       text: content.text,
     })
-    if (previewStates.value[turnKey]?.requestId !== requestId) {
+    if (previewBucket(draftIndex)[turnKey]?.requestId !== requestId) {
       void deleteAudioPreview(accepted.jobId).catch(() => undefined)
       return
     }
-    previewStates.value = {
-      ...previewStates.value,
+    replacePreviewBucket({
+      ...previewBucket(draftIndex),
       [turnKey]: {
         requestId,
         pendingSignature: signature,
@@ -436,7 +519,7 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
         progress: 0,
         generated: previous?.generated,
       },
-    }
+    }, draftIndex)
     if (
       previous?.pendingJobId &&
       previous.pendingJobId !== accepted.jobId &&
@@ -444,11 +527,11 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
     ) {
       void deleteAudioPreview(previous.pendingJobId).catch(() => undefined)
     }
-    await refreshPreviewJobs()
+    if (refreshAfterSubmit) await refreshPreviewJobs()
   } catch (error) {
-    if (previewStates.value[turnKey]?.requestId !== requestId) return
-    previewStates.value = {
-      ...previewStates.value,
+    if (previewBucket(draftIndex)[turnKey]?.requestId !== requestId) return
+    replacePreviewBucket({
+      ...previewBucket(draftIndex),
       [turnKey]: {
         requestId,
         pendingSignature: signature,
@@ -464,7 +547,7 @@ async function generateTurnPreview(turnKey: number): Promise<void> {
         errorMessage:
           error instanceof ApiError ? error.message : t('Preview could not be submitted'),
       },
-    }
+    }, draftIndex)
   }
 }
 
@@ -482,7 +565,7 @@ async function removeTurnPreview(turnKey: number): Promise<void> {
   const state = previewStates.value[turnKey]
   const next = { ...previewStates.value }
   delete next[turnKey]
-  previewStates.value = next
+  replacePreviewBucket(next)
   const jobIds = new Set(
     [state?.pendingJobId, state?.generated?.jobId].filter(
       (jobId): jobId is number => typeof jobId === 'number',
@@ -570,7 +653,16 @@ async function loadOptions(): Promise<void> {
 async function submit(): Promise<void> {
   formError.value = ''
   if (batchMode.value) {
-    await createDraftBatch()
+    saveActiveDraft()
+    if (!allBatchPreviewsReady.value) {
+      await generateAllDraftPreviews()
+      return
+    }
+    if (batchHasUnpublishedTurnChanges.value) {
+      discardChangesDialogOpen.value = true
+      return
+    }
+    await publishDraftBatchFromPreviews()
     return
   }
   if (!allPreviewsReady.value) {
@@ -633,10 +725,34 @@ function validateDraft(draft: ListeningDraft): string | null {
   return null
 }
 
-async function createDraftBatch(): Promise<void> {
-  saveActiveDraft()
+function validateDraftForPublishing(draft: ListeningDraft): string | null {
+  if (!draft.title.trim()) return t('Enter a title')
+  if (
+    draft.questions.some(
+      (question) =>
+        !question.prompt.trim() ||
+        question.correctAnswers.length === 0 ||
+        question.incorrectAnswers.length === 0 ||
+        [...question.correctAnswers, ...question.incorrectAnswers].some(
+          (answer) => !answer.trim(),
+        ),
+    )
+  ) {
+    return t('Complete every question and answer')
+  }
+  return null
+}
+
+function normalizeDraftQuestions(draft: ListeningDraft): AudioQuestionInput[] {
+  return draft.questions.map((question) => ({
+    prompt: question.prompt.trim(),
+    correctAnswers: question.correctAnswers.map((answer) => answer.trim()),
+    incorrectAnswers: question.incorrectAnswers.map((answer) => answer.trim()),
+  }))
+}
+
+async function generateAllDraftPreviews(): Promise<void> {
   batchFailures.value = []
-  batchResults.value = []
   const invalid = draftStore.drafts
     .map((draft, index) => ({ index, error: validateDraft(draft) }))
     .find((item) => item.error)
@@ -648,45 +764,94 @@ async function createDraftBatch(): Promise<void> {
   }
 
   publishing.value = true
-  const succeeded: number[] = []
+  try {
+    const submissions: Promise<void>[] = []
+    for (const [index, draft] of draftStore.drafts.entries()) {
+      for (const [turnIndex, utterance] of draft.utterances.entries()) {
+        if (batchPreviewStates.value[index]?.[turnIndex + 1]?.generated) continue
+        submissions.push(
+          generatePreview(
+            turnIndex + 1,
+            {
+              voiceId: utterance.voiceId,
+              speakerDisplayName: utterance.speakerDisplayName.trim(),
+              text: utterance.text.trim(),
+            },
+            index,
+            false,
+          ),
+        )
+      }
+    }
+    await Promise.all(submissions)
+    await refreshPreviewJobs()
+  } finally {
+    publishing.value = false
+  }
+}
+
+async function publishDraftBatchFromPreviews(): Promise<void> {
+  batchFailures.value = []
+  const invalid = draftStore.drafts
+    .map((draft, index) => ({ index, error: validateDraftForPublishing(draft) }))
+    .find((item) => item.error)
+  if (invalid?.error) {
+    draftStore.currentIndex = invalid.index
+    applyDraft(draftStore.drafts[invalid.index]!)
+    formError.value = invalid.error
+    return
+  }
+
+  publishing.value = true
+  const succeeded = new Set<number>()
   try {
     for (const [index, draft] of draftStore.drafts.entries()) {
+      const states = batchPreviewStates.value[index] ?? {}
+      const utterances = draft.utterances.map((_, turnIndex) => {
+        const generated = states[turnIndex + 1]?.generated
+        return generated
+          ? {
+              previewJobId: generated.jobId,
+              voiceId: generated.content.voiceId,
+              speakerDisplayName: generated.content.speakerDisplayName,
+              text: generated.content.text,
+            }
+          : null
+      })
+      if (utterances.some((item) => item === null)) continue
       try {
-        const speakerNames = new Set(
-          draft.utterances.map((item) => item.speakerDisplayName.normalize('NFKC').toLocaleLowerCase()),
-        )
-        const common = {
+        const audio = await publishAudioFromPreviews({
           title: draft.title.trim(),
+          utterances: utterances as NonNullable<(typeof utterances)[number]>[],
           tagIds: draft.tagIds,
-          visibility: 'public' as const,
-          questions: draft.questions,
-        }
-        const accepted = speakerNames.size === 1
-          ? await createSingleAudio({
-              ...common,
-              text: draft.utterances.map((item) => item.text.trim()).join('\n'),
-              voiceId: draft.utterances[0]!.voiceId,
-              speakerDisplayName: draft.utterances[0]!.speakerDisplayName.trim(),
-            })
-          : await createDialogueAudio({
-              ...common,
-              utterances: draft.utterances.map((item) => ({
-                voiceId: item.voiceId,
-                speakerDisplayName: item.speakerDisplayName.trim(),
-                text: item.text.trim(),
-              })),
-            })
-        batchResults.value.push({ title: draft.title, audioId: accepted.audioId })
-        succeeded.push(index)
+          visibility: 'public',
+          questions: normalizeDraftQuestions(draft),
+        })
+        batchResults.value.push({ title: draft.title, audioId: audio.id })
+        succeeded.add(index)
       } catch (error) {
-        const message = error instanceof ApiError ? error.message : t('Audio could not be submitted')
+        const message = error instanceof ApiError ? error.message : t('Audio could not be published')
         batchFailures.value.push(`${draft.title}: ${message}`)
       }
     }
-    for (const index of succeeded.sort((a, b) => b - a)) draftStore.removeDraft(index)
-    if (draftStore.drafts.length > 0 && draftStore.activeDraft) {
-      applyDraft(draftStore.activeDraft)
-      formError.value = t('{count} drafts could not be created', { count: batchFailures.value.length })
+
+    const retainedPreviewStates: Record<number, Record<number, TurnPreviewState>> = {}
+    let retainedIndex = 0
+    for (const [index] of draftStore.drafts.entries()) {
+      if (succeeded.has(index)) continue
+      retainedPreviewStates[retainedIndex] = batchPreviewStates.value[index] ?? {}
+      retainedIndex += 1
+    }
+    for (const index of [...succeeded].sort((a, b) => b - a)) {
+      draftStore.removeDraft(index)
+    }
+    batchPreviewStates.value = retainedPreviewStates
+    if (draftStore.drafts.length > 0) {
+      draftStore.currentIndex = 0
+      applyDraft(draftStore.drafts[0]!)
+      formError.value = t('{count} drafts could not be created', {
+        count: batchFailures.value.length,
+      })
     }
   } finally {
     publishing.value = false
@@ -724,7 +889,7 @@ async function publishGeneratedAudio(): Promise<void> {
       questions: normalizedQuestionValues,
     })
     publishedAudioId.value = audio.id
-    previewStates.value = {}
+    standalonePreviewStates.value = {}
   } catch (error) {
     formError.value =
       error instanceof ApiError ? error.message : t('Audio could not be published')
@@ -735,7 +900,11 @@ async function publishGeneratedAudio(): Promise<void> {
 
 async function confirmDiscardChangesAndPublish(): Promise<void> {
   discardChangesDialogOpen.value = false
-  await publishGeneratedAudio()
+  if (batchMode.value) {
+    await publishDraftBatchFromPreviews()
+  } else {
+    await publishGeneratedAudio()
+  }
 }
 
 function startAnother(): void {
@@ -757,12 +926,13 @@ async function cleanupPreviews(): Promise<void> {
   clearTimeout(previewPollTimer)
   const jobIds = [
     ...new Set(
-      Object.values(previewStates.value)
-        .flatMap((state) => [state.pendingJobId, state.generated?.jobId])
+      previewStateEntries()
+        .flatMap(({ state }) => [state.pendingJobId, state.generated?.jobId])
         .filter((jobId): jobId is number => typeof jobId === 'number'),
     ),
   ]
-  previewStates.value = {}
+  standalonePreviewStates.value = {}
+  batchPreviewStates.value = {}
   await Promise.allSettled(jobIds.map((jobId) => deleteAudioPreview(jobId)))
 }
 
@@ -896,9 +1066,9 @@ onUnmounted(() => clearTimeout(previewPollTimer))
           <div>
             <p v-if="formError" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError }}</p>
             <button type="submit" :disabled="publishing || previewGenerationActive || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
-              <svg v-if="batchMode || allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
+              <svg v-if="batchMode ? allBatchPreviewsReady : allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M8 5v14l11-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
-              {{ publishing ? t('Submitting') : batchMode ? t('Create all drafts') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
+              {{ publishing ? t('Submitting') : batchMode ? allBatchPreviewsReady ? t('Publish all drafts') : t('Generate all draft audio') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
             </button>
             <ul v-if="batchFailures.length" class="mt-3 space-y-1 text-sm text-danger"><li v-for="failure in batchFailures" :key="failure">{{ failure }}</li></ul>
           </div>
@@ -918,13 +1088,13 @@ onUnmounted(() => clearTimeout(previewPollTimer))
 
     <ConfirmDialog
       :open="discardChangesDialogOpen"
-      :title="t('Publish generated audio?')"
+      :title="t(batchMode ? 'Publish generated drafts?' : 'Publish generated audio?')"
       :busy="publishing"
       confirm-label="Publish"
       @close="discardChangesDialogOpen = false"
       @confirm="confirmDiscardChangesAndPublish"
     >
-      {{ t('Changes made after preview generation will be discarded. The last generated audio will be published instead.') }}
+      {{ t(batchMode ? 'Changes made after preview generation will be discarded for affected drafts. The last generated audio will be published instead.' : 'Changes made after preview generation will be discarded. The last generated audio will be published instead.') }}
     </ConfirmDialog>
   </section>
 </template>

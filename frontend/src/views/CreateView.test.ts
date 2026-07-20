@@ -377,17 +377,39 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
-  it('loads generated drafts and submits monologue and dialogue creation jobs', async () => {
-    const submitted: { path: string; body: unknown }[] = []
+  it('generates every draft preview before publishing and retains failed drafts', async () => {
+    const previewBodies: unknown[] = []
+    const publishBodies: unknown[] = []
+    let nextJobId = 40
+    let monologuePublishAttempts = 0
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const path = String(input)
         const options = optionsResponse(path)
         if (options) return Promise.resolve(options)
-        if ((path === '/api/audios' || path === '/api/audios/dialogues') && init?.method === 'POST') {
-          submitted.push({ path, body: JSON.parse(String(init.body)) })
-          return Promise.resolve(jsonResponse({ audioId: submitted.length + 20, jobId: submitted.length + 30 }, 202))
+        if (path === '/api/audio-previews' && init?.method === 'POST') {
+          previewBodies.push(JSON.parse(String(init.body)))
+          const jobId = nextJobId++
+          return Promise.resolve(
+            jsonResponse({ jobId, contentDigest: 'd'.repeat(64) }, 202),
+          )
+        }
+        const jobMatch = path.match(/^\/api\/jobs\/(\d+)$/)
+        if (jobMatch) {
+          return Promise.resolve(jobResponse(Number(jobMatch[1]), 'succeeded'))
+        }
+        if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+          const body = JSON.parse(String(init.body))
+          publishBodies.push(body)
+          if (body.title === 'Monologue draft') {
+            monologuePublishAttempts += 1
+            if (monologuePublishAttempts === 1) {
+              return Promise.resolve(jsonResponse({ detail: 'Publish failed' }, 500))
+            }
+            return Promise.resolve(jsonResponse(publishedAudio(52), 201))
+          }
+          return Promise.resolve(jsonResponse(publishedAudio(51), 201))
         }
         throw new Error(`Unexpected request: ${path}`)
       }),
@@ -458,19 +480,63 @@ describe('direct creation view', () => {
     await wrapper.get('button[title="Next"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Monologue draft')
+    expect(button(wrapper, 'Generate all draft audio').exists()).toBe(true)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(submitted.map((item) => item.path)).toEqual(['/api/audios/dialogues', '/api/audios'])
-    expect(submitted[0]?.body).toMatchObject({ title: 'Dialogue draft', tagIds: [4], visibility: 'public' })
-    expect(submitted[1]?.body).toMatchObject({
-      title: 'Monologue draft',
-      text: 'Report.',
-      voiceId: 3,
+    expect(previewBodies).toEqual([
+      { voiceId: 2, speakerDisplayName: 'Man', text: 'First.' },
+      { voiceId: 3, speakerDisplayName: 'Woman', text: 'Second.' },
+      { voiceId: 3, speakerDisplayName: 'Woman', text: 'Report.' },
+    ])
+    expect(button(wrapper, 'Publish all drafts').exists()).toBe(true)
+    expect(wrapper.findAll('audio')).toHaveLength(1)
+
+    await wrapper.get('button[title="Previous"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('audio')).toHaveLength(2)
+    await wrapper.get('button[title="Next"]').trigger('click')
+    await wrapper.get('#turn-text-1').setValue('Edited report.')
+    expect(wrapper.findAll('audio')).toHaveLength(1)
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Changes made after preview generation will be discarded for affected drafts',
+    )
+    await wrapper.get('[role="dialog"]').findAll('button').find((item) => item.text() === 'Publish')?.trigger('click')
+    await flushPromises()
+
+    expect(publishBodies).toHaveLength(2)
+    expect(publishBodies[0]).toMatchObject({
+      title: 'Dialogue draft',
       tagIds: [4],
+      visibility: 'public',
+      utterances: [
+        { previewJobId: 40, text: 'First.' },
+        { previewJobId: 41, text: 'Second.' },
+      ],
     })
-    expect(wrapper.find('a[href="/audio/21"]').exists()).toBe(true)
-    expect(wrapper.find('a[href="/audio/22"]').exists()).toBe(true)
+    expect(publishBodies[1]).toMatchObject({
+      title: 'Monologue draft',
+      utterances: [{ previewJobId: 42, text: 'Report.' }],
+    })
+    expect(store.drafts).toHaveLength(1)
+    expect(wrapper.findAll('audio')).toHaveLength(1)
+    expect(button(wrapper, 'Publish all drafts').exists()).toBe(true)
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    await wrapper.get('[role="dialog"]').findAll('button').find((item) => item.text() === 'Publish')?.trigger('click')
+    await flushPromises()
+
+    expect(publishBodies).toHaveLength(3)
+    expect(publishBodies[2]).toMatchObject({
+      title: 'Monologue draft',
+      utterances: [{ previewJobId: 42, text: 'Report.' }],
+    })
+    expect(wrapper.find('a[href="/audio/51"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/audio/52"]').exists()).toBe(true)
     expect(store.drafts).toHaveLength(0)
     wrapper.unmount()
   })
