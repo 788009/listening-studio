@@ -29,7 +29,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260720_0016")
+            self.assertEqual(revision, "20260720_0017")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -114,6 +114,56 @@ class DatabaseIntegrationTest(unittest.TestCase):
 
         self.assertEqual(json.loads(legacy_types), ["short_dialogue", "monologue"])
         self.assertEqual(legacy_count, 5)
+
+    def test_question_type_tag_migration_backfills_existing_tags(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "question-type-tags.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260720_0016")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_tags (type, value, normalized_value) VALUES "
+                        "('category', 'short', 'short'), "
+                        "('category', 'long', 'long')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_tag_translations "
+                        "(tag_id, language, value, normalized_value) "
+                        "SELECT id, 'zh-CN', '自定义长对话', '自定义长对话' "
+                        "FROM audio_tags WHERE normalized_value = 'long'"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.connect() as connection:
+                rows = connection.execute(
+                    text(
+                        "SELECT tags.normalized_value, translations.value "
+                        "FROM audio_tags AS tags "
+                        "JOIN audio_tag_translations AS translations "
+                        "ON translations.tag_id = tags.id "
+                        "WHERE tags.type = 'category' "
+                        "AND tags.normalized_value IN "
+                        "('short', 'long', 'monologue') "
+                        "AND translations.language = 'zh-CN' "
+                        "ORDER BY tags.normalized_value"
+                    )
+                ).all()
+            engine.dispose()
+
+        self.assertEqual(
+            rows,
+            [
+                ("long", "自定义长对话"),
+                ("short", "短对话"),
+            ],
+        )
 
     def test_voice_sample_migration_preserves_existing_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
