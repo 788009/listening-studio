@@ -43,8 +43,6 @@ class CorpusGenerationJobHandler:
                     checkpoint=context.update_progress,
                 )
         except JobFailedError as exc:
-            raise JobExecutionError(
-                "Corpus generation failed. Verify speaker voice mappings and retry."
-            ) from exc
+            raise JobExecutionError("Corpus draft generation failed") from exc
         context.update_progress(95)
         return JobResult("generation_batch", batch.id)

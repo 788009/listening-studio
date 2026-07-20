@@ -9,17 +9,8 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from backend.app.core.auth import Principal
-from backend.app.core.exceptions import (
-    ConflictError,
-    DomainValidationError,
-    NotFoundError,
-)
-from backend.app.db.models.audio import AudioStatus, AudioVisibility
-from backend.app.db.models.audio_tag import AudioTag, AudioTagType
-from backend.app.db.models.generation_batch import (
-    GenerationBatch,
-    GenerationBatchStatus,
-)
+from backend.app.core.exceptions import DomainValidationError, NotFoundError
+from backend.app.db.models.generation_batch import GenerationBatch
 from backend.app.db.models.job import Job
 from backend.app.db.models.user import User
 from backend.app.integrations.llm import (
@@ -27,11 +18,8 @@ from backend.app.integrations.llm import (
     MAX_GENERATION_COUNT,
     QuestionType,
 )
-from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.generation_batches import GenerationBatchRepository
 from backend.app.repositories.voices import VoiceRepository
-from backend.app.services.audio_storage import AudioStorage
-from backend.app.services.audios import AudioService
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.jobs import JobService
@@ -59,13 +47,6 @@ class GenerationBatchSubmission:
 class GenerationBatchListResult:
     items: list[GenerationBatch]
     total: int
-
-
-@dataclass(frozen=True)
-class GenerationBatchRetrySubmission:
-    batch: GenerationBatch
-    item_id: int
-    job: Job
 
 
 class CorpusValidator:
@@ -113,8 +94,9 @@ class CorpusValidator:
                 "Corpus file encoding is required",
                 "encoding",
             )
-        normalized = value.strip().casefold().replace("_", "-")
-        codec = SUPPORTED_CORPUS_ENCODINGS.get(normalized)
+        codec = SUPPORTED_CORPUS_ENCODINGS.get(
+            value.strip().casefold().replace("_", "-")
+        )
         if codec is None:
             raise CorpusValidator._invalid(
                 "Corpus file encoding is not supported",
@@ -154,11 +136,9 @@ class GenerationBatchService:
         *,
         storage: CorpusStorage,
         voice_storage: VoiceStorage,
-        audio_storage: AudioStorage,
         max_corpus_bytes: int,
         max_generation_count: int,
         repository: GenerationBatchRepository | None = None,
-        tag_repository: AudioTagRepository | None = None,
         job_service: JobService | None = None,
         voice_repository: VoiceRepository | None = None,
         authorization: AuthorizationService | None = None,
@@ -169,11 +149,9 @@ class GenerationBatchService:
         self.max_generation_count = max_generation_count
         self.validator = CorpusValidator(max_corpus_bytes)
         self.repository = repository or GenerationBatchRepository()
-        self.tag_repository = tag_repository or AudioTagRepository()
         self.job_service = job_service or JobService()
         self.voice_repository = voice_repository or VoiceRepository()
         self.voice_service = VoiceService(voice_storage)
-        self.audio_service = AudioService(audio_storage)
         self.authorization = authorization or AuthorizationService()
 
     def submit_text(
@@ -184,7 +162,6 @@ class GenerationBatchService:
         corpus: str,
         question_types: list[QuestionType],
         count: int,
-        tag_ids: list[int],
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
@@ -194,7 +171,6 @@ class GenerationBatchService:
             corpus=self.validator.validate_text(corpus),
             question_types=question_types,
             count=count,
-            tag_ids=tag_ids,
             speaker_voice_map=speaker_voice_map,
             request_id=request_id,
         )
@@ -209,7 +185,6 @@ class GenerationBatchService:
         encoding: str,
         question_types: list[QuestionType],
         count: int,
-        tag_ids: list[int],
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
@@ -219,7 +194,6 @@ class GenerationBatchService:
             corpus=self.validator.validate_file(filename, content, encoding),
             question_types=question_types,
             count=count,
-            tag_ids=tag_ids,
             speaker_voice_map=speaker_voice_map,
             request_id=request_id,
         )
@@ -251,64 +225,6 @@ class GenerationBatchService:
         )
         return GenerationBatchListResult(items, total)
 
-    def retry_item(
-        self,
-        session: Session,
-        owner: User,
-        *,
-        batch_id: int,
-        item_id: int,
-    ) -> GenerationBatchRetrySubmission:
-        batch = self.get_owned(session, owner, batch_id)
-        item = self.repository.get_item(session, item_id)
-        if item is None or item.batch_id != batch.id:
-            raise NotFoundError("Generation batch item not found")
-        if item.status is not GenerationBatchStatus.FAILED:
-            raise ConflictError("Only failed generation batch items can be retried")
-        if item.generated_content is None:
-            raise ConflictError("Generation batch item has no generated content")
-        job = self.job_service.create_job(
-            session,
-            owner=owner,
-            job_type=CORPUS_GENERATION_JOB_TYPE,
-            input_summary={"batchId": batch.id, "itemId": item.id},
-            retryable=True,
-        )
-        item.status = GenerationBatchStatus.PENDING
-        item.error_summary = None
-        batch.status = GenerationBatchStatus.PROCESSING
-        batch.error_summary = None
-        session.commit()
-        return GenerationBatchRetrySubmission(batch, item.id, job)
-
-    def update_completed_audios(
-        self,
-        session: Session,
-        owner: User,
-        *,
-        batch_id: int,
-        tag_ids: list[int],
-        visibility: AudioVisibility,
-    ) -> int:
-        batch = self.get_owned(session, owner, batch_id)
-        tags = self._tags(session, tag_ids)
-        completed_items = [
-            item
-            for item in batch.items
-            if item.status is GenerationBatchStatus.COMPLETED
-            and item.audio is not None
-        ]
-        if not completed_items:
-            raise ConflictError("Generation batch has no completed audios")
-        for item in completed_items:
-            audio = item.audio
-            assert audio is not None
-            if audio.author_id != owner.id or audio.status is not AudioStatus.READY:
-                raise ConflictError("A completed batch audio is unavailable")
-            self.audio_service.replace_topic_category_tags(session, audio, tags)
-            self.audio_service.set_visibility(session, audio, visibility)
-        return len(completed_items)
-
     def _submit(
         self,
         session: Session,
@@ -317,14 +233,25 @@ class GenerationBatchService:
         corpus: str,
         question_types: list[QuestionType],
         count: int,
-        tag_ids: list[int],
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
         normalized_types = self._question_types(question_types)
-        self._validate_count(count)
-        tags = self._tags(session, tag_ids)
+        self._validate_count(count, normalized_types)
         speaker_voices = self._speaker_voices(session, owner, speaker_voice_map)
+        minimum_speakers = 2 if any(
+            item in {QuestionType.SHORT_DIALOGUE, QuestionType.LONG_DIALOGUE}
+            for item in normalized_types
+        ) else 1
+        if len(speaker_voices) < minimum_speakers:
+            raise DomainValidationError(
+                "Selected question types require more speakers",
+                details={
+                    "field": "speakerVoiceMap",
+                    "minimumSpeakers": minimum_speakers,
+                },
+            )
+
         job: Job | None = None
         try:
             job = self.job_service.create_job(
@@ -340,7 +267,7 @@ class GenerationBatchService:
                 job=job,
                 question_types=[item.value for item in normalized_types],
                 requested_count=count,
-                tags=tags,
+                tags=[],
                 speaker_voices=speaker_voices,
             )
             job.input_summary = {"batchId": batch.id}
@@ -388,38 +315,20 @@ class GenerationBatchService:
             )
         return normalized
 
-    def _validate_count(self, count: int) -> None:
+    def _validate_count(self, count: int, question_types: list[QuestionType]) -> None:
         if (
             isinstance(count, bool)
             or not isinstance(count, int)
-            or not 1 <= count <= self.max_generation_count
+            or not len(question_types) <= count <= self.max_generation_count
         ):
             raise DomainValidationError(
                 "Generation count is outside the allowed range",
                 details={
                     "field": "count",
+                    "minimumCount": len(question_types),
                     "maxCount": self.max_generation_count,
                 },
             )
-
-    def _tags(self, session: Session, tag_ids: list[int]) -> list[AudioTag]:
-        if len(tag_ids) != len(set(tag_ids)):
-            raise DomainValidationError(
-                "Batch tag IDs must be unique",
-                details={"field": "tagIds"},
-            )
-        tags: list[AudioTag] = []
-        for tag_id in tag_ids:
-            if isinstance(tag_id, bool) or not isinstance(tag_id, int) or tag_id < 1:
-                raise self._invalid_tag()
-            tag = self.tag_repository.get_by_id(session, tag_id)
-            if tag is None or tag.type not in {
-                AudioTagType.TOPIC,
-                AudioTagType.CATEGORY,
-            }:
-                raise self._invalid_tag()
-            tags.append(tag)
-        return tags
 
     def _speaker_voices(
         self,
@@ -428,10 +337,7 @@ class GenerationBatchService:
         values: Mapping[str, int],
     ) -> list[tuple[str, str, int]]:
         if not isinstance(values, Mapping):
-            raise DomainValidationError(
-                "Speaker voice map must be an object",
-                details={"field": "speakerVoiceMap"},
-            )
+            raise self._invalid_speaker_voice_map()
         result: list[tuple[str, str, int]] = []
         seen_speakers: set[str] = set()
         for speaker, voice_id in values.items():
@@ -439,13 +345,8 @@ class GenerationBatchService:
                 raise self._invalid_speaker_voice_map()
             display = unicodedata.normalize("NFKC", speaker.strip())
             normalized = display.casefold()
-            if not display or len(display) > 200 or len(normalized) > 200:
+            if not display or len(display) > 200 or normalized in seen_speakers:
                 raise self._invalid_speaker_voice_map()
-            if normalized in seen_speakers:
-                raise DomainValidationError(
-                    "Speaker voice map contains duplicate roles",
-                    details={"field": "speakerVoiceMap"},
-                )
             if (
                 isinstance(voice_id, bool)
                 or not isinstance(voice_id, int)
@@ -462,13 +363,6 @@ class GenerationBatchService:
             result.append((display, normalized, voice.id))
             seen_speakers.add(normalized)
         return result
-
-    @staticmethod
-    def _invalid_tag() -> DomainValidationError:
-        return DomainValidationError(
-            "Batch tags must be existing topic or category tags",
-            details={"field": "tagIds"},
-        )
 
     @staticmethod
     def _invalid_speaker_voice_map() -> DomainValidationError:

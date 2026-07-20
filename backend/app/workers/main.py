@@ -9,7 +9,9 @@ from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.integrations.cosyvoice import CosyVoiceAdapter
 from backend.app.integrations.llm import (
     PlaceholderListeningContentGenerator,
+    PlaceholderTopicTagSuggester,
     ValidatingListeningContentGenerator,
+    ValidatingTopicTagSuggester,
 )
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audio_previews import (
@@ -66,10 +68,10 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         generator=ValidatingListeningContentGenerator(
             PlaceholderListeningContentGenerator()
         ),
+        tag_suggester=ValidatingTopicTagSuggester(
+            PlaceholderTopicTagSuggester()
+        ),
         corpus_storage=CorpusStorage(settings.data_dir),
-        synthesis_service=audio_service,
-        voice_storage=voice_storage,
-        silence_milliseconds=settings.dialogue_silence_milliseconds,
     )
     return {
         VOICE_UPLOAD_JOB_TYPE: VoiceUploadJobHandler(voice_service),

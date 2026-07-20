@@ -138,7 +138,7 @@ class ConsistencyIntegrationTest(unittest.TestCase):
             batch = GenerationBatch(
                 owner=owner,
                 job=batch_job,
-                question_types=["multiple_choice"],
+                question_types=["short_dialogue"],
                 requested_count=1,
                 status=GenerationBatchStatus.PROCESSING,
             )

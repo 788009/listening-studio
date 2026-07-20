@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { setLocale } from '@/i18n'
+import { useListeningDraftsStore } from '@/stores/listeningDrafts'
 import CreateView from './CreateView.vue'
 
 const voices = {
@@ -373,6 +374,105 @@ describe('direct creation view', () => {
     expect(submittedJobs).toEqual([20, 21, 22])
     expect(wrapper.findAll('audio')).toHaveLength(2)
     expect(button(wrapper, 'Publish').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('loads generated drafts and submits monologue and dialogue creation jobs', async () => {
+    const submitted: { path: string; body: unknown }[] = []
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if ((path === '/api/audios' || path === '/api/audios/dialogues') && init?.method === 'POST') {
+          submitted.push({ path, body: JSON.parse(String(init.body)) })
+          return Promise.resolve(jsonResponse({ audioId: submitted.length + 20, jobId: submitted.length + 30 }, 202))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/create', name: 'create', component: CreateView },
+        { path: '/audio/:id', component: { template: '<div />' } },
+        { path: '/voices/create', component: { template: '<div />' } },
+      ],
+    })
+    const pinia = createPinia()
+    const store = useListeningDraftsStore(pinia)
+    store.setBatch({
+      id: 7,
+      jobId: 9,
+      questionTypes: ['short_dialogue', 'monologue'],
+      requestedCount: 2,
+      status: 'completed',
+      progress: 100,
+      tags: [{ id: 4, type: 'topic', englishValue: 'travel' }],
+      speakerVoices: [],
+      items: [
+        {
+          id: 1,
+          position: 0,
+          status: 'completed',
+          attemptCount: 1,
+          draft: {
+            questionType: 'short_dialogue',
+            title: 'Dialogue draft',
+            utterances: [
+              { speakerDisplayName: 'Man', voiceId: 2, text: 'First.' },
+              { speakerDisplayName: 'Woman', voiceId: 3, text: 'Second.' },
+            ],
+            questions: [
+              { prompt: 'Who?', correctAnswers: ['Man'], incorrectAnswers: ['Woman'] },
+            ],
+          },
+        },
+        {
+          id: 2,
+          position: 1,
+          status: 'completed',
+          attemptCount: 1,
+          draft: {
+            questionType: 'monologue',
+            title: 'Monologue draft',
+            utterances: [{ speakerDisplayName: 'Woman', voiceId: 3, text: 'Report.' }],
+            questions: [
+              { prompt: 'What?', correctAnswers: ['Report'], incorrectAnswers: ['Call'] },
+            ],
+          },
+        },
+      ],
+      createdAt: '',
+      updatedAt: '',
+    })
+    await router.push('/create?batch=7')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Dialogue draft')
+    expect(wrapper.text()).toContain('Draft 1 of 2')
+    await wrapper.get('button[title="Next"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Monologue draft')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(submitted.map((item) => item.path)).toEqual(['/api/audios/dialogues', '/api/audios'])
+    expect(submitted[0]?.body).toMatchObject({ title: 'Dialogue draft', tagIds: [4], visibility: 'public' })
+    expect(submitted[1]?.body).toMatchObject({
+      title: 'Monologue draft',
+      text: 'Report.',
+      voiceId: 3,
+      tagIds: [4],
+    })
+    expect(wrapper.find('a[href="/audio/21"]').exists()).toBe(true)
+    expect(wrapper.find('a[href="/audio/22"]').exists()).toBe(true)
+    expect(store.drafts).toHaveLength(0)
     wrapper.unmount()
   })
 })

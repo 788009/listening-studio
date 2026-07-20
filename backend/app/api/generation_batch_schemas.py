@@ -5,7 +5,6 @@ from datetime import datetime
 from pydantic import Field
 
 from backend.app.api.tag_schemas import TagApiModel
-from backend.app.db.models.audio import AudioVisibility
 from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.generation_batch import GenerationBatchStatus
 from backend.app.integrations.llm import QuestionType
@@ -17,15 +16,32 @@ class GenerationBatchTagResponse(TagApiModel):
     english_value: str
 
 
+class GenerationDraftUtteranceResponse(TagApiModel):
+    speaker_display_name: str
+    voice_id: int
+    text: str
+
+
+class GenerationDraftQuestionResponse(TagApiModel):
+    prompt: str
+    correct_answers: list[str]
+    incorrect_answers: list[str]
+
+
+class GenerationDraftResponse(TagApiModel):
+    question_type: QuestionType
+    title: str
+    utterances: list[GenerationDraftUtteranceResponse]
+    questions: list[GenerationDraftQuestionResponse]
+
+
 class GenerationBatchItemResponse(TagApiModel):
     id: int
     position: int = Field(ge=0)
     status: GenerationBatchStatus
-    audio_id: int | None = None
-    error_summary: str | None = None
-    question_types: list[QuestionType] | None = None
     attempt_count: int = Field(ge=0)
-    title: str | None = None
+    draft: GenerationDraftResponse | None = None
+    error_summary: str | None = None
 
 
 class GenerationBatchSpeakerVoiceResponse(TagApiModel):
@@ -53,23 +69,8 @@ class GenerationBatchAccepted(TagApiModel):
     job_id: int
 
 
-class GenerationBatchRetryAccepted(TagApiModel):
-    batch_id: int
-    item_id: int
-    job_id: int
-
-
 class GenerationBatchListResponse(TagApiModel):
     items: list[GenerationBatchResponse]
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=100)
     total: int = Field(ge=0)
-
-
-class GenerationBatchAudioUpdate(TagApiModel):
-    tag_ids: list[int] = Field(default_factory=list)
-    visibility: AudioVisibility
-
-
-class GenerationBatchAudioUpdateResponse(TagApiModel):
-    updated_count: int = Field(ge=0)

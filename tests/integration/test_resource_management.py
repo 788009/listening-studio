@@ -198,7 +198,7 @@ class ResourceManagementIntegrationTest(unittest.TestCase):
                 session,
                 owner=first,
                 job=job,
-                question_types=["multiple_choice"],
+                question_types=["monologue"],
                 requested_count=1,
                 tags=[topic],
                 speaker_voices=[],

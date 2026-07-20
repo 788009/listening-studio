@@ -4,8 +4,10 @@ import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 
 import {
   audioPreviewMediaPath,
+  createDialogueAudio,
   createAudioPreview,
   createAudioTag,
+  createSingleAudio,
   deleteAudioPreview,
   listAudioCreationTags,
   publishAudioFromPreviews,
@@ -30,11 +32,13 @@ import type {
 } from '@/components/dialogueTurnTypes'
 import type { TagTranslation } from '@/api/voices'
 import { useI18n } from '@/i18n'
+import { useListeningDraftsStore, type ListeningDraft } from '@/stores/listeningDrafts'
 
 type CreationTagType = 'topic' | 'category'
 
 const route = useRoute()
 const { locale, t } = useI18n()
+const draftStore = useListeningDraftsStore()
 const title = ref('')
 const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
@@ -52,6 +56,8 @@ const formError = ref('')
 const publishing = ref(false)
 const publishedAudioId = ref<number | null>(null)
 const discardChangesDialogOpen = ref(false)
+const batchResults = ref<{ title: string; audioId: number }[]>([])
+const batchFailures = ref<string[]>([])
 
 interface GeneratedTurnPreview {
   signature: string
@@ -77,6 +83,12 @@ interface TurnContent extends AudioPreviewInput {
 const previewStates = ref<Record<number, TurnPreviewState>>({})
 let previewPollTimer: ReturnType<typeof setTimeout> | undefined
 let nextPreviewRequestId = 0
+
+const batchMode = computed(
+  () =>
+    draftStore.drafts.length > 0 &&
+    String(draftStore.sourceBatchId) === String(route.query.batch ?? ''),
+)
 
 const tagGroups = computed(() => [
   {
@@ -143,6 +155,79 @@ function newTurn(speakerKey?: number): DialogueTurnDraft {
     speakerKey: speakerKey ?? speakers.value[0]?.key ?? '',
     text: '',
   }
+}
+
+function applyDraft(draft: ListeningDraft): void {
+  const speakerKeys = new Map<string, number>()
+  const nextSpeakers: SpeakerDraft[] = []
+  const nextTurns: DialogueTurnDraft[] = []
+  for (const [index, utterance] of draft.utterances.entries()) {
+    const identity = utterance.speakerDisplayName.normalize('NFKC').toLocaleLowerCase()
+    let speakerKey = speakerKeys.get(identity)
+    if (speakerKey === undefined) {
+      speakerKey = nextSpeakers.length + 1
+      speakerKeys.set(identity, speakerKey)
+      nextSpeakers.push({
+        key: speakerKey,
+        name: utterance.speakerDisplayName,
+        voiceId: String(utterance.voiceId),
+      })
+    }
+    nextTurns.push({ key: index + 1, speakerKey, text: utterance.text })
+  }
+  title.value = draft.title
+  speakers.value = nextSpeakers
+  turns.value = nextTurns
+  questions.value = cloneQuestions(draft.questions)
+  selectedTagIds.value = [...draft.tagIds]
+  visibility.value = 'public'
+  previewStates.value = {}
+  formError.value = ''
+}
+
+function currentDraft(): ListeningDraft | null {
+  const utterances = turns.value.map((turn) => {
+    const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
+    const voiceId = Number(speaker?.voiceId)
+    if (!speaker || !Number.isInteger(voiceId) || voiceId < 1) return null
+    return {
+      speakerDisplayName: speaker.name,
+      voiceId,
+      text: turn.text,
+    }
+  })
+  if (utterances.some((item) => item === null)) return null
+  const original = draftStore.activeDraft
+  if (!original) return null
+  return {
+    title: title.value,
+    questionType: original.questionType,
+    utterances: utterances as NonNullable<(typeof utterances)[number]>[],
+    questions: cloneQuestions(questions.value),
+    tagIds: [...selectedTagIds.value],
+  }
+}
+
+function cloneQuestions(values: AudioQuestionInput[]): AudioQuestionInput[] {
+  return values.map((question) => ({
+    prompt: question.prompt,
+    correctAnswers: [...question.correctAnswers],
+    incorrectAnswers: [...question.incorrectAnswers],
+  }))
+}
+
+function saveActiveDraft(): void {
+  const draft = currentDraft()
+  if (draft) draftStore.updateDraft(draftStore.currentIndex, draft)
+}
+
+async function selectDraft(index: number): Promise<void> {
+  if (index < 0 || index >= draftStore.drafts.length || index === draftStore.currentIndex) return
+  saveActiveDraft()
+  await cleanupPreviews()
+  draftStore.currentIndex = index
+  const draft = draftStore.activeDraft
+  if (draft) applyDraft(draft)
 }
 
 function removeSpeaker(speakerKey: number): void {
@@ -468,8 +553,12 @@ async function loadOptions(): Promise<void> {
       : voices.value[0]
         ? String(voices.value[0].id)
         : ''
-    if (speakers.value.length === 0) speakers.value = [newSpeaker(voiceId)]
-    if (turns.value.length === 0) turns.value = [newTurn(speakers.value[0]?.key)]
+    if (batchMode.value && draftStore.activeDraft) {
+      applyDraft(draftStore.activeDraft)
+    } else {
+      if (speakers.value.length === 0) speakers.value = [newSpeaker(voiceId)]
+      if (turns.value.length === 0) turns.value = [newTurn(speakers.value[0]?.key)]
+    }
   } catch (error) {
     formError.value =
       error instanceof ApiError ? error.message : t('Creation options could not be loaded')
@@ -480,6 +569,10 @@ async function loadOptions(): Promise<void> {
 
 async function submit(): Promise<void> {
   formError.value = ''
+  if (batchMode.value) {
+    await createDraftBatch()
+    return
+  }
   if (!allPreviewsReady.value) {
     await generateMissingPreviews()
     return
@@ -493,6 +586,111 @@ async function submit(): Promise<void> {
     return
   }
   await publishGeneratedAudio()
+}
+
+function validateDraft(draft: ListeningDraft): string | null {
+  if (!draft.title.trim()) return t('Enter a title')
+  if (
+    draft.utterances.length === 0 ||
+    draft.utterances.some(
+      (item) =>
+        !item.speakerDisplayName.trim() ||
+        !item.text.trim() ||
+        !Number.isInteger(item.voiceId) ||
+        item.voiceId < 1,
+    )
+  ) {
+    return t('Select a speaker and enter text for every item')
+  }
+  const speakerVoices = new Map<string, number>()
+  for (const utterance of draft.utterances) {
+    const speaker = utterance.speakerDisplayName.trim().normalize('NFKC').toLocaleLowerCase()
+    const existingVoice = speakerVoices.get(speaker)
+    if (existingVoice !== undefined && existingVoice !== utterance.voiceId) {
+      return t('Complete each speaker with a unique name and voice')
+    }
+    speakerVoices.set(speaker, utterance.voiceId)
+  }
+  if (draft.questionType !== 'monologue' && speakerVoices.size < 2) {
+    return t('Dialogue types require at least two speakers')
+  }
+  if (draft.questionType === 'monologue' && speakerVoices.size !== 1) {
+    return t('Monologue requires one speaker')
+  }
+  if (
+    draft.questions.some(
+      (question) =>
+        !question.prompt.trim() ||
+        question.correctAnswers.length === 0 ||
+        question.incorrectAnswers.length === 0 ||
+        [...question.correctAnswers, ...question.incorrectAnswers].some(
+          (answer) => !answer.trim(),
+        ),
+    )
+  ) {
+    return t('Complete every question and answer')
+  }
+  return null
+}
+
+async function createDraftBatch(): Promise<void> {
+  saveActiveDraft()
+  batchFailures.value = []
+  batchResults.value = []
+  const invalid = draftStore.drafts
+    .map((draft, index) => ({ index, error: validateDraft(draft) }))
+    .find((item) => item.error)
+  if (invalid?.error) {
+    draftStore.currentIndex = invalid.index
+    applyDraft(draftStore.drafts[invalid.index]!)
+    formError.value = invalid.error
+    return
+  }
+
+  publishing.value = true
+  const succeeded: number[] = []
+  try {
+    for (const [index, draft] of draftStore.drafts.entries()) {
+      try {
+        const speakerNames = new Set(
+          draft.utterances.map((item) => item.speakerDisplayName.normalize('NFKC').toLocaleLowerCase()),
+        )
+        const common = {
+          title: draft.title.trim(),
+          tagIds: draft.tagIds,
+          visibility: 'public' as const,
+          questions: draft.questions,
+        }
+        const accepted = speakerNames.size === 1
+          ? await createSingleAudio({
+              ...common,
+              text: draft.utterances.map((item) => item.text.trim()).join('\n'),
+              voiceId: draft.utterances[0]!.voiceId,
+              speakerDisplayName: draft.utterances[0]!.speakerDisplayName.trim(),
+            })
+          : await createDialogueAudio({
+              ...common,
+              utterances: draft.utterances.map((item) => ({
+                voiceId: item.voiceId,
+                speakerDisplayName: item.speakerDisplayName.trim(),
+                text: item.text.trim(),
+              })),
+            })
+        batchResults.value.push({ title: draft.title, audioId: accepted.audioId })
+        succeeded.push(index)
+      } catch (error) {
+        const message = error instanceof ApiError ? error.message : t('Audio could not be submitted')
+        batchFailures.value.push(`${draft.title}: ${message}`)
+      }
+    }
+    for (const index of succeeded.sort((a, b) => b - a)) draftStore.removeDraft(index)
+    if (draftStore.drafts.length > 0 && draftStore.activeDraft) {
+      applyDraft(draftStore.activeDraft)
+      formError.value = t('{count} drafts could not be created', { count: batchFailures.value.length })
+    }
+  } finally {
+    publishing.value = false
+  }
 }
 
 async function publishGeneratedAudio(): Promise<void> {
@@ -551,6 +749,8 @@ function startAnother(): void {
   visibility.value = 'public'
   formError.value = ''
   discardChangesDialogOpen.value = false
+  batchResults.value = []
+  batchFailures.value = []
 }
 
 async function cleanupPreviews(): Promise<void> {
@@ -570,6 +770,7 @@ onMounted(() => {
   void loadOptions()
 })
 onBeforeRouteLeave(async () => {
+  if (batchMode.value) saveActiveDraft()
   if (!publishedAudioId.value) await cleanupPreviews()
 })
 onUnmounted(() => clearTimeout(previewPollTimer))
@@ -594,10 +795,17 @@ onUnmounted(() => clearTimeout(previewPollTimer))
       </RouterLink>
     </div>
 
-    <div v-if="publishedAudioId" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
+    <div v-if="publishedAudioId || (batchResults.length > 0 && draftStore.drafts.length === 0)" class="mt-6 rounded-lg border border-line bg-surface px-5 py-9 shadow-panel">
       <p class="text-base font-semibold text-success">{{ t('Audio is ready') }}</p>
+      <ul v-if="batchResults.length" class="mt-5 divide-y divide-line border-y border-line">
+        <li v-for="result in batchResults" :key="result.audioId" class="flex items-center justify-between gap-4 py-3">
+          <span class="min-w-0 truncate text-sm font-medium">{{ result.title }}</span>
+          <RouterLink :to="`/audio/${result.audioId}`" class="shrink-0 text-sm font-medium text-accent hover:underline">{{ t('View audio') }}</RouterLink>
+        </li>
+      </ul>
       <div class="mt-5 flex flex-wrap gap-3">
         <RouterLink
+          v-if="publishedAudioId"
           :to="`/audio/${publishedAudioId}`"
           class="inline-flex h-10 items-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent"
         >
@@ -613,6 +821,17 @@ onUnmounted(() => clearTimeout(previewPollTimer))
     </div>
 
     <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
+      <div v-if="batchMode" class="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-canvas px-5 py-3">
+        <p class="text-sm font-medium">{{ t('Draft {current} of {total}', { current: draftStore.currentIndex + 1, total: draftStore.drafts.length }) }}</p>
+        <div class="flex items-center gap-2">
+          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex === 0" :title="t('Previous')" @click="selectDraft(draftStore.currentIndex - 1)">
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" /></svg>
+          </button>
+          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex >= draftStore.drafts.length - 1" :title="t('Next')" @click="selectDraft(draftStore.currentIndex + 1)">
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" /></svg>
+          </button>
+        </div>
+      </div>
       <div class="border-b border-line px-5 py-6">
         <div class="min-w-0">
           <label for="audio-title" class="mb-1 block text-sm font-medium">{{ t('Title') }}</label>
@@ -677,10 +896,11 @@ onUnmounted(() => clearTimeout(previewPollTimer))
           <div>
             <p v-if="formError" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError }}</p>
             <button type="submit" :disabled="publishing || previewGenerationActive || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
-              <svg v-if="allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
+              <svg v-if="batchMode || allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M8 5v14l11-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
-              {{ publishing ? t('Submitting') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
+              {{ publishing ? t('Submitting') : batchMode ? t('Create all drafts') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
             </button>
+            <ul v-if="batchFailures.length" class="mt-3 space-y-1 text-sm text-danger"><li v-for="failure in batchFailures" :key="failure">{{ failure }}</li></ul>
           </div>
         </div>
       </div>

@@ -10,16 +10,20 @@ from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
     GenerationBatchSpeakerVoice,
+    GenerationBatchStatus,
 )
 from backend.app.db.models.job import Job
 from backend.app.db.models.user import User
+from backend.app.db.models.voice import Voice
 
 
 class GenerationBatchRepository:
     _load_options = (
         selectinload(GenerationBatch.tags),
         selectinload(GenerationBatch.items).selectinload(GenerationBatchItem.audio),
-        selectinload(GenerationBatch.speaker_voices),
+        selectinload(GenerationBatch.speaker_voices)
+        .selectinload(GenerationBatchSpeakerVoice.voice)
+        .selectinload(Voice.tags),
     )
 
     def create(
@@ -42,8 +46,6 @@ class GenerationBatchRepository:
         )
         session.add(batch)
         session.flush()
-        for position in range(requested_count):
-            session.add(GenerationBatchItem(batch=batch, position=position))
         for speaker, normalized_speaker, voice_id in speaker_voices:
             session.add(
                 GenerationBatchSpeakerVoice(
@@ -55,6 +57,27 @@ class GenerationBatchRepository:
             )
         session.flush()
         return batch
+
+    def replace_items(
+        self,
+        session: Session,
+        *,
+        batch: GenerationBatch,
+        drafts: Sequence[dict[str, object]],
+    ) -> None:
+        batch.items.clear()
+        session.flush()
+        for position, draft in enumerate(drafts):
+            session.add(
+                GenerationBatchItem(
+                    batch=batch,
+                    position=position,
+                    status=GenerationBatchStatus.COMPLETED,
+                    generated_content=draft,
+                    attempt_count=1,
+                )
+            )
+        session.flush()
 
     def get_item(
         self,

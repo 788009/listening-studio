@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import json
+import random
 import re
 from enum import Enum
-from typing import Annotated, Protocol
+from functools import lru_cache
+from pathlib import Path
+from typing import Annotated, Literal, Protocol
 
 from loguru import logger
 from pydantic import (
@@ -12,6 +16,7 @@ from pydantic import (
     StringConstraints,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from backend.app.core.exceptions import DomainValidationError, JobFailedError
@@ -21,12 +26,13 @@ MAX_CORPUS_LENGTH = 100_000
 MAX_GENERATION_COUNT = 20
 _CALL_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,128}$")
 _LANGUAGE_PATTERN = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$")
+_EXAMPLE_DIRECTORY = Path(__file__).resolve().parents[3] / "category_examples"
 
 NonEmptyText = Annotated[
     str,
     StringConstraints(strip_whitespace=True, min_length=1, max_length=10_000),
 ]
-SuggestedTag = Annotated[
+SuggestedTagValue = Annotated[
     str,
     StringConstraints(
         strip_whitespace=True,
@@ -38,10 +44,21 @@ SuggestedTag = Annotated[
 
 
 class QuestionType(str, Enum):
-    MULTIPLE_CHOICE = "multiple_choice"
-    TRUE_FALSE = "true_false"
-    FILL_IN_BLANK = "fill_in_blank"
-    SHORT_ANSWER = "short_answer"
+    SHORT_DIALOGUE = "short_dialogue"
+    LONG_DIALOGUE = "long_dialogue"
+    MONOLOGUE = "monologue"
+
+
+_QUESTION_TYPE_ORDER = {
+    QuestionType.SHORT_DIALOGUE: 0,
+    QuestionType.LONG_DIALOGUE: 1,
+    QuestionType.MONOLOGUE: 2,
+}
+_EXAMPLE_FILES = {
+    QuestionType.SHORT_DIALOGUE: "short.json",
+    QuestionType.LONG_DIALOGUE: "long.json",
+    QuestionType.MONOLOGUE: "monologue.json",
+}
 
 
 class LlmModel(BaseModel):
@@ -62,56 +79,118 @@ class ListeningGenerationRequest(LlmModel):
     @field_validator("language")
     @classmethod
     def normalize_language(cls, value: str) -> str:
-        normalized = value.replace("_", "-")
-        if _LANGUAGE_PATTERN.fullmatch(normalized) is None:
-            raise ValueError("Language code is invalid")
-        parts = normalized.split("-")
-        return "-".join([parts[0].lower(), *parts[1:]])
+        return _normalize_language(value)
+
+    @model_validator(mode="after")
+    def require_one_result_per_selected_type(self) -> ListeningGenerationRequest:
+        if self.count < len(self.question_types):
+            raise ValueError("Count must cover every selected question type")
+        return self
 
 
 class GeneratedDialogueTurn(LlmModel):
-    speaker: Annotated[
-        str,
-        StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
-    ]
+    speaker: Literal["Man", "Woman"]
     text: NonEmptyText
 
 
+class GeneratedQuestion(LlmModel):
+    prompt: NonEmptyText
+    correct_answers: list[NonEmptyText] = Field(min_length=1)
+    incorrect_answers: list[NonEmptyText] = Field(min_length=1)
+
+
 class GeneratedListeningContent(LlmModel):
+    question_type: QuestionType
     title: Annotated[
         str,
         StringConstraints(strip_whitespace=True, min_length=1, max_length=200),
     ]
-    turns: list[GeneratedDialogueTurn] = Field(min_length=1)
-    question_types: list[QuestionType] = Field(min_length=1)
-    suggested_topics: list[SuggestedTag] = Field(min_length=1)
-    suggested_categories: list[SuggestedTag] = Field(min_length=1)
+    utterances: list[GeneratedDialogueTurn] = Field(min_length=1)
+    questions: list[GeneratedQuestion] = Field(min_length=1)
 
-    @field_validator(
-        "question_types",
-        "suggested_topics",
-        "suggested_categories",
-    )
-    @classmethod
-    def require_unique_values(cls, value: list[object]) -> list[object]:
-        if len(value) != len(set(value)):
-            raise ValueError("Generated values must be unique")
-        for item in value:
-            if isinstance(item, str) and not any(
-                character.isalnum() for character in item
-            ):
-                raise ValueError("Generated values require a letter or number")
-        return value
+    @model_validator(mode="after")
+    def validate_speaker_shape(self) -> GeneratedListeningContent:
+        speakers = {utterance.speaker for utterance in self.utterances}
+        if self.question_type is QuestionType.MONOLOGUE:
+            if len(speakers) != 1:
+                raise ValueError("A monologue must use one speaker")
+        elif speakers != {"Man", "Woman"}:
+            raise ValueError("A dialogue must use Man and Woman")
+        return self
 
 
 class ListeningGenerationResult(LlmModel):
     items: list[GeneratedListeningContent] = Field(min_length=1)
 
 
+class GeneratedTagTranslation(LlmModel):
+    language: str = Field(min_length=2, max_length=35)
+    value: Annotated[
+        str,
+        StringConstraints(strip_whitespace=True, min_length=1, max_length=255),
+    ]
+
+    @field_validator("language")
+    @classmethod
+    def normalize_language(cls, value: str) -> str:
+        return _normalize_language(value)
+
+
+class SuggestedTopicTag(LlmModel):
+    english_value: SuggestedTagValue
+    translations: list[GeneratedTagTranslation] = Field(default_factory=list)
+
+    @field_validator("translations")
+    @classmethod
+    def require_unique_languages(
+        cls,
+        values: list[GeneratedTagTranslation],
+    ) -> list[GeneratedTagTranslation]:
+        if len({item.language for item in values}) != len(values):
+            raise ValueError("Suggested tag translation languages must be unique")
+        return values
+
+
+class TopicSuggestionRequest(LlmModel):
+    corpus: str = Field(min_length=1, max_length=MAX_CORPUS_LENGTH)
+    existing_topics: tuple[SuggestedTagValue, ...]
+    language: str = Field(default="en", min_length=2, max_length=35)
+
+    @field_validator("language")
+    @classmethod
+    def normalize_language(cls, value: str) -> str:
+        return _normalize_language(value)
+
+
+class TopicSuggestionResult(LlmModel):
+    topics: list[SuggestedTopicTag] = Field(default_factory=list, max_length=10)
+
+    @field_validator("topics")
+    @classmethod
+    def require_unique_topics(
+        cls,
+        values: list[SuggestedTopicTag],
+    ) -> list[SuggestedTopicTag]:
+        normalized = [item.english_value.casefold() for item in values]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("Suggested topics must be unique")
+        return values
+
+
 class ListeningContentGenerator(Protocol):
     def generate(
         self,
         request: ListeningGenerationRequest,
+        *,
+        call_id: str,
+    ) -> object:
+        pass
+
+
+class TopicTagSuggester(Protocol):
+    def suggest(
+        self,
+        request: TopicSuggestionRequest,
         *,
         call_id: str,
     ) -> object:
@@ -126,30 +205,48 @@ class PlaceholderListeningContentGenerator:
         call_id: str,
     ) -> ListeningGenerationResult:
         del call_id
-        question_types = sorted(request.question_types, key=lambda item: item.value)
-        items = [
-            GeneratedListeningContent(
-                title=f"Listening Practice {index}",
-                turns=[
-                    GeneratedDialogueTurn(
-                        speaker="Host",
-                        text="Welcome to today's listening practice.",
-                    ),
-                    GeneratedDialogueTurn(
-                        speaker="Guest",
-                        text=(
-                            "Clear communication helps learners understand "
-                            "new ideas."
-                        ),
-                    ),
-                ],
-                question_types=question_types,
-                suggested_topics=["education"],
-                suggested_categories=["listening_practice"],
-            )
-            for index in range(1, request.count + 1)
-        ]
+        selected = sorted(
+            request.question_types,
+            key=_QUESTION_TYPE_ORDER.__getitem__,
+        )
+        examples = {item: list(_load_examples(item)) for item in selected}
+        items: list[GeneratedListeningContent] = []
+        position = 0
+        while len(items) < request.count:
+            added = False
+            for question_type in selected:
+                values = examples[question_type]
+                if position < len(values):
+                    items.append(values[position])
+                    added = True
+                    if len(items) == request.count:
+                        break
+            if not added:
+                break
+            position += 1
         return ListeningGenerationResult(items=items)
+
+
+class PlaceholderTopicTagSuggester:
+    def __init__(self, rng: random.Random | random.SystemRandom | None = None) -> None:
+        self.rng = rng or random.SystemRandom()
+
+    def suggest(
+        self,
+        request: TopicSuggestionRequest,
+        *,
+        call_id: str,
+    ) -> TopicSuggestionResult:
+        del call_id
+        if not request.existing_topics:
+            return TopicSuggestionResult()
+        return TopicSuggestionResult(
+            topics=[
+                SuggestedTopicTag(
+                    english_value=self.rng.choice(request.existing_topics),
+                )
+            ]
+        )
 
 
 class ValidatingListeningContentGenerator:
@@ -162,23 +259,20 @@ class ValidatingListeningContentGenerator:
         *,
         call_id: str,
     ) -> ListeningGenerationResult:
-        normalized_call_id = self._validate_call_id(call_id)
-        question_types = sorted(item.value for item in request.question_types)
+        normalized_call_id = _validate_call_id(call_id)
         call_logger = logger.bind(request_id=normalized_call_id)
         call_logger.info(
             "Listening content generation requested call_id={} corpus_length={} "
             "question_types={} count={}",
             normalized_call_id,
             len(request.corpus),
-            ",".join(question_types),
+            ",".join(sorted(item.value for item in request.question_types)),
             request.count,
         )
         try:
-            raw_result = self.implementation.generate(
-                request,
-                call_id=normalized_call_id,
+            result = ListeningGenerationResult.model_validate(
+                self.implementation.generate(request, call_id=normalized_call_id)
             )
-            result = ListeningGenerationResult.model_validate(raw_result)
             self._validate_result(request, result)
         except (ValidationError, ValueError) as exc:
             call_logger.warning(
@@ -202,26 +296,102 @@ class ValidatingListeningContentGenerator:
         request: ListeningGenerationRequest,
         result: ListeningGenerationResult,
     ) -> None:
-        if len(result.items) != request.count:
-            raise ValueError("Generated item count does not match the request")
-        expected_types = set(request.question_types)
-        for item in result.items:
-            if set(item.question_types) != expected_types:
-                raise ValueError(
-                    "Generated question types do not match the request"
-                )
+        if len(result.items) > request.count:
+            raise ValueError("Generated item count exceeds the request")
+        generated_types = {item.question_type for item in result.items}
+        if generated_types != set(request.question_types):
+            raise ValueError("Generated question types do not match the request")
 
-    @staticmethod
-    def _validate_call_id(call_id: str) -> str:
-        if not isinstance(call_id, str):
-            raise DomainValidationError(
-                "Generation call ID is invalid",
-                details={"field": "callId"},
+
+class ValidatingTopicTagSuggester:
+    def __init__(self, implementation: TopicTagSuggester) -> None:
+        self.implementation = implementation
+
+    def suggest(
+        self,
+        request: TopicSuggestionRequest,
+        *,
+        call_id: str,
+    ) -> TopicSuggestionResult:
+        normalized_call_id = _validate_call_id(call_id)
+        call_logger = logger.bind(request_id=normalized_call_id)
+        call_logger.info(
+            "Topic suggestion requested call_id={} corpus_length={} "
+            "existing_topic_count={}",
+            normalized_call_id,
+            len(request.corpus),
+            len(request.existing_topics),
+        )
+        try:
+            result = TopicSuggestionResult.model_validate(
+                self.implementation.suggest(request, call_id=normalized_call_id)
             )
-        value = call_id.strip()
-        if _CALL_ID_PATTERN.fullmatch(value) is None:
-            raise DomainValidationError(
-                "Generation call ID is invalid",
-                details={"field": "callId"},
+        except (ValidationError, ValueError) as exc:
+            call_logger.warning(
+                "Topic suggestion returned invalid output exception_type={}",
+                type(exc).__name__,
             )
-        return value
+            raise JobFailedError(
+                "Topic suggester returned invalid output",
+                details={"exceptionType": type(exc).__name__},
+            ) from exc
+        call_logger.info(
+            "Topic suggestion completed call_id={} suggestion_count={}",
+            normalized_call_id,
+            len(result.topics),
+        )
+        return result
+
+
+@lru_cache(maxsize=3)
+def _load_examples(question_type: QuestionType) -> tuple[GeneratedListeningContent, ...]:
+    path = _EXAMPLE_DIRECTORY / _EXAMPLE_FILES[question_type]
+    try:
+        raw_items = json.loads(path.read_text(encoding="utf-8"))
+        return tuple(
+            GeneratedListeningContent(
+                question_type=question_type,
+                title=item["title"],
+                utterances=[
+                    GeneratedDialogueTurn(
+                        speaker=utterance["speaker"],
+                        text=utterance["text"],
+                    )
+                    for utterance in item["utterances"]
+                ],
+                questions=[
+                    GeneratedQuestion(
+                        prompt=question["prompt"],
+                        correct_answers=question["correctAnswers"],
+                        incorrect_answers=question["wrongAnswers"],
+                    )
+                    for question in item["questions"]
+                ],
+            )
+            for item in raw_items
+        )
+    except (OSError, TypeError, ValueError, KeyError, ValidationError) as exc:
+        raise RuntimeError(f"Question examples are invalid: {path.name}") from exc
+
+
+def _normalize_language(value: str) -> str:
+    normalized = value.replace("_", "-")
+    if _LANGUAGE_PATTERN.fullmatch(normalized) is None:
+        raise ValueError("Language code is invalid")
+    parts = normalized.split("-")
+    return "-".join([parts[0].lower(), *parts[1:]])
+
+
+def _validate_call_id(call_id: str) -> str:
+    if not isinstance(call_id, str):
+        raise DomainValidationError(
+            "Generation call ID is invalid",
+            details={"field": "callId"},
+        )
+    value = call_id.strip()
+    if _CALL_ID_PATTERN.fullmatch(value) is None:
+        raise DomainValidationError(
+            "Generation call ID is invalid",
+            details={"field": "callId"},
+        )
+    return value

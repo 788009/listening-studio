@@ -42,8 +42,11 @@ from backend.app.integrations.identity import (
 from backend.app.integrations.llm import (
     GeneratedDialogueTurn,
     GeneratedListeningContent,
+    GeneratedQuestion,
     ListeningGenerationRequest,
     ListeningGenerationResult,
+    PlaceholderTopicTagSuggester,
+    ValidatingTopicTagSuggester,
     ValidatingListeningContentGenerator,
 )
 from backend.app.services.audio_storage import AudioStorage
@@ -108,24 +111,29 @@ class FakeListeningContentGenerator:
         call_id: str,
     ) -> ListeningGenerationResult:
         self.calls.append((request, call_id))
-        question_types = sorted(request.question_types, key=lambda item: item.value)
+        question_type = next(iter(request.question_types))
         return ListeningGenerationResult(
             items=[
                 GeneratedListeningContent(
+                    question_type=question_type,
                     title="Generated climate interview",
-                    turns=[
+                    utterances=[
                         GeneratedDialogueTurn(
-                            speaker="Host",
+                            speaker="Man",
                             text="What can schools do about climate change?",
                         ),
                         GeneratedDialogueTurn(
-                            speaker="Guest",
+                            speaker="Woman",
                             text="They can teach practical ways to reduce waste.",
                         ),
                     ],
-                    question_types=question_types,
-                    suggested_topics=["climate_change"],
-                    suggested_categories=["interview"],
+                    questions=[
+                        GeneratedQuestion(
+                            prompt="What can schools do?",
+                            correct_answers=["Teach ways to reduce waste."],
+                            incorrect_answers=["Use more energy."],
+                        )
+                    ],
                 )
             ]
         )
@@ -227,10 +235,10 @@ class FullWorkflowTest(unittest.TestCase):
         )
         corpus_service = CorpusGenerationService(
             generator=ValidatingListeningContentGenerator(self.llm),
+            tag_suggester=ValidatingTopicTagSuggester(
+                PlaceholderTopicTagSuggester()
+            ),
             corpus_storage=CorpusStorage(self.settings.data_dir),
-            synthesis_service=synthesis_service,
-            voice_storage=self.voice_storage,
-            silence_milliseconds=self.settings.dialogue_silence_milliseconds,
         )
         voice_service = VoiceUploadService(
             storage=self.voice_storage,
@@ -480,10 +488,9 @@ class FullWorkflowTest(unittest.TestCase):
             "/api/generation-batches",
             headers=self.teacher_headers("submit-batch"),
             files=[
-                ("questionTypes", (None, "multiple_choice")),
+                ("questionTypes", (None, "short_dialogue")),
                 ("count", (None, "1")),
                 ("corpus", (None, "Schools can reduce waste and save energy.")),
-                ("tagIds", (None, str(topic_tag_id))),
                 (
                     "speakerVoiceMap",
                     (
@@ -506,7 +513,10 @@ class FullWorkflowTest(unittest.TestCase):
         )
         self.assert_status(batch_detail, 200, "read completed corpus batch")
         self.assertEqual(batch_detail.json()["status"], "completed")
-        batch_audio_id = batch_detail.json()["items"][0]["audioId"]
+        self.assertEqual(
+            batch_detail.json()["items"][0]["draft"]["title"],
+            "Generated climate interview",
+        )
 
         preset = self.send(
             "POST",
@@ -528,7 +538,7 @@ class FullWorkflowTest(unittest.TestCase):
             json={
                 "title": "Climate listening paper",
                 "presetId": preset.json()["id"],
-                "audioIds": [single_audio_id, dialogue_audio_id, batch_audio_id],
+                "audioIds": [single_audio_id, dialogue_audio_id],
             },
         )
         self.assert_status(paper, 201, "assemble listening paper")
@@ -608,11 +618,10 @@ class FullWorkflowTest(unittest.TestCase):
             single_record = session.get(Audio, single_audio_id)
             dialogue_record = session.get(Audio, dialogue_audio_id)
             batch_record = session.get(GenerationBatch, batch_id)
-            batch_audio = session.get(Audio, batch_audio_id)
             paper_record = session.get(Paper, paper_id)
             paper_audio = session.get(Audio, paper_audio_id)
             assert single_record and dialogue_record and batch_record
-            assert batch_audio and paper_record and paper_audio
+            assert paper_record and paper_audio
             self.assertEqual(single_record.author_id, teacher.id)
             self.assertEqual(single_record.source_type, AudioSourceType.SINGLE_SPEAKER)
             self.assertEqual(single_record.status, AudioStatus.READY)
@@ -644,19 +653,15 @@ class FullWorkflowTest(unittest.TestCase):
                 },
             )
             self.assertEqual(batch_record.status, GenerationBatchStatus.COMPLETED)
-            self.assertEqual(batch_record.items[0].audio_id, batch_audio_id)
-            self.assertEqual(batch_audio.source_type, AudioSourceType.CORPUS)
-            self.assertEqual(batch_audio.status, AudioStatus.READY)
-            self.assertTrue(
-                {
-                    (AudioTagType.TOPIC, "climate_change"),
-                    (AudioTagType.CATEGORY, "interview"),
-                }.issubset({(tag.type, tag.value) for tag in batch_audio.tags})
+            self.assertIsNone(batch_record.items[0].audio_id)
+            self.assertEqual(
+                batch_record.items[0].generated_content["title"],
+                "Generated climate interview",
             )
             self.assertEqual(paper_record.status, PaperStatus.READY)
             self.assertEqual(
                 [item.audio_id for item in paper_record.items],
-                [single_audio_id, dialogue_audio_id, batch_audio_id],
+                [single_audio_id, dialogue_audio_id],
             )
             self.assertEqual(paper_record.result_audio_id, paper_audio_id)
             self.assertEqual(paper_audio.status, AudioStatus.READY)
@@ -665,7 +670,6 @@ class FullWorkflowTest(unittest.TestCase):
         for audio_id in (
             single_audio_id,
             dialogue_audio_id,
-            batch_audio_id,
             paper_audio_id,
         ):
             self.assertTrue(
@@ -687,7 +691,7 @@ class FullWorkflowTest(unittest.TestCase):
         )
         self.assertEqual(
             [call.operation for call in self.tts.calls].count("synthesize"),
-            5,
+            3,
         )
         self.cosyvoice_import.assert_not_called()
 

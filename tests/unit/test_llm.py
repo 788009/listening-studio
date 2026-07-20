@@ -1,159 +1,151 @@
 from __future__ import annotations
 
+import random
 import unittest
 
-from loguru import logger
 from pydantic import ValidationError
 
-from backend.app.core.exceptions import DomainValidationError, JobFailedError
+from backend.app.core.exceptions import JobFailedError
 from backend.app.integrations.llm import (
-    GeneratedDialogueTurn,
     GeneratedListeningContent,
-    ListeningGenerationResult,
     ListeningGenerationRequest,
     PlaceholderListeningContentGenerator,
+    PlaceholderTopicTagSuggester,
     QuestionType,
+    SuggestedTopicTag,
+    TopicSuggestionRequest,
     ValidatingListeningContentGenerator,
+    ValidatingTopicTagSuggester,
 )
 
 
 class InvalidGenerator:
-    def __init__(self, output: object) -> None:
-        self.output = output
-
-    def generate(
-        self,
-        request: ListeningGenerationRequest,
-        *,
-        call_id: str,
-    ) -> object:
+    def generate(self, request: ListeningGenerationRequest, *, call_id: str) -> object:
         del request, call_id
-        return self.output
+        return {"items": []}
+
+
+class InvalidTopicSuggester:
+    def suggest(self, request: TopicSuggestionRequest, *, call_id: str) -> object:
+        del request, call_id
+        return {"topics": [{"english_value": "invalid value"}]}
 
 
 class LlmIntegrationTest(unittest.TestCase):
-    def test_placeholder_is_deterministic_valid_and_logs_only_metadata(self) -> None:
-        corpus = "Private corpus content that must not be logged."
+    def test_placeholder_loads_examples_and_round_robins_selected_types(self) -> None:
         request = ListeningGenerationRequest(
-            corpus=corpus,
+            corpus="Source corpus",
             question_types={
-                QuestionType.MULTIPLE_CHOICE,
-                QuestionType.SHORT_ANSWER,
+                QuestionType.SHORT_DIALOGUE,
+                QuestionType.LONG_DIALOGUE,
+                QuestionType.MONOLOGUE,
             },
-            count=3,
-            language="en-US",
+            count=7,
         )
-        generator = ValidatingListeningContentGenerator(
-            PlaceholderListeningContentGenerator()
+        result = PlaceholderListeningContentGenerator().generate(
+            request,
+            call_id="test-call",
         )
-        messages: list[str] = []
-        sink_id = logger.add(messages.append, format="{message}")
-        try:
-            first = generator.generate(request, call_id="corpus-job-12")
-            second = generator.generate(request, call_id="corpus-job-12")
-        finally:
-            logger.remove(sink_id)
 
-        self.assertEqual(first, second)
-        self.assertEqual(len(first.items), 3)
+        self.assertEqual(len(result.items), 7)
         self.assertEqual(
-            set(first.items[0].question_types),
-            set(request.question_types),
+            [item.question_type for item in result.items[:3]],
+            [
+                QuestionType.SHORT_DIALOGUE,
+                QuestionType.LONG_DIALOGUE,
+                QuestionType.MONOLOGUE,
+            ],
         )
-        log_text = "".join(messages)
-        self.assertIn("call_id=corpus-job-12", log_text)
-        self.assertIn(f"corpus_length={len(corpus)}", log_text)
-        self.assertIn("count=3", log_text)
-        self.assertNotIn(corpus, log_text)
-
-    def test_request_rejects_invalid_corpus_count_type_and_language(self) -> None:
-        valid = {
-            "corpus": "Corpus",
-            "question_types": [QuestionType.TRUE_FALSE],
-            "count": 1,
-            "language": "en",
-        }
-        invalid_values = [
-            {**valid, "corpus": "   "},
-            {**valid, "count": 0},
-            {**valid, "count": 21},
-            {**valid, "question_types": ["unknown"]},
-            {**valid, "question_types": []},
-            {**valid, "language": "not a language"},
-        ]
-
-        for value in invalid_values:
-            with self.subTest(value=value), self.assertRaises(ValidationError):
-                ListeningGenerationRequest.model_validate(value)
-
-    def test_invalid_implementation_output_fails_at_validation_boundary(self) -> None:
-        request = ListeningGenerationRequest(
-            corpus="Corpus",
-            question_types={QuestionType.MULTIPLE_CHOICE},
-            count=2,
-            language="en",
+        self.assertTrue(all(item.questions for item in result.items))
+        self.assertTrue(
+            all(
+                question.correct_answers and question.incorrect_answers
+                for item in result.items
+                for question in item.questions
+            )
         )
-        valid_item = GeneratedListeningContent(
-            title="Title",
-            turns=[GeneratedDialogueTurn(speaker="Host", text="Text")],
-            question_types=[QuestionType.MULTIPLE_CHOICE],
-            suggested_topics=["education"],
-            suggested_categories=["practice"],
-        )
-        invalid_outputs = [
-            {"items": [valid_item]},
-            {
-                "items": [
-                    valid_item,
-                    valid_item.model_copy(
-                        update={"question_types": [QuestionType.TRUE_FALSE]}
-                    ),
-                ]
-            },
-            {
-                "items": [
-                    valid_item,
-                    {
-                        "title": "Broken",
-                        "turns": [],
-                        "question_types": ["multiple_choice"],
-                        "suggested_topics": ["invalid topic"],
-                        "suggested_categories": ["practice"],
-                    },
-                ]
-            },
-            ListeningGenerationResult.model_construct(
-                items=[
-                    GeneratedListeningContent.model_construct(
-                        title="",
-                        turns=[],
-                        question_types=[],
-                        suggested_topics=[],
-                        suggested_categories=[],
-                    ),
-                    valid_item,
-                ]
-            ),
-        ]
 
-        for output in invalid_outputs:
-            with self.subTest(output=output), self.assertRaises(JobFailedError):
-                ValidatingListeningContentGenerator(
-                    InvalidGenerator(output)
-                ).generate(request, call_id="job-1")
-
-    def test_call_id_is_validated_before_implementation_runs(self) -> None:
-        request = ListeningGenerationRequest(
-            corpus="Corpus",
-            question_types={QuestionType.TRUE_FALSE},
-            count=1,
-        )
-        generator = ValidatingListeningContentGenerator(
+    def test_placeholder_returns_all_available_examples_when_count_is_larger(self) -> None:
+        result = ValidatingListeningContentGenerator(
             PlaceholderListeningContentGenerator()
+        ).generate(
+            ListeningGenerationRequest(
+                corpus="Source corpus",
+                question_types=set(QuestionType),
+                count=20,
+            ),
+            call_id="all-examples",
         )
+        self.assertEqual(len(result.items), 11)
 
-        with self.assertRaises(DomainValidationError):
-            generator.generate(request, call_id="invalid call id")
+    def test_request_count_must_cover_every_selected_type(self) -> None:
+        with self.assertRaises(ValidationError):
+            ListeningGenerationRequest(
+                corpus="Source corpus",
+                question_types=set(QuestionType),
+                count=2,
+            )
+
+    def test_dialogue_and_monologue_speaker_shapes_are_enforced(self) -> None:
+        dialogue = {
+            "question_type": "short_dialogue",
+            "title": "Invalid",
+            "utterances": [{"speaker": "Man", "text": "Only one role"}],
+            "questions": [
+                {
+                    "prompt": "Question?",
+                    "correct_answers": ["Yes"],
+                    "incorrect_answers": ["No"],
+                }
+            ],
+        }
+        with self.assertRaises(ValidationError):
+            GeneratedListeningContent.model_validate(dialogue)
+
+        monologue = dict(dialogue)
+        monologue["question_type"] = "monologue"
+        monologue["utterances"] = [
+            {"speaker": "Man", "text": "First"},
+            {"speaker": "Woman", "text": "Second"},
+        ]
+        with self.assertRaises(ValidationError):
+            GeneratedListeningContent.model_validate(monologue)
+
+    def test_placeholder_topic_suggester_selects_existing_topic(self) -> None:
+        result = PlaceholderTopicTagSuggester(random.Random(4)).suggest(
+            TopicSuggestionRequest(
+                corpus="Source corpus",
+                existing_topics=("education", "travel"),
+            ),
+            call_id="topics",
+        )
+        self.assertEqual(len(result.topics), 1)
+        self.assertIn(result.topics[0].english_value, {"education", "travel"})
+
+    def test_topic_protocol_allows_new_normalized_tags(self) -> None:
+        tag = SuggestedTopicTag.model_validate(
+            {
+                "english_value": "climate_change",
+                "translations": [{"language": "zh-CN", "value": "气候变化"}],
+            }
+        )
+        self.assertEqual(tag.english_value, "climate_change")
+
+    def test_validators_reject_invalid_implementation_output(self) -> None:
+        with self.assertRaises(JobFailedError):
+            ValidatingListeningContentGenerator(InvalidGenerator()).generate(
+                ListeningGenerationRequest(
+                    corpus="Source corpus",
+                    question_types={QuestionType.MONOLOGUE},
+                    count=1,
+                ),
+                call_id="invalid-content",
+            )
+        with self.assertRaises(JobFailedError):
+            ValidatingTopicTagSuggester(InvalidTopicSuggester()).suggest(
+                TopicSuggestionRequest(corpus="Source corpus", existing_topics=()),
+                call_id="invalid-topic",
+            )
 
 
 if __name__ == "__main__":

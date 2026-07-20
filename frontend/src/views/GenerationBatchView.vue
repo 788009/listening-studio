@@ -1,159 +1,125 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
-import { listAudioCreationTags, type AudioTag, type ResourceVisibility } from '@/api/audios'
 import { ApiError } from '@/api/errors'
 import {
   createGenerationBatch,
   getGenerationBatch,
-  retryGenerationBatchItem,
-  updateCompletedBatchAudios,
   type GenerationBatch,
-  type GenerationBatchItem,
   type GenerationBatchStatus,
   type QuestionType,
 } from '@/api/generationBatches'
 import { listVoices, type Voice } from '@/api/voices'
+import SpeakerDefinitionsEditor from '@/components/SpeakerDefinitionsEditor.vue'
+import type { SpeakerDraft } from '@/components/dialogueTurnTypes'
 import { useI18n } from '@/i18n'
+import { useListeningDraftsStore } from '@/stores/listeningDrafts'
 
 type InputMode = 'text' | 'file'
-interface SpeakerMappingDraft {
-  key: number
-  speaker: string
-  voiceId: string
-}
 
 const MAX_COUNT = 20
-const questionOptions: { value: QuestionType; label: string }[] = [
-  { value: 'multiple_choice', label: 'Multiple choice' },
-  { value: 'true_false', label: 'True or false' },
-  { value: 'fill_in_blank', label: 'Fill in the blank' },
-  { value: 'short_answer', label: 'Short answer' },
+const questionOptions: { value: QuestionType; label: string; detail: string }[] = [
+  { value: 'short_dialogue', label: 'Short dialogue', detail: 'Two-speaker brief exchanges' },
+  { value: 'long_dialogue', label: 'Long dialogue', detail: 'Two-speaker extended conversations' },
+  { value: 'monologue', label: 'Monologue', detail: 'Single-speaker passages' },
 ]
 
 const route = useRoute()
 const router = useRouter()
 const { locale, t } = useI18n()
+const draftStore = useListeningDraftsStore()
 const inputMode = ref<InputMode>('text')
 const corpus = ref('')
 const corpusFile = ref<File | null>(null)
 const encoding = ref('utf-8')
-const questionTypes = ref<QuestionType[]>(['multiple_choice'])
-const count = ref(2)
-const selectedTagIds = ref<number[]>([])
-const bulkTagIds = ref<number[]>([])
-const bulkVisibility = ref<ResourceVisibility>('private')
-const mappings = ref<SpeakerMappingDraft[]>([
-  { key: 1, speaker: 'Host', voiceId: '' },
-  { key: 2, speaker: 'Guest', voiceId: '' },
+const questionTypes = ref<QuestionType[]>(['short_dialogue'])
+const count = ref(3)
+const speakers = ref<SpeakerDraft[]>([
+  { key: 1, name: t('Speaker {position}', { position: 1 }), voiceId: '' },
+  { key: 2, name: t('Speaker {position}', { position: 2 }), voiceId: '' },
 ])
-const nextMappingKey = ref(3)
 const voices = ref<Voice[]>([])
-const tags = ref<AudioTag[]>([])
 const batch = ref<GenerationBatch | null>(null)
 const loadingOptions = ref(true)
 const loadingBatch = ref(false)
 const submitting = ref(false)
-const applying = ref(false)
-const retryingIds = ref<number[]>([])
 const errorMessage = ref('')
-const actionMessage = ref('')
 let pollTimer: number | undefined
 
-const topicTags = computed(() => tags.value.filter((tag) => tag.type === 'topic'))
-const categoryTags = computed(() => tags.value.filter((tag) => tag.type === 'category'))
-const completedCount = computed(
-  () => batch.value?.items.filter((item) => item.status === 'completed').length ?? 0,
-)
 const batchId = computed(() => {
   const value = Number(route.params.id)
   return Number.isInteger(value) && value > 0 ? value : null
 })
+const minimumCount = computed(() => questionTypes.value.length || 1)
+const requiresDialogue = computed(() =>
+  questionTypes.value.some((type) => type !== 'monologue'),
+)
 
 function toggleQuestionType(value: QuestionType): void {
   questionTypes.value = questionTypes.value.includes(value)
     ? questionTypes.value.filter((item) => item !== value)
     : [...questionTypes.value, value]
+  if (count.value < minimumCount.value) count.value = minimumCount.value
 }
 
-function toggleTag(target: 'submission' | 'bulk', tagId: number): void {
-  const current = target === 'submission' ? selectedTagIds.value : bulkTagIds.value
-  const updated = current.includes(tagId)
-    ? current.filter((id) => id !== tagId)
-    : [...current, tagId]
-  if (target === 'submission') selectedTagIds.value = updated
-  else bulkTagIds.value = updated
-}
-
-function addMapping(): void {
-  mappings.value.push({ key: nextMappingKey.value++, speaker: '', voiceId: '' })
-}
-
-function removeMapping(key: number): void {
-  mappings.value = mappings.value.filter((item) => item.key !== key)
+function removeSpeaker(speakerKey: number): void {
+  if (speakers.value.length <= 1) return
+  speakers.value = speakers.value.filter((speaker) => speaker.key !== speakerKey)
 }
 
 function selectFile(event: Event): void {
   corpusFile.value = (event.target as HTMLInputElement).files?.[0] ?? null
 }
 
-function speakerVoiceMap(): Record<string, number> | null {
-  const result: Record<string, number> = {}
-  const normalized = new Set<string>()
-  for (const mapping of mappings.value) {
-    const speaker = mapping.speaker.trim()
-    const voiceId = Number(mapping.voiceId)
-    const key = speaker.normalize('NFKC').toLocaleLowerCase()
-    if (!speaker || !Number.isInteger(voiceId) || voiceId < 1) {
-      errorMessage.value = t('Complete every speaker and voice mapping')
-      return null
-    }
-    if (normalized.has(key)) {
-      errorMessage.value = t('Speaker roles must be unique')
-      return null
-    }
-    normalized.add(key)
-    result[speaker] = voiceId
-  }
-  if (Object.keys(result).length === 0) {
-    errorMessage.value = t('Add at least one speaker and voice mapping')
-    return null
-  }
-  return result
-}
-
-function validateSubmission(): Record<string, number> | null {
+function validate(): Record<string, number> | null {
+  errorMessage.value = ''
   if (questionTypes.value.length === 0) {
     errorMessage.value = t('Select at least one question type')
     return null
   }
-  if (!Number.isInteger(count.value) || count.value < 1 || count.value > MAX_COUNT) {
-    errorMessage.value = t('Count must be between 1 and {count}', { count: MAX_COUNT })
+  if (count.value < minimumCount.value || count.value > MAX_COUNT) {
+    errorMessage.value = t('Count must be between {minimum} and {maximum}', {
+      minimum: minimumCount.value,
+      maximum: MAX_COUNT,
+    })
     return null
   }
   if (inputMode.value === 'text' && !corpus.value.trim()) {
     errorMessage.value = t('Enter corpus text')
     return null
   }
-  if (inputMode.value === 'file') {
-    if (!corpusFile.value) {
-      errorMessage.value = t('Choose a TXT file')
-      return null
-    }
-    if (!corpusFile.value.name.toLocaleLowerCase().endsWith('.txt')) {
-      errorMessage.value = t('Corpus file must use the .txt extension')
-      return null
-    }
+  if (inputMode.value === 'file' && !corpusFile.value) {
+    errorMessage.value = t('Choose a TXT file')
+    return null
   }
-  return speakerVoiceMap()
+  if (inputMode.value === 'file' && !corpusFile.value?.name.toLowerCase().endsWith('.txt')) {
+    errorMessage.value = t('Corpus file must use the .txt extension')
+    return null
+  }
+  const result: Record<string, number> = {}
+  const names = new Set<string>()
+  for (const speaker of speakers.value) {
+    const name = speaker.name.trim()
+    const normalizedName = name.normalize('NFKC').toLocaleLowerCase()
+    const voiceId = Number(speaker.voiceId)
+    if (!name || names.has(normalizedName) || !Number.isInteger(voiceId) || voiceId < 1) {
+      errorMessage.value = t('Complete each speaker with a unique name and voice')
+      return null
+    }
+    names.add(normalizedName)
+    result[name] = voiceId
+  }
+  if (speakers.value.length < (requiresDialogue.value ? 2 : 1)) {
+    errorMessage.value = t('Dialogue types require at least two speakers')
+    return null
+  }
+  return result
 }
 
 async function submit(): Promise<void> {
-  errorMessage.value = ''
-  actionMessage.value = ''
-  const voiceMap = validateSubmission()
-  if (!voiceMap) return
+  const speakerVoiceMap = validate()
+  if (!speakerVoiceMap) return
   submitting.value = true
   try {
     const accepted = await createGenerationBatch({
@@ -162,13 +128,11 @@ async function submit(): Promise<void> {
       encoding: inputMode.value === 'file' ? encoding.value : undefined,
       questionTypes: questionTypes.value,
       count: count.value,
-      tagIds: selectedTagIds.value,
-      speakerVoiceMap: voiceMap,
+      speakerVoiceMap,
     })
     await router.replace({ name: 'generation-batch', params: { id: accepted.batchId } })
   } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Batch could not be submitted')
+    errorMessage.value = error instanceof ApiError ? error.message : t('Batch could not be submitted')
   } finally {
     submitting.value = false
   }
@@ -177,21 +141,17 @@ async function submit(): Promise<void> {
 async function loadOptions(): Promise<void> {
   loadingOptions.value = true
   try {
-    const [voiceResponse, tagResponse] = await Promise.all([
-      listVoices({ language: locale.value }),
-      listAudioCreationTags(locale.value),
-    ])
-    voices.value = voiceResponse.items.filter((voice) => voice.status === 'ready')
-    tags.value = tagResponse
+    const response = await listVoices({ language: locale.value })
+    voices.value = response.items.filter((voice) => voice.status === 'ready')
     const firstVoice = voices.value[0]
     if (firstVoice) {
-      for (const mapping of mappings.value) {
-        if (!mapping.voiceId) mapping.voiceId = String(firstVoice.id)
-      }
+      speakers.value = speakers.value.map((speaker) => ({
+        ...speaker,
+        voiceId: speaker.voiceId || String(firstVoice.id),
+      }))
     }
   } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Generation options could not be loaded')
+    errorMessage.value = error instanceof ApiError ? error.message : t('Generation options could not be loaded')
   } finally {
     loadingOptions.value = false
   }
@@ -206,8 +166,12 @@ async function loadBatch(): Promise<void> {
   try {
     const result = await getGenerationBatch(batchId.value)
     batch.value = result
-    if (bulkTagIds.value.length === 0) {
-      bulkTagIds.value = result.tags.map((tag) => tag.id)
+    if (result.status === 'completed') {
+      const completedDrafts = result.items.filter((item) => item.draft)
+      if (completedDrafts.length === 0) throw new Error('Completed batch has no drafts')
+      draftStore.setBatch(result)
+      await router.replace({ name: 'create', query: { batch: String(result.id) } })
+      return
     }
     schedulePoll(result.status)
   } catch (error) {
@@ -219,8 +183,9 @@ async function loadBatch(): Promise<void> {
 
 function schedulePoll(status: GenerationBatchStatus): void {
   stopPolling()
-  if (status !== 'pending' && status !== 'processing') return
-  pollTimer = window.setTimeout(() => void loadBatch(), 1000)
+  if (status === 'pending' || status === 'processing') {
+    pollTimer = window.setTimeout(() => void loadBatch(), 1000)
+  }
 }
 
 function stopPolling(): void {
@@ -228,58 +193,11 @@ function stopPolling(): void {
   pollTimer = undefined
 }
 
-async function retry(item: GenerationBatchItem): Promise<void> {
-  if (!batch.value) return
-  errorMessage.value = ''
-  retryingIds.value = [...retryingIds.value, item.id]
-  try {
-    await retryGenerationBatchItem(batch.value.id, item.id)
-    await loadBatch()
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : t('Item retry failed')
-  } finally {
-    retryingIds.value = retryingIds.value.filter((id) => id !== item.id)
-  }
-}
-
-async function applyCompletedUpdates(): Promise<void> {
-  if (!batch.value) return
-  applying.value = true
-  errorMessage.value = ''
-  actionMessage.value = ''
-  try {
-    const result = await updateCompletedBatchAudios(
-      batch.value.id,
-      bulkTagIds.value,
-      bulkVisibility.value,
-    )
-    actionMessage.value = t('{count} completed audios updated', { count: result.updatedCount })
-  } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Completed audios could not be updated')
-  } finally {
-    applying.value = false
-  }
-}
-
-function statusLabel(status: GenerationBatchStatus): string {
-  return t(status.charAt(0).toUpperCase() + status.slice(1))
-}
-
-function statusClass(status: GenerationBatchStatus): string {
-  if (status === 'completed') return 'text-success'
-  if (status === 'failed' || status === 'cancelled') return 'text-danger'
-  if (status === 'processing') return 'text-warning'
-  return 'text-muted'
-}
-
 watch(batchId, () => {
   stopPolling()
   batch.value = null
-  bulkTagIds.value = []
   void loadBatch()
 })
-
 onMounted(() => {
   void loadOptions()
   void loadBatch()
@@ -288,313 +206,74 @@ onUnmounted(stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="batch-page-title" class="page-shell">
+  <section aria-labelledby="batch-page-title" class="page-shell min-w-0">
     <div class="page-heading">
       <div class="min-w-0">
         <p class="eyebrow">{{ t('Teacher workspace') }}</p>
-        <h1 id="batch-page-title" class="break-words text-3xl font-semibold">{{ t('Corpus generation') }}</h1>
+        <h1 id="batch-page-title" class="break-words text-3xl font-semibold">{{ t('Batch generation') }}</h1>
       </div>
-      <RouterLink
-        v-if="batch"
-        to="/generate"
-        class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
-      >
-        <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-          <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
-        </svg>
-        {{ t('New batch') }}
-      </RouterLink>
     </div>
 
-    <p v-if="errorMessage" role="alert" class="mt-6 rounded-md border border-danger/30 bg-surface px-5 py-4 text-sm text-danger">
-      {{ errorMessage }}
-    </p>
+    <p v-if="errorMessage" role="alert" class="mt-6 border border-danger/30 bg-surface px-5 py-4 text-sm text-danger">{{ errorMessage }}</p>
 
-    <div v-if="loadingBatch" class="mt-6 rounded-lg border border-line bg-surface px-5 py-12 text-sm text-muted shadow-panel">
-      {{ t('Loading batch') }}
-    </div>
-
-    <template v-else-if="batch">
-      <div class="mt-6 rounded-t-lg border border-line bg-surface px-5 py-6 shadow-panel">
-        <div class="flex min-w-0 items-start justify-between gap-5">
-          <div class="min-w-0">
-            <p class="text-base font-semibold">{{ t('Batch {id}', { id: batch.id }) }}</p>
-            <p class="mt-1 text-sm text-muted">
-              {{ t('{completed} of {total} audios ready', { completed: completedCount, total: batch.requestedCount }) }}
-            </p>
-          </div>
-          <span class="shrink-0 text-sm font-medium tabular-nums">{{ batch.progress }}%</span>
-        </div>
-        <div
-          class="mt-5 h-2 overflow-hidden bg-canvas"
-          role="progressbar"
-          :aria-label="t('Batch generation progress')"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          :aria-valuenow="batch.progress"
-        >
-          <div class="h-full bg-accent" :style="{ width: `${batch.progress}%` }" />
-        </div>
-        <div class="mt-4 flex items-center gap-2 text-sm font-medium" :class="statusClass(batch.status)">
-          <span class="h-2 w-2 bg-current" aria-hidden="true" />
-          {{ statusLabel(batch.status) }}
-        </div>
-        <p v-if="batch.errorSummary" class="mt-2 text-sm text-danger">{{ batch.errorSummary }}</p>
-      </div>
-
-      <div class="border-x border-b border-line bg-surface">
-        <div class="border-b border-line px-5 py-4">
-          <h2 class="text-base font-semibold">{{ t('Generated items') }}</h2>
-        </div>
-        <ol class="divide-y divide-line">
-          <li
-            v-for="item in batch.items"
-            :key="item.id"
-            class="grid min-w-0 gap-4 px-5 py-5 sm:grid-cols-[2rem_minmax(0,1fr)_auto] sm:items-center"
-          >
-            <span class="text-sm tabular-nums text-muted">{{ item.position + 1 }}</span>
-            <div class="min-w-0">
-              <RouterLink
-                v-if="item.audioId && item.status === 'completed'"
-                :to="`/audio/${item.audioId}`"
-                class="break-words text-sm font-semibold hover:text-accent hover:underline"
-              >
-                {{ item.title || t('Audio {id}', { id: item.audioId ?? '' }) }}
-              </RouterLink>
-              <p v-else class="break-words text-sm font-semibold">
-                {{ item.title || t('Preparing item {position}', { position: item.position + 1 }) }}
-              </p>
-              <p v-if="item.errorSummary" class="mt-1 break-words text-sm text-danger">
-                {{ item.errorSummary }}
-              </p>
-            </div>
-            <div class="flex items-center justify-between gap-4 sm:justify-end">
-              <span class="text-sm font-medium" :class="statusClass(item.status)">
-                {{ statusLabel(item.status) }}
-              </span>
-              <button
-                v-if="item.status === 'failed'"
-                type="button"
-                class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink disabled:opacity-50"
-                :disabled="retryingIds.includes(item.id)"
-                @click="retry(item)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-                  <path d="M20 7v5h-5M4 17v-5h5" stroke="currentColor" stroke-width="2" />
-                  <path d="M6.1 9A7 7 0 0 1 18 7l2 5M17.9 15A7 7 0 0 1 6 17l-2-5" stroke="currentColor" stroke-width="2" />
-                </svg>
-                {{ retryingIds.includes(item.id) ? t('Retrying') : t('Retry') }}
-              </button>
-            </div>
-          </li>
-        </ol>
-      </div>
-
-      <form
-        v-if="completedCount > 0"
-        class="rounded-b-lg border-x border-b border-line bg-surface px-5 py-6 shadow-panel"
-        @submit.prevent="applyCompletedUpdates"
-      >
-        <h2 class="text-base font-semibold">{{ t('Completed audios') }}</h2>
-        <div class="mt-5 grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-          <div class="grid min-w-0 gap-5 sm:grid-cols-2">
-            <fieldset
-              v-for="group in [
-                { label: 'Topics', items: topicTags },
-                { label: 'Categories', items: categoryTags },
-              ]"
-              :key="group.label"
-              class="min-w-0"
-            >
-              <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
-              <div class="flex min-w-0 flex-wrap gap-2">
-                <label
-                  v-for="tag in group.items"
-                  :key="tag.id"
-                  class="tag-chip tag-chip-interactive cursor-pointer"
-                  :class="{ 'tag-chip-selected': bulkTagIds.includes(tag.id) }"
-                >
-                  <input
-                    type="checkbox"
-                    class="sr-only"
-                    :checked="bulkTagIds.includes(tag.id)"
-                    @change="toggleTag('bulk', tag.id)"
-                  />
-                  <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
-                </label>
-                <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
-              </div>
-            </fieldset>
-          </div>
-          <div class="flex flex-col justify-between gap-5">
-            <label class="flex items-start gap-3">
-              <input
-                type="checkbox"
-                class="mt-0.5 h-4 w-4 accent-accent"
-                :checked="bulkVisibility === 'public'"
-                @change="bulkVisibility = ($event.target as HTMLInputElement).checked ? 'public' : 'private'"
-              />
-              <span class="text-sm font-medium">{{ t('Public visibility') }}</span>
-            </label>
-            <div>
-              <p v-if="actionMessage" class="mb-3 text-sm text-success">{{ actionMessage }}</p>
-              <button
-                type="submit"
-                :disabled="applying || loadingOptions"
-                class="h-10 w-full bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
-              >
-                {{ applying ? t('Applying') : t('Apply to completed') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </form>
-    </template>
-
-    <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
-      <div class="grid min-w-0 gap-6 border-b border-line px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div class="min-w-0">
-          <div class="grid h-10 grid-cols-2 border border-line" :aria-label="t('Corpus input mode')">
-            <button
-              type="button"
-              :aria-pressed="inputMode === 'text'"
-              :class="inputMode === 'text' ? 'bg-ink text-white' : 'hover:bg-canvas'"
-              class="text-sm font-medium"
-              @click="inputMode = 'text'"
-            >
-              {{ t('Text') }}
-            </button>
-            <button
-              type="button"
-              :aria-pressed="inputMode === 'file'"
-              :class="inputMode === 'file' ? 'bg-ink text-white' : 'hover:bg-canvas'"
-              class="border-l border-line text-sm font-medium"
-              @click="inputMode = 'file'"
-            >
-              {{ t('TXT file') }}
-            </button>
-          </div>
-          <div class="mt-4">
-            <label v-if="inputMode === 'text'" for="corpus-text" class="mb-1 block text-sm font-medium">{{ t('Corpus text') }}</label>
-            <textarea
-              v-if="inputMode === 'text'"
-              id="corpus-text"
-              v-model="corpus"
-              class="min-h-56 w-full min-w-0 resize-y border border-line p-3 text-sm leading-6 focus:border-accent focus:outline-none focus:shadow-focus"
-            />
-            <div v-else class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
-              <div class="min-w-0">
-                <label for="corpus-file" class="mb-1 block text-sm font-medium">{{ t('TXT file') }}</label>
-                <input
-                  id="corpus-file"
-                  type="file"
-                  accept=".txt,text/plain"
-                  class="block h-10 w-full min-w-0 border border-line bg-surface px-2 py-1.5 text-sm file:mr-3 file:border-0 file:bg-canvas file:px-3 file:py-1 file:text-sm"
-                  @change="selectFile"
-                />
-              </div>
-              <div>
-                <label for="corpus-encoding" class="mb-1 block text-sm font-medium">{{ t('Encoding') }}</label>
-                <select id="corpus-encoding" v-model="encoding" class="h-10 w-full border border-line bg-surface px-3 text-sm">
-                  <option value="utf-8">UTF-8</option>
-                  <option value="utf-8-sig">UTF-8 with BOM</option>
-                  <option value="utf-16">UTF-16</option>
-                  <option value="utf-16-le">UTF-16 LE</option>
-                  <option value="utf-16-be">UTF-16 BE</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div v-if="batchId" class="mt-6 border border-line bg-surface px-5 py-7 shadow-panel">
+      <div class="flex items-center justify-between gap-5">
         <div>
-          <label for="generation-count" class="mb-1 block text-sm font-medium">{{ t('Audio count') }}</label>
-          <input
-            id="generation-count"
-            v-model.number="count"
-            type="number"
-            min="1"
-            :max="MAX_COUNT"
-            class="h-10 w-full border border-line px-3 text-sm tabular-nums"
-          />
-          <fieldset class="mt-5">
-            <legend class="mb-2 text-sm font-medium">{{ t('Question types') }}</legend>
-            <div class="space-y-2">
-              <label v-for="option in questionOptions" :key="option.value" class="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  class="mt-0.5 h-4 w-4 accent-accent"
-                  :checked="questionTypes.includes(option.value)"
-                  @change="toggleQuestionType(option.value)"
-                />
-                {{ t(option.label) }}
+          <h2 class="text-base font-semibold">{{ t('Generating drafts') }}</h2>
+          <p class="mt-1 text-sm text-muted">{{ t('Content and topic suggestions are being prepared') }}</p>
+        </div>
+        <span class="text-sm font-medium tabular-nums">{{ batch?.progress ?? 0 }}%</span>
+      </div>
+      <div class="mt-5 h-2 overflow-hidden bg-canvas" role="progressbar" :aria-valuenow="batch?.progress ?? 0" aria-valuemin="0" aria-valuemax="100">
+        <div class="h-full bg-accent transition-[width]" :style="{ width: `${batch?.progress ?? 0}%` }" />
+      </div>
+      <p v-if="loadingBatch" class="mt-4 text-sm text-muted">{{ t('Loading batch') }}</p>
+      <p v-if="batch?.status === 'failed'" class="mt-4 text-sm text-danger">{{ batch.errorSummary || t('Generation failed') }}</p>
+    </div>
+
+    <form v-else class="mt-6 min-w-0 overflow-hidden border border-line bg-surface shadow-panel" @submit.prevent="submit">
+      <section class="border-b border-line px-5 py-6">
+        <h2 class="text-base font-semibold">{{ t('Corpus') }}</h2>
+        <div class="mt-5 inline-grid h-10 grid-cols-2 border border-line" :aria-label="t('Corpus input mode')">
+          <button type="button" class="px-4 text-sm font-medium" :class="inputMode === 'text' ? 'bg-ink text-white' : 'text-muted'" @click="inputMode = 'text'">{{ t('Text input') }}</button>
+          <button type="button" class="px-4 text-sm font-medium" :class="inputMode === 'file' ? 'bg-ink text-white' : 'text-muted'" @click="inputMode = 'file'">{{ t('TXT file') }}</button>
+        </div>
+        <textarea v-if="inputMode === 'text'" id="corpus-text" v-model="corpus" rows="9" class="mt-4 w-full resize-y border border-line px-3 py-3 text-sm leading-6 focus:border-accent focus:outline-none" :placeholder="t('Paste source material here')" />
+        <div v-else class="mt-4 grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <input id="corpus-file" type="file" accept=".txt,text/plain" class="h-10 min-w-0 border border-line px-3 py-2 text-sm" @change="selectFile" />
+          <select v-model="encoding" class="h-10 border border-line bg-surface px-3 text-sm">
+            <option value="utf-8">UTF-8</option><option value="utf-8-sig">UTF-8 BOM</option><option value="utf-16">UTF-16</option>
+          </select>
+        </div>
+      </section>
+
+      <section class="border-b border-line px-5 py-6">
+        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_12rem]">
+          <fieldset>
+            <legend class="text-base font-semibold">{{ t('Question types') }}</legend>
+            <div class="mt-4 grid gap-3 sm:grid-cols-3">
+              <label v-for="option in questionOptions" :key="option.value" class="cursor-pointer border border-line px-4 py-4" :class="questionTypes.includes(option.value) ? 'border-accent bg-accent-soft' : ''">
+                <input type="checkbox" class="sr-only" :checked="questionTypes.includes(option.value)" @change="toggleQuestionType(option.value)" />
+                <span class="block text-sm font-semibold">{{ t(option.label) }}</span>
+                <span class="mt-1 block text-xs leading-5 text-muted">{{ t(option.detail) }}</span>
               </label>
             </div>
           </fieldset>
-        </div>
-      </div>
-
-      <div class="border-b border-line px-5 py-6">
-        <div class="flex items-center justify-between gap-4">
-          <h2 class="text-base font-semibold">{{ t('Speaker voices') }}</h2>
-          <button type="button" class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink" @click="addMapping">
-            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" /></svg>
-            {{ t('Add role') }}
-          </button>
-        </div>
-        <div v-if="loadingOptions" class="py-10 text-sm text-muted">{{ t('Loading voices') }}</div>
-        <div v-else-if="voices.length === 0" class="py-8 text-sm text-muted">{{ t('No ready voices are available') }}</div>
-        <div v-else class="mt-4 space-y-3">
-          <div
-            v-for="mapping in mappings"
-            :key="mapping.key"
-            class="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2.5rem]"
-          >
-            <div class="min-w-0">
-              <label :for="`speaker-${mapping.key}`" class="sr-only">{{ t('Speaker role') }}</label>
-              <input :id="`speaker-${mapping.key}`" v-model="mapping.speaker" type="text" maxlength="200" :placeholder="t('Speaker role')" class="h-10 w-full min-w-0 border border-line px-3 text-sm" />
-            </div>
-            <div class="min-w-0">
-              <label :for="`speaker-voice-${mapping.key}`" class="sr-only">{{ t('Voice') }}</label>
-              <select :id="`speaker-voice-${mapping.key}`" v-model="mapping.voiceId" class="h-10 w-full min-w-0 border border-line bg-surface px-3 text-sm">
-                <option value="" disabled>{{ t('Select voice') }}</option>
-                <option v-for="voice in voices" :key="voice.id" :value="String(voice.id)">{{ voice.title }}</option>
-              </select>
-            </div>
-            <button type="button" class="flex h-10 w-10 items-center justify-center border border-line hover:border-danger hover:text-danger disabled:opacity-40" :disabled="mappings.length === 1" :aria-label="t('Remove {speaker} mapping', { speaker: mapping.speaker || t('speaker') })" :title="t('Remove mapping')" @click="removeMapping(mapping.key)">
-              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2" /></svg>
-            </button>
+          <div>
+            <label for="generation-count" class="block text-base font-semibold">{{ t('Total count') }}</label>
+            <input id="generation-count" v-model.number="count" type="number" :min="minimumCount" :max="MAX_COUNT" class="mt-4 h-10 w-full border border-line px-3 text-sm" />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div class="grid min-w-0 gap-6 px-5 py-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div class="grid min-w-0 gap-5 sm:grid-cols-2">
-          <fieldset v-for="group in [{ label: 'Topics', items: topicTags }, { label: 'Categories', items: categoryTags }]" :key="group.label" class="min-w-0">
-            <legend class="mb-2 text-sm font-medium">{{ t(group.label) }}</legend>
-            <div class="flex min-w-0 flex-wrap gap-2">
-              <label
-                v-for="tag in group.items"
-                :key="tag.id"
-                class="tag-chip tag-chip-interactive cursor-pointer"
-                :class="{ 'tag-chip-selected': selectedTagIds.includes(tag.id) }"
-              >
-                <input type="checkbox" class="sr-only" :checked="selectedTagIds.includes(tag.id)" @change="toggleTag('submission', tag.id)" />
-                <span class="min-w-0 break-words">{{ tag.displayValue.replace(/_/g, ' ') }}</span>
-              </label>
-              <p v-if="group.items.length === 0" class="text-sm text-muted">{{ t('None available') }}</p>
-            </div>
-          </fieldset>
-        </div>
-        <div class="flex items-end">
-          <button
-            type="submit"
-            :disabled="submitting || loadingOptions || voices.length === 0"
-            class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
-          >
-            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" /></svg>
-            {{ submitting ? t('Submitting') : t('Generate batch') }}
-          </button>
-        </div>
+      <SpeakerDefinitionsEditor v-if="!loadingOptions && voices.length" v-model="speakers" :voices="voices" @remove="removeSpeaker" />
+      <div v-else class="border-b border-line px-5 py-8 text-sm text-muted">{{ loadingOptions ? t('Loading options') : t('No ready voices are available') }}</div>
+
+      <div class="flex items-center justify-end px-5 py-5">
+        <button type="submit" :disabled="submitting || loadingOptions || voices.length === 0" class="inline-flex h-10 items-center gap-2 bg-ink px-5 text-sm font-medium text-white hover:bg-accent disabled:opacity-50">
+          <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M8 5v14l11-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
+          {{ submitting ? t('Submitting') : t('Generate drafts') }}
+        </button>
       </div>
     </form>
   </section>
