@@ -80,6 +80,11 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 tag_type=AudioTagType.TOPIC,
                 english_value="travel",
             )
+            AudioTagService().create_user_tag(
+                session,
+                tag_type=AudioTagType.CATEGORY,
+                english_value="short",
+            )
             session.commit()
             self.male_voice = self.create_voice(session, "Male voice", male)
             self.female_voice = self.create_voice(session, "Female voice", female)
@@ -197,6 +202,21 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                     (AudioTagType.CATEGORY, "monologue"),
                 ],
             )
+            self.assertEqual(
+                {
+                    tag.value: {
+                        translation.language: translation.value
+                        for translation in tag.translations
+                    }
+                    for tag in batch.tags
+                    if tag.type is AudioTagType.CATEGORY
+                },
+                {
+                    "short": {"zh-CN": "短对话"},
+                    "long": {"zh-CN": "长对话"},
+                    "monologue": {"zh-CN": "独白"},
+                },
+            )
             first = batch.items[0].generated_content
             assert first is not None
             self.assertEqual(first["question_type"], "short_dialogue")
@@ -227,6 +247,19 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 ("category", "long"),
                 ("category", "monologue"),
             ],
+        )
+        localized_tags = self.send(
+            "GET",
+            "/api/audio-tags?type=category&language=zh-CN",
+            headers=self.headers(),
+        )
+        self.assertEqual(localized_tags.status_code, 200, localized_tags.text)
+        self.assertEqual(
+            {
+                tag["englishValue"]: tag["displayValue"]
+                for tag in localized_tags.json()
+            },
+            {"short": "短对话", "long": "长对话", "monologue": "独白"},
         )
         self.assertEqual(payload["items"][0]["draft"]["questions"][0]["correctAnswers"], ["Park the car."])
         self.assertFalse((self.root / "data" / "jobs" / str(job_id)).exists())

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import JobFailedError
@@ -34,10 +35,19 @@ from backend.app.services.tag_values import (
 )
 
 
-_QUESTION_TYPE_CATEGORY_VALUES = {
-    QuestionType.SHORT_DIALOGUE: "short",
-    QuestionType.LONG_DIALOGUE: "long",
-    QuestionType.MONOLOGUE: "monologue",
+_QUESTION_TYPE_CATEGORIES = {
+    QuestionType.SHORT_DIALOGUE: (
+        "short",
+        TagTranslationInput(language="zh-CN", value="短对话"),
+    ),
+    QuestionType.LONG_DIALOGUE: (
+        "long",
+        TagTranslationInput(language="zh-CN", value="长对话"),
+    ),
+    QuestionType.MONOLOGUE: (
+        "monologue",
+        TagTranslationInput(language="zh-CN", value="独白"),
+    ),
 }
 
 
@@ -210,22 +220,66 @@ class CorpusGenerationService:
             if question_type in seen:
                 continue
             seen.add(question_type)
-            value = _QUESTION_TYPE_CATEGORY_VALUES[question_type]
-            normalized = normalize_english_tag_value(value)
-            tag = self.tag_repository.get_by_normalized_value(
-                session,
-                AudioTagType.CATEGORY,
-                normalized.normalized_value,
-            )
-            if tag is None:
-                tag = self.tag_repository.create(
-                    session,
-                    tag_type=AudioTagType.CATEGORY,
-                    value=normalized.value,
-                    normalized_value=normalized.normalized_value,
-                )
-            tags.append(tag)
+            tags.append(self._question_type_category(session, question_type))
         return tags
+
+    def _question_type_category(
+        self,
+        session: Session,
+        question_type: QuestionType,
+    ) -> AudioTag:
+        value, translation = _QUESTION_TYPE_CATEGORIES[question_type]
+        normalized_value = normalize_english_tag_value(value)
+        tag = self.tag_repository.get_by_normalized_value(
+            session,
+            AudioTagType.CATEGORY,
+            normalized_value.normalized_value,
+        )
+        if tag is None:
+            try:
+                with session.begin_nested():
+                    tag = self.tag_repository.create(
+                        session,
+                        tag_type=AudioTagType.CATEGORY,
+                        value=normalized_value.value,
+                        normalized_value=normalized_value.normalized_value,
+                    )
+            except IntegrityError:
+                tag = self.tag_repository.get_by_normalized_value(
+                    session,
+                    AudioTagType.CATEGORY,
+                    normalized_value.normalized_value,
+                )
+                if tag is None:
+                    raise
+
+        existing_translation = self.tag_repository.get_translation(
+            session,
+            tag_id=tag.id,
+            language=translation.language,
+        )
+        if existing_translation is None:
+            normalized_translation = normalize_tag_translations([translation])[0]
+            try:
+                with session.begin_nested():
+                    self.tag_repository.add_translation(
+                        session,
+                        tag=tag,
+                        language=normalized_translation.language,
+                        value=normalized_translation.value.value,
+                        normalized_value=normalized_translation.value.normalized_value,
+                    )
+            except IntegrityError:
+                if (
+                    self.tag_repository.get_translation(
+                        session,
+                        tag_id=tag.id,
+                        language=normalized_translation.language,
+                    )
+                    is None
+                ):
+                    raise
+        return tag
 
     @staticmethod
     def _assign_speakers(
