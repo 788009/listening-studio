@@ -190,7 +190,7 @@ class AsyncVoiceUploadIntegrationTest(unittest.TestCase):
             self.assertEqual(voice.status, VoiceStatus.FAILED)
             self.assertEqual(voice.visibility, VoiceVisibility.PRIVATE)
             self.assertEqual(job.status, JobStatus.FAILED)
-            self.assertIn("Verify the reference WAV", job.error_summary or "")
+            self.assertIn("Verify the reference audio", job.error_summary or "")
         self.assertFalse(self.voice_storage.directory(voice_id).exists())
         self.assertFalse(self.job_storage.directory(job_id).exists())
 

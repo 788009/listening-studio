@@ -79,6 +79,7 @@ describe('create voice view', () => {
       'checked',
       true,
     )
+    expect(wrapper.get('#voice-file').attributes('accept')).toContain('.mp3')
     await wrapper.get('#voice-title').setValue('Classroom voice')
     await wrapper.get('#voice-new-gender').setValue('female')
     await wrapper.findAll('button').find((button) => button.text() === 'Add tag')?.trigger('click')
@@ -125,7 +126,7 @@ describe('create voice view', () => {
               status: 'failed',
               progress: 80,
               inputSummary: { voiceId: 11 },
-              errorSummary: 'Verify the reference WAV and try again.',
+              errorSummary: 'Verify the reference audio and try again.',
               cancelRequested: false,
               retryable: true,
               attemptCount: 1,
@@ -142,7 +143,7 @@ describe('create voice view', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('Voice creation failed')
-    expect(wrapper.get('[role="alert"]').text()).toContain('Verify the reference WAV')
+    expect(wrapper.get('[role="alert"]').text()).toContain('Verify the reference audio')
     wrapper.unmount()
   })
 })

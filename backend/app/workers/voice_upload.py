@@ -42,7 +42,7 @@ class VoiceUploadJobHandler:
                 )
         except JobFailedError as exc:
             raise JobExecutionError(
-                "Voice generation failed. Verify the reference WAV and try again."
+                "Voice generation failed. Verify the reference audio and try again."
             ) from exc
         context.update_progress(95)
         return JobResult("voice", voice.id)

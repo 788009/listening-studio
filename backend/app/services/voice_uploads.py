@@ -6,6 +6,7 @@ import wave
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -20,6 +21,10 @@ from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceStatus, VoiceVisibility
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.integrations.cosyvoice import CosyVoiceIntegration
+from backend.app.integrations.audio_conversion import (
+    AudioConversionError,
+    FfmpegAudioTranscoder,
+)
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.repositories.voices import VoiceRepository
 from backend.app.services.job_storage import JobStorage
@@ -30,7 +35,9 @@ from backend.app.services.voices import VoiceService
 
 DEFAULT_MIN_REFERENCE_SECONDS = 1.0
 DEFAULT_MAX_REFERENCE_SECONDS = 30.0
-SUPPORTED_REFERENCE_EXTENSION = ".wav"
+SUPPORTED_REFERENCE_EXTENSIONS = frozenset(
+    {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".webm"}
+)
 VOICE_UPLOAD_JOB_TYPE = "voice_upload"
 
 
@@ -49,6 +56,17 @@ class VoiceUploadSubmission:
     job: Job
 
 
+class ReferenceAudioTranscoder(Protocol):
+    def convert_to_wav(
+        self,
+        content: bytes,
+        *,
+        extension: str,
+        max_duration_seconds: float,
+    ) -> bytes:
+        pass
+
+
 class ReferenceAudioValidator:
     def __init__(
         self,
@@ -56,6 +74,7 @@ class ReferenceAudioValidator:
         max_upload_bytes: int,
         min_duration_seconds: float = DEFAULT_MIN_REFERENCE_SECONDS,
         max_duration_seconds: float = DEFAULT_MAX_REFERENCE_SECONDS,
+        transcoder: ReferenceAudioTranscoder | None = None,
     ) -> None:
         if max_upload_bytes < 1:
             raise ValueError("Maximum upload size must be positive")
@@ -64,9 +83,10 @@ class ReferenceAudioValidator:
         self.max_upload_bytes = max_upload_bytes
         self.min_duration_seconds = min_duration_seconds
         self.max_duration_seconds = max_duration_seconds
+        self.transcoder = transcoder or FfmpegAudioTranscoder()
 
     def validate(self, filename: str, content: bytes) -> ValidatedReferenceAudio:
-        self._validate_filename(filename)
+        extension = self._validate_filename(filename)
         if not isinstance(content, bytes):
             raise DomainValidationError(
                 "Reference audio content is invalid",
@@ -85,8 +105,21 @@ class ReferenceAudioValidator:
                     "maxBytes": self.max_upload_bytes,
                 },
             )
+        wav_content = content
+        if extension != ".wav":
+            try:
+                wav_content = self.transcoder.convert_to_wav(
+                    content,
+                    extension=extension,
+                    max_duration_seconds=self.max_duration_seconds,
+                )
+            except AudioConversionError as exc:
+                raise DomainValidationError(
+                    "Reference audio could not be decoded",
+                    details={"field": "file"},
+                ) from exc
         try:
-            with wave.open(io.BytesIO(content), "rb") as audio_file:
+            with wave.open(io.BytesIO(wav_content), "rb") as audio_file:
                 if audio_file.getcomptype() != "NONE":
                     raise DomainValidationError(
                         "Reference WAV compression is not supported",
@@ -151,17 +184,19 @@ class ReferenceAudioValidator:
         )
 
     @staticmethod
-    def _validate_filename(filename: str) -> None:
+    def _validate_filename(filename: str) -> str:
         if not isinstance(filename, str) or not filename.strip():
             raise DomainValidationError(
                 "Reference audio filename is required",
                 details={"field": "filename"},
             )
-        if Path(filename).suffix.casefold() != SUPPORTED_REFERENCE_EXTENSION:
+        extension = Path(filename).suffix.casefold()
+        if extension not in SUPPORTED_REFERENCE_EXTENSIONS:
             raise DomainValidationError(
-                "Reference audio must use the .wav extension",
+                "Reference audio format is not supported",
                 details={"field": "filename"},
             )
+        return extension
 
 
 class VoiceUploadService:
@@ -178,6 +213,7 @@ class VoiceUploadService:
         tag_repository: VoiceTagRepository | None = None,
         min_duration_seconds: float = DEFAULT_MIN_REFERENCE_SECONDS,
         max_duration_seconds: float = DEFAULT_MAX_REFERENCE_SECONDS,
+        audio_transcoder: ReferenceAudioTranscoder | None = None,
     ) -> None:
         self.integration = integration
         self.storage = storage
@@ -190,6 +226,7 @@ class VoiceUploadService:
             max_upload_bytes=max_upload_bytes,
             min_duration_seconds=min_duration_seconds,
             max_duration_seconds=max_duration_seconds,
+            transcoder=audio_transcoder,
         )
 
     def prepare_async_upload(

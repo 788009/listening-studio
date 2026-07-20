@@ -78,7 +78,7 @@ async function submit(): Promise<void> {
     return
   }
   if (!file.value) {
-    formError.value = t('Choose a WAV reference recording')
+    formError.value = t('Choose a reference recording')
     return
   }
   const selectedGenderId = Number(genderTagId.value)
@@ -193,12 +193,12 @@ onUnmounted(creation.stopPolling)
         </div>
 
         <div>
-          <label for="voice-file" class="mb-1 block text-sm font-medium">{{ t('Reference WAV') }}</label>
+          <label for="voice-file" class="mb-1 block text-sm font-medium">{{ t('Reference audio') }}</label>
           <input
             id="voice-file"
             type="file"
             required
-            accept=".wav,audio/wav,audio/x-wav"
+            accept=".wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.webm"
             class="block w-full border border-line bg-surface text-sm text-muted file:mr-4 file:h-10 file:border-0 file:border-r file:border-line file:bg-canvas file:px-3 file:text-sm file:font-medium file:text-ink hover:file:bg-accent-soft"
             @change="selectFile"
           />

@@ -24,11 +24,30 @@ from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voice_tags import VoiceTagService
-from backend.app.services.voice_uploads import VoiceUploadService
+from backend.app.services.voice_uploads import (
+    ReferenceAudioValidator,
+    VoiceUploadService,
+)
 from backend.app.services.voices import VoiceService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class FakeAudioTranscoder:
+    def __init__(self, output: bytes) -> None:
+        self.output = output
+        self.calls: list[tuple[bytes, str, float]] = []
+
+    def convert_to_wav(
+        self,
+        content: bytes,
+        *,
+        extension: str,
+        max_duration_seconds: float,
+    ) -> bytes:
+        self.calls.append((content, extension, max_duration_seconds))
+        return self.output
 
 
 class VoiceUploadIntegrationTest(unittest.TestCase):
@@ -78,11 +97,13 @@ class VoiceUploadIntegrationTest(unittest.TestCase):
         integration: FakeCosyVoiceIntegration,
         *,
         max_upload_bytes: int = 1024 * 1024,
+        audio_transcoder: FakeAudioTranscoder | None = None,
     ) -> VoiceUploadService:
         return VoiceUploadService(
             integration=integration,
             storage=self.storage,
             max_upload_bytes=max_upload_bytes,
+            audio_transcoder=audio_transcoder,
         )
 
     def test_success_uses_fixed_paths_tags_and_delayed_public_visibility(self) -> None:
@@ -150,11 +171,58 @@ class VoiceUploadIntegrationTest(unittest.TestCase):
         self.assertEqual(fake.calls[0].input_path.parent.name, "1")
         self.assertEqual(fake.calls[0].output_path.parent.name, "1")
 
+    def test_compressed_reference_is_converted_before_validation(self) -> None:
+        fake = FakeCosyVoiceIntegration()
+        transcoder = FakeAudioTranscoder(self.wav_bytes(2.0, sample_rate=16000))
+
+        with self.session_factory() as session:
+            author = self.create_author(session)
+            voice = self.service(fake, audio_transcoder=transcoder).create_from_upload(
+                session,
+                author=author,
+                title="MP3 voice",
+                filename="reference.MP3",
+                content=b"compressed-audio",
+                request_id="request-mp3",
+            )
+
+        self.assertEqual(voice.status, VoiceStatus.READY)
+        self.assertEqual(
+            transcoder.calls,
+            [(b"compressed-audio", ".mp3", 30.0)],
+        )
+        with wave.open(
+            str(self.storage.path(voice.id, VoiceAsset.REFERENCE)),
+            "rb",
+        ) as reference:
+            self.assertEqual(reference.getframerate(), 16000)
+            self.assertEqual(reference.getnchannels(), 1)
+
+    def test_validator_accepts_each_supported_compressed_extension(self) -> None:
+        transcoder = FakeAudioTranscoder(self.wav_bytes(2.0, sample_rate=16000))
+        validator = ReferenceAudioValidator(
+            max_upload_bytes=1024 * 1024,
+            transcoder=transcoder,
+        )
+
+        for extension in (".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".webm"):
+            with self.subTest(extension=extension):
+                reference = validator.validate(
+                    f"reference{extension}",
+                    b"compressed-audio",
+                )
+                self.assertEqual(reference.sample_rate, 16000)
+
+        self.assertEqual(
+            [extension for _, extension, _ in transcoder.calls],
+            [".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".webm"],
+        )
+
     def test_invalid_uploads_are_rejected_before_model_or_record_creation(self) -> None:
         fake = FakeCosyVoiceIntegration()
         valid = self.wav_bytes(2.0)
         invalid_uploads = [
-            ("reference.mp3", valid, 1024 * 1024),
+            ("reference.txt", valid, 1024 * 1024),
             ("reference.wav", b"", 1024 * 1024),
             ("reference.wav", b"not a wav", 1024 * 1024),
             ("reference.wav", self.wav_bytes(0.5), 1024 * 1024),
