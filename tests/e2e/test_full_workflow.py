@@ -488,8 +488,10 @@ class FullWorkflowTest(unittest.TestCase):
             "/api/generation-batches",
             headers=self.teacher_headers("submit-batch"),
             files=[
-                ("questionTypes", (None, "short_dialogue")),
-                ("count", (None, "1")),
+                (
+                    "questionTypeCounts",
+                    (None, json.dumps({"short_dialogue": 1})),
+                ),
                 ("corpus", (None, "Schools can reduce waste and save energy.")),
                 (
                     "speakerVoiceMap",

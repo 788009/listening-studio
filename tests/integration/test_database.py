@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,7 +29,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260719_0015")
+            self.assertEqual(revision, "20260720_0016")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -46,6 +47,73 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine.dispose()
 
         self.assertEqual(foreign_keys_enabled, 1)
+
+    def test_batch_question_type_count_migration_preserves_legacy_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "batch-counts.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260719_0015")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'subject', 'active', 'TeacherOne', "
+                        "'teacherone')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO jobs (owner_id, type, input_summary) "
+                        "VALUES (1, 'corpus_generation', '{}')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO generation_batches "
+                        "(owner_id, job_id, question_types, requested_count) "
+                        "VALUES (1, 1, "
+                        "'[\"short_dialogue\", \"monologue\"]', 5)"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.connect() as connection:
+                rows = connection.execute(
+                    text(
+                        "SELECT question_type, requested_count, position "
+                        "FROM generation_batch_question_types "
+                        "ORDER BY position"
+                    )
+                ).all()
+                columns = {
+                    column["name"]
+                    for column in inspect(connection).get_columns(
+                        "generation_batches"
+                    )
+                }
+            self.assertEqual(
+                rows,
+                [("short_dialogue", 3, 0), ("monologue", 2, 1)],
+            )
+            self.assertNotIn("question_types", columns)
+            self.assertNotIn("requested_count", columns)
+
+            command.downgrade(config, "20260719_0015")
+            with engine.connect() as connection:
+                legacy_types, legacy_count = connection.execute(
+                    text(
+                        "SELECT question_types, requested_count "
+                        "FROM generation_batches"
+                    )
+                ).one()
+            engine.dispose()
+
+        self.assertEqual(json.loads(legacy_types), ["short_dialogue", "monologue"])
+        self.assertEqual(legacy_count, 5)
 
     def test_voice_sample_migration_preserves_existing_sources(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

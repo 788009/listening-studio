@@ -405,8 +405,7 @@ describe('direct creation view', () => {
     store.setBatch({
       id: 7,
       jobId: 9,
-      questionTypes: ['short_dialogue', 'monologue'],
-      requestedCount: 2,
+      questionTypeCounts: { short_dialogue: 1, monologue: 1 },
       status: 'completed',
       progress: 100,
       tags: [{ id: 4, type: 'topic', englishValue: 'travel' }],

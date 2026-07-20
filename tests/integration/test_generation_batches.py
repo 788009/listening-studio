@@ -93,10 +93,13 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             session.commit()
             return voice.id
 
-    def submit(self, question_types: list[str], count: int, speakers: int) -> httpx.Response:
+    def submit(
+        self,
+        question_type_counts: dict[str, int],
+        speakers: int,
+    ) -> httpx.Response:
         fields: list[tuple[str, tuple[None, str]]] = [
-            *(("questionTypes", (None, item)) for item in question_types),
-            ("count", (None, str(count))),
+            ("questionTypeCounts", (None, json.dumps(question_type_counts))),
             ("corpus", (None, "A short source corpus.")),
             (
                 "speakerVoiceMap",
@@ -119,7 +122,7 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
 
     def test_submission_stages_corpus_without_precreating_draft_items(self) -> None:
-        response = self.submit(["short_dialogue", "monologue"], 3, 2)
+        response = self.submit({"short_dialogue": 2, "monologue": 1}, 2)
         self.assertEqual(response.status_code, 202, response.text)
         batch_id = response.json()["batchId"]
         job_id = response.json()["jobId"]
@@ -129,7 +132,10 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             job = session.get(Job, job_id)
             assert batch is not None and job is not None
             self.assertEqual(batch.status, GenerationBatchStatus.PENDING)
-            self.assertEqual(batch.question_types, ["short_dialogue", "monologue"])
+            self.assertEqual(
+                batch.question_type_counts,
+                {"short_dialogue": 2, "monologue": 1},
+            )
             self.assertEqual(batch.items, [])
             self.assertEqual(job.status, JobStatus.QUEUED)
         self.assertEqual(
@@ -137,24 +143,23 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             "A short source corpus.",
         )
 
-    def test_dialogue_requires_two_speakers_and_count_covers_types(self) -> None:
-        one_speaker = self.submit(["long_dialogue"], 1, 1)
-        too_few = self.submit(["short_dialogue", "monologue"], 1, 2)
-        monologue = self.submit(["monologue"], 1, 1)
+    def test_dialogue_requires_two_speakers_and_counts_are_positive(self) -> None:
+        one_speaker = self.submit({"long_dialogue": 1}, 1)
+        zero_count = self.submit({"short_dialogue": 0, "monologue": 1}, 2)
+        monologue = self.submit({"monologue": 1}, 1)
 
         self.assertEqual(one_speaker.status_code, 422)
-        self.assertEqual(too_few.status_code, 422)
+        self.assertEqual(zero_count.status_code, 422)
         self.assertEqual(monologue.status_code, 202, monologue.text)
 
     def test_rejects_invalid_question_type_and_file_encoding(self) -> None:
-        invalid_type = self.submit(["multiple_choice"], 1, 1)
+        invalid_type = self.submit({"multiple_choice": 1}, 1)
         invalid_file = self.send(
             "POST",
             "/api/generation-batches",
             headers=self.headers(),
             files=[
-                ("questionTypes", (None, "monologue")),
-                ("count", (None, "1")),
+                ("questionTypeCounts", (None, json.dumps({"monologue": 1}))),
                 ("encoding", (None, "latin-1")),
                 ("file", ("corpus.txt", b"source", "text/plain")),
                 ("speakerVoiceMap", (None, json.dumps({"Narrator": self.voice_ids[0]}))),

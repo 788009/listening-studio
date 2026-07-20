@@ -41,6 +41,7 @@ SuggestedTagValue = Annotated[
         pattern=r"^[A-Za-z0-9_-]+$",
     ),
 ]
+GenerationCount = Annotated[int, Field(ge=1, le=MAX_GENERATION_COUNT)]
 
 
 class QuestionType(str, Enum):
@@ -72,8 +73,7 @@ class LlmModel(BaseModel):
 
 class ListeningGenerationRequest(LlmModel):
     corpus: str = Field(min_length=1, max_length=MAX_CORPUS_LENGTH)
-    question_types: frozenset[QuestionType] = Field(min_length=1)
-    count: int = Field(ge=1, le=MAX_GENERATION_COUNT)
+    question_type_counts: dict[QuestionType, GenerationCount] = Field(min_length=1)
     language: str = Field(default="en", min_length=2, max_length=35)
 
     @field_validator("language")
@@ -82,10 +82,18 @@ class ListeningGenerationRequest(LlmModel):
         return _normalize_language(value)
 
     @model_validator(mode="after")
-    def require_one_result_per_selected_type(self) -> ListeningGenerationRequest:
-        if self.count < len(self.question_types):
-            raise ValueError("Count must cover every selected question type")
+    def limit_total_count(self) -> ListeningGenerationRequest:
+        if self.count > MAX_GENERATION_COUNT:
+            raise ValueError("Total generation count exceeds the limit")
         return self
+
+    @property
+    def question_types(self) -> frozenset[QuestionType]:
+        return frozenset(self.question_type_counts)
+
+    @property
+    def count(self) -> int:
+        return sum(self.question_type_counts.values())
 
 
 class GeneratedDialogueTurn(LlmModel):
@@ -205,25 +213,16 @@ class PlaceholderListeningContentGenerator:
         call_id: str,
     ) -> ListeningGenerationResult:
         del call_id
-        selected = sorted(
-            request.question_types,
-            key=_QUESTION_TYPE_ORDER.__getitem__,
-        )
-        examples = {item: list(_load_examples(item)) for item in selected}
-        items: list[GeneratedListeningContent] = []
-        position = 0
-        while len(items) < request.count:
-            added = False
-            for question_type in selected:
-                values = examples[question_type]
-                if position < len(values):
-                    items.append(values[position])
-                    added = True
-                    if len(items) == request.count:
-                        break
-            if not added:
-                break
-            position += 1
+        items = [
+            example
+            for question_type in sorted(
+                request.question_type_counts,
+                key=_QUESTION_TYPE_ORDER.__getitem__,
+            )
+            for example in _load_examples(question_type)[
+                : request.question_type_counts[question_type]
+            ]
+        ]
         return ListeningGenerationResult(items=items)
 
 
@@ -263,10 +262,16 @@ class ValidatingListeningContentGenerator:
         call_logger = logger.bind(request_id=normalized_call_id)
         call_logger.info(
             "Listening content generation requested call_id={} corpus_length={} "
-            "question_types={} count={}",
+            "question_type_counts={} total_count={}",
             normalized_call_id,
             len(request.corpus),
-            ",".join(sorted(item.value for item in request.question_types)),
+            ",".join(
+                f"{item.value}:{request.question_type_counts[item]}"
+                for item in sorted(
+                    request.question_type_counts,
+                    key=_QUESTION_TYPE_ORDER.__getitem__,
+                )
+            ),
             request.count,
         )
         try:
@@ -296,10 +301,23 @@ class ValidatingListeningContentGenerator:
         request: ListeningGenerationRequest,
         result: ListeningGenerationResult,
     ) -> None:
-        if len(result.items) > request.count:
+        if any(
+            item.question_type not in request.question_type_counts
+            for item in result.items
+        ):
+            raise ValueError("Generated question types do not match the request")
+        generated_counts = {
+            question_type: sum(
+                item.question_type is question_type for item in result.items
+            )
+            for question_type in request.question_type_counts
+        }
+        if any(
+            generated_counts[question_type] > requested_count
+            for question_type, requested_count in request.question_type_counts.items()
+        ):
             raise ValueError("Generated item count exceeds the request")
-        generated_types = {item.question_type for item in result.items}
-        if generated_types != set(request.question_types):
+        if any(count == 0 for count in generated_counts.values()):
             raise ValueError("Generated question types do not match the request")
 
 

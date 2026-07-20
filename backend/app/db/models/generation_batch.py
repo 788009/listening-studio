@@ -57,7 +57,6 @@ generation_batch_tag_associations = Table(
 class GenerationBatch(Base):
     __tablename__ = "generation_batches"
     __table_args__ = (
-        CheckConstraint("requested_count > 0", name="ck_generation_batches_count"),
         Index(
             "ix_generation_batches_owner_created",
             "owner_id",
@@ -76,8 +75,6 @@ class GenerationBatch(Base):
         unique=True,
         nullable=False,
     )
-    question_types: Mapped[list[str]] = mapped_column(JSON, nullable=False)
-    requested_count: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[GenerationBatchStatus] = mapped_column(
         SqlEnum(
             GenerationBatchStatus,
@@ -109,6 +106,12 @@ class GenerationBatch(Base):
         secondary=generation_batch_tag_associations,
         order_by="AudioTag.id",
     )
+    question_type_requests: Mapped[list["GenerationBatchQuestionType"]] = relationship(
+        back_populates="batch",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="GenerationBatchQuestionType.position",
+    )
     items: Mapped[list["GenerationBatchItem"]] = relationship(
         back_populates="batch",
         cascade="all, delete-orphan",
@@ -121,6 +124,44 @@ class GenerationBatch(Base):
         passive_deletes=True,
         order_by="GenerationBatchSpeakerVoice.id",
     )
+
+    @property
+    def question_type_counts(self) -> dict[str, int]:
+        return {
+            item.question_type: item.requested_count
+            for item in self.question_type_requests
+        }
+
+class GenerationBatchQuestionType(Base):
+    __tablename__ = "generation_batch_question_types"
+    __table_args__ = (
+        CheckConstraint(
+            "question_type IN ('short_dialogue', 'long_dialogue', 'monologue')",
+            name="ck_generation_batch_question_types_type",
+        ),
+        CheckConstraint(
+            "requested_count > 0",
+            name="ck_generation_batch_question_types_count",
+        ),
+        CheckConstraint(
+            "position >= 0",
+            name="ck_generation_batch_question_types_position",
+        ),
+        UniqueConstraint(
+            "batch_id",
+            "position",
+            name="uq_generation_batch_question_types_position",
+        ),
+    )
+
+    batch_id: Mapped[int] = mapped_column(
+        ForeignKey("generation_batches.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    question_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    requested_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    batch: Mapped[GenerationBatch] = relationship(back_populates="question_type_requests")
 
 
 class GenerationBatchItem(Base):

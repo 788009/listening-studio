@@ -45,8 +45,7 @@ export interface GenerationBatchSpeakerVoice {
 export interface GenerationBatch {
   id: number
   jobId: number
-  questionTypes: QuestionType[]
-  requestedCount: number
+  questionTypeCounts: Partial<Record<QuestionType, number>>
   status: GenerationBatchStatus
   progress: number
   tags: GenerationBatchTag[]
@@ -66,8 +65,7 @@ export interface GenerationBatchCreationInput {
   corpus?: string
   file?: File
   encoding?: string
-  questionTypes: QuestionType[]
-  count: number
+  questionTypeCounts: Partial<Record<QuestionType, number>>
   speakerVoiceMap: Record<string, number>
 }
 
@@ -75,10 +73,7 @@ export function createGenerationBatch(
   input: GenerationBatchCreationInput,
 ): Promise<GenerationBatchAccepted> {
   const form = new FormData()
-  for (const questionType of input.questionTypes) {
-    form.append('questionTypes', questionType)
-  }
-  form.set('count', String(input.count))
+  form.set('questionTypeCounts', JSON.stringify(input.questionTypeCounts))
   form.set('speakerVoiceMap', JSON.stringify(input.speakerVoiceMap))
   if (input.file) {
     form.set('file', input.file)

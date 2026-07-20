@@ -79,8 +79,7 @@ class CorpusGenerationService:
                 self.generator.generate(
                     ListeningGenerationRequest(
                         corpus=corpus,
-                        question_types=set(batch.question_types),
-                        count=batch.requested_count,
+                        question_type_counts=batch.question_type_counts,
                         language=owner.locale,
                     ),
                     call_id=request_id,

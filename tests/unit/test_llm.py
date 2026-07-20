@@ -32,15 +32,14 @@ class InvalidTopicSuggester:
 
 
 class LlmIntegrationTest(unittest.TestCase):
-    def test_placeholder_loads_examples_and_round_robins_selected_types(self) -> None:
+    def test_placeholder_uses_each_question_type_count(self) -> None:
         request = ListeningGenerationRequest(
             corpus="Source corpus",
-            question_types={
-                QuestionType.SHORT_DIALOGUE,
-                QuestionType.LONG_DIALOGUE,
-                QuestionType.MONOLOGUE,
+            question_type_counts={
+                QuestionType.SHORT_DIALOGUE: 2,
+                QuestionType.LONG_DIALOGUE: 3,
+                QuestionType.MONOLOGUE: 2,
             },
-            count=7,
         )
         result = PlaceholderListeningContentGenerator().generate(
             request,
@@ -49,10 +48,14 @@ class LlmIntegrationTest(unittest.TestCase):
 
         self.assertEqual(len(result.items), 7)
         self.assertEqual(
-            [item.question_type for item in result.items[:3]],
+            [item.question_type for item in result.items],
             [
                 QuestionType.SHORT_DIALOGUE,
+                QuestionType.SHORT_DIALOGUE,
                 QuestionType.LONG_DIALOGUE,
+                QuestionType.LONG_DIALOGUE,
+                QuestionType.LONG_DIALOGUE,
+                QuestionType.MONOLOGUE,
                 QuestionType.MONOLOGUE,
             ],
         )
@@ -71,19 +74,24 @@ class LlmIntegrationTest(unittest.TestCase):
         ).generate(
             ListeningGenerationRequest(
                 corpus="Source corpus",
-                question_types=set(QuestionType),
-                count=20,
+                question_type_counts={
+                    QuestionType.SHORT_DIALOGUE: 7,
+                    QuestionType.LONG_DIALOGUE: 7,
+                    QuestionType.MONOLOGUE: 6,
+                },
             ),
             call_id="all-examples",
         )
         self.assertEqual(len(result.items), 11)
 
-    def test_request_count_must_cover_every_selected_type(self) -> None:
+    def test_request_rejects_total_count_above_limit(self) -> None:
         with self.assertRaises(ValidationError):
             ListeningGenerationRequest(
                 corpus="Source corpus",
-                question_types=set(QuestionType),
-                count=2,
+                question_type_counts={
+                    QuestionType.SHORT_DIALOGUE: 19,
+                    QuestionType.MONOLOGUE: 2,
+                },
             )
 
     def test_dialogue_and_monologue_speaker_shapes_are_enforced(self) -> None:
@@ -136,8 +144,7 @@ class LlmIntegrationTest(unittest.TestCase):
             ValidatingListeningContentGenerator(InvalidGenerator()).generate(
                 ListeningGenerationRequest(
                     corpus="Source corpus",
-                    question_types={QuestionType.MONOLOGUE},
-                    count=1,
+                    question_type_counts={QuestionType.MONOLOGUE: 1},
                 ),
                 call_id="invalid-content",
             )

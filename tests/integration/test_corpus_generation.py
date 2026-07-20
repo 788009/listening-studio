@@ -133,9 +133,10 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             "/api/generation-batches",
             headers=self.headers(),
             files=[
-                ("questionTypes", (None, "short_dialogue")),
-                ("questionTypes", (None, "monologue")),
-                ("count", (None, "3")),
+                (
+                    "questionTypeCounts",
+                    (None, json.dumps({"short_dialogue": 2, "monologue": 1})),
+                ),
                 ("corpus", (None, "A source corpus about a journey.")),
                 (
                     "speakerVoiceMap",
@@ -197,6 +198,10 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
         self.assertEqual(detail.status_code, 200, detail.text)
         payload = detail.json()
         self.assertEqual(payload["progress"], 100)
+        self.assertEqual(
+            payload["questionTypeCounts"],
+            {"short_dialogue": 2, "monologue": 1},
+        )
         self.assertEqual(payload["tags"][0]["englishValue"], "travel")
         self.assertEqual(payload["items"][0]["draft"]["questions"][0]["correctAnswers"], ["Park the car."])
         self.assertFalse((self.root / "data" / "jobs" / str(job_id)).exists())

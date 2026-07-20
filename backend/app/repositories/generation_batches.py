@@ -9,6 +9,7 @@ from backend.app.db.models.audio_tag import AudioTag
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
+    GenerationBatchQuestionType,
     GenerationBatchSpeakerVoice,
     GenerationBatchStatus,
 )
@@ -20,6 +21,7 @@ from backend.app.db.models.voice import Voice
 class GenerationBatchRepository:
     _load_options = (
         selectinload(GenerationBatch.tags),
+        selectinload(GenerationBatch.question_type_requests),
         selectinload(GenerationBatch.items).selectinload(GenerationBatchItem.audio),
         selectinload(GenerationBatch.speaker_voices)
         .selectinload(GenerationBatchSpeakerVoice.voice)
@@ -32,20 +34,28 @@ class GenerationBatchRepository:
         *,
         owner: User,
         job: Job,
-        question_types: list[str],
-        requested_count: int,
+        question_type_counts: Sequence[tuple[str, int]],
         tags: Sequence[AudioTag],
         speaker_voices: Sequence[tuple[str, str, int]],
     ) -> GenerationBatch:
         batch = GenerationBatch(
             owner=owner,
             job=job,
-            question_types=question_types,
-            requested_count=requested_count,
             tags=list(tags),
         )
         session.add(batch)
         session.flush()
+        for position, (question_type, requested_count) in enumerate(
+            question_type_counts
+        ):
+            session.add(
+                GenerationBatchQuestionType(
+                    batch=batch,
+                    question_type=question_type,
+                    requested_count=requested_count,
+                    position=position,
+                )
+            )
         for speaker, normalized_speaker, voice_id in speaker_voices:
             session.add(
                 GenerationBatchSpeakerVoice(

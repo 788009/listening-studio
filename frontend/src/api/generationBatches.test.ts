@@ -28,13 +28,14 @@ describe('generation batch API', () => {
 
     await createGenerationBatch({
       corpus: 'Corpus text',
-      questionTypes: ['short_dialogue', 'monologue'],
-      count: 4,
+      questionTypeCounts: { short_dialogue: 3, monologue: 1 },
       speakerVoiceMap: { Host: 7, Guest: 9 },
     })
 
-    expect(body?.getAll('questionTypes')).toEqual(['short_dialogue', 'monologue'])
-    expect(body?.get('count')).toBe('4')
+    expect(JSON.parse(String(body?.get('questionTypeCounts')))).toEqual({
+      short_dialogue: 3,
+      monologue: 1,
+    })
     expect(body?.getAll('tagIds')).toEqual([])
     expect(body?.get('corpus')).toBe('Corpus text')
     expect(JSON.parse(String(body?.get('speakerVoiceMap')))).toEqual({ Host: 7, Guest: 9 })

@@ -52,8 +52,7 @@ class GenerationBatchSpeakerVoiceResponse(TagApiModel):
 class GenerationBatchResponse(TagApiModel):
     id: int
     job_id: int
-    question_types: list[QuestionType]
-    requested_count: int = Field(ge=1)
+    question_type_counts: dict[QuestionType, int]
     status: GenerationBatchStatus
     progress: int = Field(ge=0, le=100)
     tags: list[GenerationBatchTagResponse]

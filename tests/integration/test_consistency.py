@@ -23,6 +23,7 @@ from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
+    GenerationBatchQuestionType,
     GenerationBatchStatus,
 )
 from backend.app.db.models.voice import (
@@ -138,9 +139,14 @@ class ConsistencyIntegrationTest(unittest.TestCase):
             batch = GenerationBatch(
                 owner=owner,
                 job=batch_job,
-                question_types=["short_dialogue"],
-                requested_count=1,
                 status=GenerationBatchStatus.PROCESSING,
+            )
+            batch.question_type_requests.append(
+                GenerationBatchQuestionType(
+                    question_type="short_dialogue",
+                    requested_count=1,
+                    position=0,
+                )
             )
             session.add_all([active_audio, batch])
             session.flush()

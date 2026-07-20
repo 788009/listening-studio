@@ -7,8 +7,7 @@ import { useListeningDraftsStore } from './listeningDrafts'
 const batch = {
   id: 9,
   jobId: 10,
-  questionTypes: ['monologue' as const],
-  requestedCount: 1,
+  questionTypeCounts: { monologue: 1 },
   status: 'completed' as const,
   progress: 100,
   tags: [{ id: 4, type: 'topic' as const, englishValue: 'travel' }],
