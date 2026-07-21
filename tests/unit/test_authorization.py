@@ -4,7 +4,7 @@ import unittest
 
 from backend.app.core.auth import Principal, STUDENT_PRINCIPAL
 from backend.app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
-from backend.app.db.models.user import User
+from backend.app.db.models.user import User, UserRole
 from backend.app.services.authorization import (
     AuthorizationService,
     ResourceDescriptor,
@@ -19,6 +19,8 @@ class AuthorizationServiceTest(unittest.TestCase):
         self.service = AuthorizationService()
         self.owner = Principal(User(id=1))
         self.other_teacher = Principal(User(id=2))
+        self.admin = Principal(User(id=3, role=UserRole.ADMIN))
+        self.super_admin = Principal(User(id=4, role=UserRole.SUPER_ADMIN))
 
     @staticmethod
     def resource(
@@ -103,29 +105,42 @@ class AuthorizationServiceTest(unittest.TestCase):
         self.assertFalse(self.service.can_view(self.other_teacher, resource))
         self.assertFalse(self.service.can_view(STUDENT_PRINCIPAL, resource))
 
-    def test_edit_and_delete_are_owner_only(self) -> None:
+    def test_edit_is_owner_only(self) -> None:
         for visibility in ResourceVisibility:
             for status in ResourceStatus:
                 resource = self.resource(visibility=visibility, status=status)
                 with self.subTest(visibility=visibility, status=status):
-                    for operation in (
-                        self.service.require_edit,
-                        self.service.require_delete,
-                    ):
-                        operation(self.owner, resource)
-                        expected_error = (
-                            ForbiddenError
-                            if visibility is ResourceVisibility.PUBLIC
-                            else NotFoundError
-                        )
-                        with self.assertRaises(expected_error):
-                            operation(self.other_teacher, resource)
-
+                    self.service.require_edit(self.owner, resource)
+                    expected_error = (
+                        ForbiddenError
+                        if visibility is ResourceVisibility.PUBLIC
+                        else NotFoundError
+                    )
+                    with self.assertRaises(expected_error):
+                        self.service.require_edit(self.other_teacher, resource)
                     self.assertTrue(self.service.can_edit(self.owner, resource))
-                    self.assertTrue(self.service.can_delete(self.owner, resource))
                     self.assertFalse(
                         self.service.can_edit(self.other_teacher, resource)
                     )
+
+    def test_admins_can_delete_other_teachers_public_resources_only(self) -> None:
+        for kind in ResourceKind:
+            public = self.resource(kind=kind, visibility=ResourceVisibility.PUBLIC)
+            private = self.resource(kind=kind, visibility=ResourceVisibility.PRIVATE)
+            with self.subTest(kind=kind):
+                for principal in (self.admin, self.super_admin):
+                    self.assertTrue(self.service.can_delete(principal, public))
+                    self.service.require_delete(principal, public)
+                    self.assertFalse(self.service.can_delete(principal, private))
+                    with self.assertRaises(NotFoundError):
+                        self.service.require_delete(principal, private)
+
+                self.assertFalse(self.service.can_delete(self.other_teacher, public))
+                with self.assertRaises(ForbiddenError):
+                    self.service.require_delete(self.other_teacher, public)
+
+                self.assertTrue(self.service.can_delete(self.owner, public))
+                self.assertTrue(self.service.can_delete(self.owner, private))
 
     def test_publish_requires_owner_ready_status_and_file(self) -> None:
         ready = self.resource()

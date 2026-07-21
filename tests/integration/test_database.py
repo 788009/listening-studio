@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.db.session import create_db_engine
 
@@ -29,7 +30,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260720_0017")
+            self.assertEqual(revision, "20260721_0018")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -37,6 +38,52 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine.dispose()
 
         self.assertIsNone(revision)
+
+    def test_user_role_migration_defaults_existing_and_new_users(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "user-roles.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260720_0017")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'existing', 'active', "
+                        "'ExistingUser', 'existinguser')"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'new', 'active', 'NewUser', 'newuser')"
+                    )
+                )
+                roles = connection.execute(
+                    text("SELECT user_id, role FROM users ORDER BY id")
+                ).all()
+            with self.assertRaises(IntegrityError):
+                with engine.begin() as connection:
+                    connection.execute(
+                        text("UPDATE users SET role = 'invalid' WHERE id = 1")
+                    )
+            command.downgrade(config, "20260720_0017")
+            with engine.connect() as connection:
+                columns = {
+                    column["name"]
+                    for column in inspect(connection).get_columns("users")
+                }
+            engine.dispose()
+
+        self.assertEqual(roles, [("ExistingUser", "user"), ("NewUser", "user")])
+        self.assertNotIn("role", columns)
 
     def test_sqlite_connections_enable_foreign_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

@@ -17,7 +17,10 @@ export interface CurrentUser {
   username: string | null
   locale: string
   profileComplete: boolean
+  role: UserRole
 }
+
+export type UserRole = 'user' | 'admin' | 'super_admin'
 
 export const useAuthStore = defineStore('auth', () => {
   const capabilities = ref<AuthenticationCapabilities>({
@@ -32,6 +35,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isTeacher = computed(() => user.value !== null)
   const profileComplete = computed(() => user.value?.profileComplete ?? false)
+  const isAdmin = computed(
+    () => user.value?.role === 'admin' || user.value?.role === 'super_admin',
+  )
+  const isSuperAdmin = computed(() => user.value?.role === 'super_admin')
 
   async function loadCapabilities(): Promise<void> {
     if (capabilitiesLoaded.value || capabilitiesLoading.value) {
@@ -99,6 +106,8 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     isTeacher,
     profileComplete,
+    isAdmin,
+    isSuperAdmin,
     loadCapabilities,
     loadCurrentUser,
     setCurrentUser,

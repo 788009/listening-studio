@@ -23,6 +23,7 @@ from backend.app.db.models.voice import (
     VoiceStatus,
     VoiceVisibility,
 )
+from backend.app.db.models.user import UserRole
 from backend.app.factory import create_app
 from backend.app.integrations.identity import (
     DEBUG_ISSUER_HEADER,
@@ -142,6 +143,7 @@ class UserApiIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(pending.status_code, 200)
         self.assertEqual(pending.json()["locale"], "zh-CN")
+        self.assertEqual(pending.json()["role"], "user")
 
         completed = self.complete_profile("localized", "LocalizedTeacher")
         unsupported = self.send(
@@ -286,6 +288,76 @@ class UserApiIntegrationTest(unittest.TestCase):
 
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.json()["error"]["code"], "profile_incomplete")
+
+    def test_super_admin_manages_admin_roles_without_exposing_its_role(self) -> None:
+        self.complete_profile("super", "RootTeacher")
+        self.complete_profile("target", "TargetTeacher")
+        self.complete_profile("regular", "RegularTeacher")
+        with self.app.state.session_factory() as session:
+            super_admin = UserRepository().get_by_user_id(session, "RootTeacher")
+            assert super_admin is not None
+            super_admin.role = UserRole.SUPER_ADMIN
+            session.commit()
+
+        denied_list = self.send(
+            "GET",
+            "/api/users",
+            headers=self.headers("regular"),
+        )
+        denied_update = self.send(
+            "PATCH",
+            "/api/users/TargetTeacher/role",
+            headers=self.headers("regular"),
+            json={"role": "admin"},
+        )
+        listed = self.send(
+            "GET",
+            "/api/users?page=1&pageSize=25",
+            headers=self.headers("super"),
+        )
+        promoted = self.send(
+            "PATCH",
+            "/api/users/targetteacher/role",
+            headers=self.headers("super"),
+            json={"role": "admin"},
+        )
+        target_me = self.send(
+            "GET",
+            "/api/users/me",
+            headers=self.headers("target"),
+        )
+        demoted = self.send(
+            "PATCH",
+            "/api/users/TargetTeacher/role",
+            headers=self.headers("super"),
+            json={"role": "user"},
+        )
+        assign_super_admin = self.send(
+            "PATCH",
+            "/api/users/TargetTeacher/role",
+            headers=self.headers("super"),
+            json={"role": "super_admin"},
+        )
+        change_super_admin = self.send(
+            "PATCH",
+            "/api/users/RootTeacher/role",
+            headers=self.headers("super"),
+            json={"role": "user"},
+        )
+
+        self.assertEqual(denied_list.status_code, 403)
+        self.assertEqual(denied_update.status_code, 403)
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(listed.json()["total"], 3)
+        roles = {item["userId"]: item["role"] for item in listed.json()["items"]}
+        self.assertEqual(roles["RootTeacher"], "super_admin")
+        self.assertEqual(promoted.status_code, 200)
+        self.assertEqual(promoted.json()["role"], "admin")
+        self.assertEqual(target_me.json()["role"], "admin")
+        self.assertEqual(demoted.status_code, 200)
+        self.assertEqual(demoted.json()["role"], "user")
+        self.assertEqual(assign_super_admin.status_code, 422)
+        self.assertEqual(change_super_admin.status_code, 403)
 
 
 if __name__ == "__main__":

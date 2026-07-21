@@ -35,6 +35,7 @@ async function mountUserView(authenticated: boolean) {
       username: 'Other Teacher',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
   } else {
     auth.loaded = true

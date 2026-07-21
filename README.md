@@ -114,6 +114,20 @@ source .venv/bin/activate
 .venv/bin/alembic -c alembic.ini downgrade base
 ```
 
+### Super Admin Assignment
+
+`super_admin` is never assignable through the application API or frontend. Set
+or revoke it manually through the production database console after the teacher
+has completed profile setup:
+
+```sql
+UPDATE users SET role = 'super_admin' WHERE normalized_user_id = 'teacherone';
+UPDATE users SET role = 'user' WHERE normalized_user_id = 'teacherone';
+```
+
+Replace `teacherone` with the lower-case user ID. Super Admins can assign the
+`admin` and `user` roles from the User roles page.
+
 ## Consistency Scan
 
 Report database and managed-file inconsistencies without changing either:

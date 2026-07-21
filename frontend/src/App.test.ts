@@ -36,10 +36,23 @@ describe('App', () => {
       username: 'Teacher One',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
     await wrapper.vm.$nextTick()
 
     expect(wrapper.get('a[href="/create"]').text()).toBe('Create')
     expect(wrapper.get('a[href="/manage"]').text()).toBe('Manage')
+    expect(wrapper.find('a[href="/admin/users"]').exists()).toBe(false)
+
+    useAuthStore().setCurrentUser({
+      userId: 'RootTeacher',
+      username: 'Root Teacher',
+      locale: 'en',
+      profileComplete: true,
+      role: 'super_admin',
+    })
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.get('a[href="/admin/users"]').text()).toBe('User roles')
   })
 })

@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import type { Audio } from '@/api/audios'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import { setLocale } from '@/i18n'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, type UserRole } from '@/stores/auth'
 import AudioDetailView from './AudioDetailView.vue'
 import LibraryView from './LibraryView.vue'
 
@@ -82,16 +82,17 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function setupAuth(owner = false): ReturnType<typeof createPinia> {
+function setupAuth(owner = false, role: UserRole = 'user'): ReturnType<typeof createPinia> {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
-  if (owner) {
+  if (owner || role !== 'user') {
     auth.setCurrentUser({
-      userId: 'TeacherOne',
-      username: 'Teacher One',
+      userId: owner ? 'TeacherOne' : 'AdminTeacher',
+      username: owner ? 'Teacher One' : 'Admin Teacher',
       locale: 'en',
       profileComplete: true,
+      role,
     })
   } else {
     auth.loaded = true
@@ -403,6 +404,28 @@ describe('audio views', () => {
     await flushPromises()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  it('lets an admin delete public audio without exposing owner editing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ ...audio, visibility: 'public' })),
+    )
+    const pinia = setupAuth(false, 'admin')
+    const router = testRouter()
+    await router.push('/audio/5')
+    const wrapper = mount(AudioDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Edit')
+    const deleteButton = wrapper.findAll('button').find((button) =>
+      button.text().includes('Delete audio'),
+    )
+    expect(deleteButton).toBeDefined()
+    await deleteButton?.trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Delete audio')
   })
 
   it('renders the normalized text when an audio has no utterances', async () => {

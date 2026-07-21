@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from loguru import logger
 from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.orm import Session
@@ -11,11 +12,12 @@ from backend.app.core.auth import (
     Principal,
     get_principal,
     require_completed_profile,
+    require_super_admin,
     require_teacher,
 )
 from backend.app.core.exceptions import NotFoundError
 from backend.app.core.locales import SupportedLocale
-from backend.app.db.models.user import User
+from backend.app.db.models.user import User, UserRole
 from backend.app.db.session import get_db_session
 from backend.app.repositories.users import UserRepository
 from backend.app.services.users import UserService
@@ -59,6 +61,7 @@ class CurrentUserResponse(ApiModel):
     username: str | None
     locale: str
     profile_complete: bool
+    role: UserRole
 
 
 class PublicStatistics(ApiModel):
@@ -80,6 +83,24 @@ class UserSummaryResponse(ApiModel):
     private_statistics: PrivateStatistics | None = None
 
 
+class ManagedUserResponse(ApiModel):
+    user_id: str
+    username: str | None
+    role: UserRole
+    created_at: datetime
+
+
+class ManagedUserListResponse(ApiModel):
+    items: list[ManagedUserResponse]
+    page: int
+    page_size: int
+    total: int
+
+
+class UpdateUserRoleRequest(ApiModel):
+    role: Literal[UserRole.USER, UserRole.ADMIN]
+
+
 def _attached_user(session: Session, current_user: User) -> User:
     user = UserRepository().get_by_id(session, current_user.id)
     if user is None:
@@ -93,6 +114,18 @@ def _current_user_response(user: User) -> CurrentUserResponse:
         username=user.username,
         locale=user.locale,
         profile_complete=user.is_profile_complete,
+        role=user.role,
+    )
+
+
+def _managed_user_response(user: User) -> ManagedUserResponse:
+    if user.user_id is None:
+        raise ValueError("Managed users must have a completed profile")
+    return ManagedUserResponse(
+        user_id=user.user_id,
+        username=user.username,
+        role=user.role,
+        created_at=user.created_at,
     )
 
 
@@ -150,6 +183,51 @@ async def update_profile(
         "User profile updated user_db_id={}", user.id
     )
     return _current_user_response(user)
+
+
+@router.get("", response_model=ManagedUserListResponse)
+async def list_users(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    _: User = Depends(require_super_admin),
+    session: Session = Depends(get_db_session),
+) -> ManagedUserListResponse:
+    users, total = UserRepository().list_active(
+        session,
+        page=page,
+        page_size=page_size,
+    )
+    return ManagedUserListResponse(
+        items=[_managed_user_response(user) for user in users],
+        page=page,
+        page_size=page_size,
+        total=total,
+    )
+
+
+@router.patch("/{user_id}/role", response_model=ManagedUserResponse)
+async def update_user_role(
+    user_id: str,
+    payload: UpdateUserRoleRequest,
+    request: Request,
+    current_user: User = Depends(require_super_admin),
+    session: Session = Depends(get_db_session),
+) -> ManagedUserResponse:
+    user = UserRepository().get_by_user_id(session, user_id)
+    if user is None or user.user_id is None:
+        raise NotFoundError("User not found")
+    UserService().update_role(session, user, UserRole(payload.role))
+    logger.bind(
+        request_id=request.state.request_id,
+        user_db_id=current_user.id,
+        resource_type="user",
+        resource_id=user.id,
+    ).info(
+        "User role updated target_user_db_id={} role={}",
+        user.id,
+        user.role.value,
+    )
+    return _managed_user_response(user)
 
 
 @router.get(

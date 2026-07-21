@@ -21,7 +21,7 @@ from backend.app.db.models.audio import (
     AudioStatus,
     AudioVisibility,
 )
-from backend.app.db.models.user import User
+from backend.app.db.models.user import User, UserRole
 from backend.app.db.models.voice import (
     Voice,
     VoiceSampleSource,
@@ -662,6 +662,46 @@ class VoiceApiIntegrationTest(unittest.TestCase):
     @staticmethod
     def _translation(language: str, value: str) -> TagTranslationInput:
         return TagTranslationInput(language=language, value=value)
+
+    def test_admin_can_delete_another_users_public_voice_only(self) -> None:
+        self.complete_profile("owner", "VoiceOwner")
+        self.complete_profile("admin", "VoiceAdmin")
+        with self.app.state.session_factory() as session:
+            owner = self.user(session, "VoiceOwner")
+            admin = self.user(session, "VoiceAdmin")
+            admin.role = UserRole.ADMIN
+            public = self.upload_voice(
+                session,
+                owner,
+                "Admin deletable public voice",
+                VoiceVisibility.PUBLIC,
+            )
+            private = self.upload_voice(
+                session,
+                owner,
+                "Owner private voice",
+                VoiceVisibility.PRIVATE,
+            )
+            public_id = public.id
+            private_id = private.id
+            session.commit()
+
+        public_deleted = self.send(
+            "DELETE",
+            f"/api/voices/{public_id}",
+            headers=self.headers("admin"),
+        )
+        private_hidden = self.send(
+            "DELETE",
+            f"/api/voices/{private_id}",
+            headers=self.headers("admin"),
+        )
+
+        self.assertEqual(public_deleted.status_code, 204)
+        self.assertEqual(private_hidden.status_code, 404)
+        with self.app.state.session_factory() as session:
+            self.assertIsNone(session.get(Voice, public_id))
+            self.assertIsNotNone(session.get(Voice, private_id))
 
 
 if __name__ == "__main__":

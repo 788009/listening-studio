@@ -15,6 +15,12 @@ class UserStatus(str, Enum):
     ACTIVE = "active"
 
 
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+    SUPER_ADMIN = "super_admin"
+
+
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
@@ -39,6 +45,19 @@ class User(Base):
         ),
         default=UserStatus.PENDING_PROFILE,
         server_default=UserStatus.PENDING_PROFILE.value,
+        nullable=False,
+    )
+    role: Mapped[UserRole] = mapped_column(
+        SqlEnum(
+            UserRole,
+            name="ck_users_role",
+            native_enum=False,
+            create_constraint=True,
+            length=32,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        default=UserRole.USER,
+        server_default=UserRole.USER.value,
         nullable=False,
     )
     user_id: Mapped[str | None] = mapped_column(String(64))

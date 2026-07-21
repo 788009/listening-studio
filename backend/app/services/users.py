@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from backend.app.core.exceptions import (
     ConflictError,
     DomainValidationError,
+    ForbiddenError,
     UserIdImmutableError,
     UserIdTakenError,
 )
 from backend.app.core.locales import normalize_supported_locale
-from backend.app.db.models.user import User, UserStatus
+from backend.app.db.models.user import User, UserRole, UserStatus
 from backend.app.repositories.users import UserRepository
 
 
@@ -110,6 +111,15 @@ class UserService:
 
     def update_locale(self, session: Session, user: User, locale: str) -> User:
         user.locale = self._validate_locale(locale)
+        session.flush()
+        return user
+
+    def update_role(self, session: Session, user: User, role: UserRole) -> User:
+        if user.role is UserRole.SUPER_ADMIN or role is UserRole.SUPER_ADMIN:
+            raise ForbiddenError(
+                "Super Admin roles can only be changed manually on the backend"
+            )
+        user.role = role
         session.flush()
         return user
 

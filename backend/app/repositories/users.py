@@ -47,6 +47,31 @@ class UserRepository:
     def get_by_user_id(self, session: Session, user_id: str) -> User | None:
         return self.get_by_normalized_user_id(session, user_id.lower())
 
+    def list_active(
+        self,
+        session: Session,
+        *,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[User], int]:
+        filters = (
+            User.status == UserStatus.ACTIVE,
+            User.user_id.is_not(None),
+        )
+        total = session.scalar(
+            select(func.count()).select_from(User).where(*filters)
+        )
+        users = list(
+            session.scalars(
+                select(User)
+                .where(*filters)
+                .order_by(User.normalized_user_id, User.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
+        )
+        return users, int(total or 0)
+
     def resource_statistics(
         self,
         session: Session,

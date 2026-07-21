@@ -5,7 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import VoiceDetailView from './VoiceDetailView.vue'
 import VoiceListView from './VoiceListView.vue'
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, type UserRole } from '@/stores/auth'
 
 const voice = {
   id: 7,
@@ -41,14 +41,15 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
-function setupAuth(): ReturnType<typeof createPinia> {
+function setupAuth(userId = 'TeacherOne', role: UserRole = 'user'): ReturnType<typeof createPinia> {
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().setCurrentUser({
-    userId: 'TeacherOne',
-    username: 'Teacher One',
+    userId,
+    username: userId,
     locale: 'en',
     profileComplete: true,
+    role,
   })
   return pinia
 }
@@ -171,6 +172,36 @@ describe('voice views', () => {
     await flushPromises()
     expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  it('lets an admin delete a public voice without exposing owner editing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse({ ...voice, visibility: 'public' })),
+    )
+    const pinia = setupAuth('VoiceAdmin', 'admin')
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/voice/:id', component: VoiceDetailView },
+        { path: '/voices', component: VoiceListView, name: 'voices' },
+        { path: '/create', component: { template: '<div />' }, name: 'create' },
+        { path: '/user/:userId', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/voice/7')
+    const wrapper = mount(VoiceDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Edit')
+    const deleteButton = wrapper.findAll('button').find((button) =>
+      button.text().includes('Delete voice'),
+    )
+    expect(deleteButton).toBeDefined()
+    await deleteButton?.trigger('click')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Delete voice')
   })
 
   it('edits gender tags while preserving the system author tag', async () => {

@@ -18,6 +18,7 @@ describe('profile completion guard', () => {
       username: null,
       locale: 'en',
       profileComplete: false,
+      role: 'user',
     })
     const router = createAppRouter(createMemoryHistory())
 
@@ -33,6 +34,7 @@ describe('profile completion guard', () => {
       username: 'Teacher One',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
     const router = createAppRouter(createMemoryHistory())
 
@@ -80,6 +82,7 @@ describe('profile completion guard', () => {
       username: 'Teacher One',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
     const router = createAppRouter(createMemoryHistory())
 
@@ -95,6 +98,7 @@ describe('profile completion guard', () => {
       username: 'Teacher One',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
     const router = createAppRouter(createMemoryHistory())
 
@@ -111,5 +115,32 @@ describe('profile completion guard', () => {
     await anonymousRouter.push('/manage')
 
     expect(anonymousRouter.currentRoute.value.name).toBe('home')
+  })
+
+  it('restricts user role management to super admins', async () => {
+    const auth = useAuthStore()
+    auth.setCurrentUser({
+      userId: 'AdminTeacher',
+      username: 'Admin Teacher',
+      locale: 'en',
+      profileComplete: true,
+      role: 'admin',
+    })
+    const router = createAppRouter(createMemoryHistory())
+
+    await router.push('/admin/users')
+    expect(router.currentRoute.value.name).toBe('home')
+
+    auth.setCurrentUser({
+      userId: 'RootTeacher',
+      username: 'Root Teacher',
+      locale: 'en',
+      profileComplete: true,
+      role: 'super_admin',
+    })
+    await router.push('/admin/users')
+    expect(router.currentRoute.value.name).toBe('user-roles')
+    expect(auth.isAdmin).toBe(true)
+    expect(auth.isSuperAdmin).toBe(true)
   })
 })

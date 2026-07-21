@@ -19,7 +19,7 @@ from backend.app.db.models.audio import (
     AudioVisibility,
 )
 from backend.app.db.models.audio_tag import AudioTagType
-from backend.app.db.models.user import User
+from backend.app.db.models.user import User, UserRole
 from backend.app.db.models.voice import VoiceSampleSource
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
@@ -270,6 +270,53 @@ class AudioApiIntegrationTest(unittest.TestCase):
             reloaded = session.get(Audio, referenced.id)
             assert reloaded is not None
             self.assertEqual(reloaded.visibility, AudioVisibility.PUBLIC)
+
+    def test_admin_can_delete_another_users_public_audio_only(self) -> None:
+        self.profile()
+        admin_profile = self.send(
+            "POST",
+            "/api/users/me/profile",
+            headers=self.headers("admin"),
+            json={"userId": "AdminTeacher", "username": "Admin"},
+        )
+        self.assertEqual(admin_profile.status_code, 200)
+        with self.app.state.session_factory() as session:
+            owner = self.user(session)
+            admin = UserRepository().get_by_user_id(session, "AdminTeacher")
+            assert admin is not None
+            admin.role = UserRole.ADMIN
+            public = self.ready_audio(
+                session,
+                owner,
+                "Admin deletable public audio",
+                AudioVisibility.PUBLIC,
+            )
+            private = self.ready_audio(
+                session,
+                owner,
+                "Owner private audio",
+                AudioVisibility.PRIVATE,
+            )
+            public_id = public.id
+            private_id = private.id
+            session.commit()
+
+        public_deleted = self.send(
+            "DELETE",
+            f"/api/audios/{public_id}",
+            headers=self.headers("admin"),
+        )
+        private_hidden = self.send(
+            "DELETE",
+            f"/api/audios/{private_id}",
+            headers=self.headers("admin"),
+        )
+
+        self.assertEqual(public_deleted.status_code, 204)
+        self.assertEqual(private_hidden.status_code, 404)
+        with self.app.state.session_factory() as session:
+            self.assertIsNone(session.get(Audio, public_id))
+            self.assertIsNotNone(session.get(Audio, private_id))
 
 
 if __name__ == "__main__":

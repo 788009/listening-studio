@@ -31,6 +31,7 @@ describe('AuthControls', () => {
             username: null,
             locale: 'en',
             profileComplete: false,
+            role: 'user',
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
@@ -77,6 +78,7 @@ describe('AuthControls', () => {
       username: 'Teacher One',
       locale: 'en',
       profileComplete: true,
+      role: 'user',
     })
     const router = createAppRouter(createMemoryHistory())
     await router.push('/user/TeacherOne')

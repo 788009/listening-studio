@@ -58,6 +58,11 @@ const isOwner = computed(
     voice.value !== null &&
     voice.value.author.userId.toLowerCase() === auth.user?.userId?.toLowerCase(),
 )
+const canDelete = computed(
+  () =>
+    isOwner.value ||
+    (auth.isAdmin && voice.value?.visibility === 'public'),
+)
 const canUse = computed(
   () =>
     voice.value?.status === 'ready' &&
@@ -252,6 +257,17 @@ watch(() => route.params.id, loadVoice, { immediate: true })
               <path d="m13 7 4 4" stroke="currentColor" stroke-width="2" />
             </svg>
             {{ t('Edit') }}
+          </button>
+          <button
+            v-if="canDelete && !isOwner"
+            type="button"
+            class="inline-flex h-9 items-center gap-2 border border-danger/40 px-3 text-sm font-medium text-danger hover:border-danger"
+            @click="confirmDelete = true"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" stroke="currentColor" stroke-width="2" />
+            </svg>
+            {{ t('Delete voice') }}
           </button>
           <RouterLink
             v-if="canUse"

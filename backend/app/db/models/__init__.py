@@ -25,7 +25,7 @@ from backend.app.db.models.generation_batch import (
 )
 from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.paper import Paper, PaperItem, PaperPreset, PaperStatus
-from backend.app.db.models.user import User, UserStatus
+from backend.app.db.models.user import User, UserRole, UserStatus
 from backend.app.db.models.voice import (
     Voice,
     VoiceSampleSource,
@@ -62,6 +62,7 @@ __all__ = [
     "GenerationBatchSpeakerVoice",
     "GenerationBatchStatus",
     "User",
+    "UserRole",
     "UserStatus",
     "Voice",
     "VoiceSampleSource",

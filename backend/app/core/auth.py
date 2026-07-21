@@ -6,9 +6,9 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session, sessionmaker
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from backend.app.core.exceptions import ProfileIncompleteError
+from backend.app.core.exceptions import ForbiddenError, ProfileIncompleteError
 from backend.app.core.locales import resolve_locale
-from backend.app.db.models.user import User
+from backend.app.db.models.user import User, UserRole
 from backend.app.integrations.identity import IdentityProvider
 from backend.app.services.users import UserService
 
@@ -20,6 +20,17 @@ class Principal:
     @property
     def is_teacher(self) -> bool:
         return self.user is not None
+
+    @property
+    def is_admin(self) -> bool:
+        return bool(
+            self.user
+            and self.user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}
+        )
+
+    @property
+    def is_super_admin(self) -> bool:
+        return bool(self.user and self.user.role is UserRole.SUPER_ADMIN)
 
     @property
     def has_completed_profile(self) -> bool:
@@ -91,4 +102,12 @@ async def require_completed_profile(
 ) -> User:
     if not user.is_profile_complete:
         raise ProfileIncompleteError()
+    return user
+
+
+async def require_super_admin(
+    user: User = Depends(require_completed_profile),
+) -> User:
+    if user.role is not UserRole.SUPER_ADMIN:
+        raise ForbiddenError("Super Admin access is required")
     return user

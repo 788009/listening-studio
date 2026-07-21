@@ -73,6 +73,10 @@ const { t } = useI18n()
             <svg viewBox="0 0 24 24" fill="none" class="h-[18px] w-[18px]" aria-hidden="true"><path d="M4 7h16M7 12h10M9 17h6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
             {{ t('Manage') }}
           </RouterLink>
+          <RouterLink v-if="auth.isSuperAdmin" to="/admin/users" active-class="bg-accent-soft text-accent" class="mt-1 flex h-10 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted transition-colors hover:bg-raised hover:text-ink">
+            <svg viewBox="0 0 24 24" fill="none" class="h-[18px] w-[18px]" aria-hidden="true"><path d="M16 20v-1.5a4.5 4.5 0 0 0-4.5-4.5h-5A4.5 4.5 0 0 0 2 18.5V20M9 10a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 8h5M19.5 5.5v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" /></svg>
+            {{ t('User roles') }}
+          </RouterLink>
         </template>
       </nav>
 
@@ -106,6 +110,7 @@ const { t } = useI18n()
             <RouterLink to="/papers/new" active-class="bg-accent-soft text-accent" class="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-muted">{{ t('Papers') }}</RouterLink>
             <RouterLink to="/voices" active-class="bg-accent-soft text-accent" class="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-muted">{{ t('Voices') }}</RouterLink>
             <RouterLink to="/manage" active-class="bg-accent-soft text-accent" class="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-muted">{{ t('Manage') }}</RouterLink>
+            <RouterLink v-if="auth.isSuperAdmin" to="/admin/users" active-class="bg-accent-soft text-accent" class="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-muted">{{ t('User roles') }}</RouterLink>
           </template>
         </nav>
       </header>

@@ -15,6 +15,10 @@ class AuthorizationPrincipal(Protocol):
     def is_teacher(self) -> bool:
         pass
 
+    @property
+    def is_admin(self) -> bool:
+        pass
+
 
 class ResourceKind(str, Enum):
     AUDIO = "audio"
@@ -84,7 +88,10 @@ class AuthorizationService:
         principal: AuthorizationPrincipal,
         resource: ResourceDescriptor,
     ) -> bool:
-        return self.can_edit(principal, resource)
+        return self._is_owner(principal, resource) or (
+            principal.is_admin
+            and resource.visibility is ResourceVisibility.PUBLIC
+        )
 
     def can_publish(
         self,

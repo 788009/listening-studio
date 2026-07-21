@@ -90,6 +90,7 @@ function setupAuth() {
     username: 'Teacher One',
     locale: 'en',
     profileComplete: true,
+    role: 'user',
   })
   return pinia
 }

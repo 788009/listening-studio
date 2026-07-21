@@ -52,6 +52,12 @@ const routes = [
     meta: { title: 'Resource management', requiresTeacher: true },
   },
   {
+    path: '/admin/users',
+    name: 'user-roles',
+    component: () => import('@/views/UserRolesView.vue'),
+    meta: { title: 'User roles', requiresSuperAdmin: true },
+  },
+  {
     path: '/voices',
     name: 'voices',
     component: () => import('@/views/VoiceListView.vue'),
@@ -102,6 +108,9 @@ export function createAppRouter(history: RouterHistory = createWebHistory()) {
       return { name: 'home' }
     }
     if (route.meta.requiresTeacher && !auth.isTeacher) {
+      return { name: 'home' }
+    }
+    if (route.meta.requiresSuperAdmin && !auth.isSuperAdmin) {
       return { name: 'home' }
     }
     return true
