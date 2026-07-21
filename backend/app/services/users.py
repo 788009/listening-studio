@@ -123,6 +123,17 @@ class UserService:
         session.flush()
         return user
 
+    def set_super_admin(
+        self,
+        session: Session,
+        user: User,
+        *,
+        enabled: bool,
+    ) -> User:
+        user.role = UserRole.SUPER_ADMIN if enabled else UserRole.USER
+        session.flush()
+        return user
+
     @staticmethod
     def _validate_identity(issuer: str, subject: str) -> None:
         if not issuer.strip() or not subject.strip():

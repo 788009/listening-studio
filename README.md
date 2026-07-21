@@ -117,16 +117,24 @@ source .venv/bin/activate
 ### Super Admin Assignment
 
 `super_admin` is never assignable through the application API or frontend. Set
-or revoke it manually through the production database console after the teacher
-has completed profile setup:
+it through the backend command after the teacher has completed profile setup:
 
-```sql
-UPDATE users SET role = 'super_admin' WHERE normalized_user_id = 'teacherone';
-UPDATE users SET role = 'user' WHERE normalized_user_id = 'teacherone';
+```bash
+export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
+source .venv/bin/activate
+.venv/bin/python -m backend.app.user_admin set-super-admin TeacherOne
 ```
 
-Replace `teacherone` with the lower-case user ID. Super Admins can assign the
-`admin` and `user` roles from the User roles page.
+The user ID match is case-insensitive. To revoke Super Admin and restore the
+account to User:
+
+```bash
+.venv/bin/python -m backend.app.user_admin unset-super-admin TeacherOne
+```
+
+Both commands are idempotent and print the previous role, resulting role, and
+whether a change was made. Super Admins can assign the `admin` and `user` roles
+from the User roles page.
 
 ## Consistency Scan
 
