@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import unicodedata
+import wave
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -22,6 +26,10 @@ from backend.app.db.models.audio import (
 )
 from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.user import User
+from backend.app.integrations.audio_conversion import (
+    AudioConversionError,
+    FfmpegAudioTranscoder,
+)
 from backend.app.integrations.cosyvoice import CosyVoiceIntegration
 from backend.app.services.audio_combiner import AudioCombiner
 from backend.app.services.audio_storage import AudioStorage
@@ -34,6 +42,12 @@ from backend.app.services.audios import (
 from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.jobs import JobService
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
+
+
+SUPPORTED_PREVIEW_UPLOAD_EXTENSIONS = frozenset(
+    {".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".webm"}
+)
+MAX_PREVIEW_UPLOAD_DURATION_SECONDS = 60 * 60
 
 
 @dataclass(frozen=True)
@@ -69,6 +83,8 @@ class AudioPreviewService:
         job_service: JobService | None = None,
         audio_service: AudioService | None = None,
         combiner: AudioCombiner | None = None,
+        max_upload_bytes: int = 50 * 1024 * 1024,
+        audio_transcoder: FfmpegAudioTranscoder | None = None,
     ) -> None:
         self.job_storage = job_storage
         self.voice_storage = voice_storage
@@ -84,6 +100,8 @@ class AudioPreviewService:
             AudioService(audio_storage) if audio_storage is not None else None
         )
         self.combiner = combiner or AudioCombiner()
+        self.max_upload_bytes = max_upload_bytes
+        self.audio_transcoder = audio_transcoder or FfmpegAudioTranscoder()
 
     @staticmethod
     def normalize_input(
@@ -115,6 +133,15 @@ class AudioPreviewService:
 
     @staticmethod
     def content_digest(value: AudioPreviewInput) -> str:
+        encoded = json.dumps(
+            [value.voice_id, value.text],
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    @staticmethod
+    def legacy_content_digest(value: AudioPreviewInput) -> str:
         encoded = json.dumps(
             [value.voice_id, value.speaker_display_name, value.text],
             ensure_ascii=False,
@@ -162,6 +189,115 @@ class AudioPreviewService:
                 self.job_storage.cleanup(job.id)
             raise
 
+    def upload(
+        self,
+        session: Session,
+        *,
+        owner: User,
+        voice_id: int,
+        speaker_display_name: str,
+        text: str,
+        filename: str,
+        content: bytes,
+    ) -> AudioPreviewSubmission:
+        preview_input = self.normalize_input(voice_id, speaker_display_name, text)
+        self.synthesis_service.authorized_voice(session, owner, preview_input.voice_id)
+        wav_content = self._validated_upload(filename, content)
+        self._validate_wav_content(wav_content)
+        digest = self.content_digest(preview_input)
+        job: Job | None = None
+        try:
+            job = self.job_service.create_job(
+                session,
+                owner=owner,
+                job_type=AUDIO_PREVIEW_JOB_TYPE,
+                input_summary={
+                    "voiceId": preview_input.voice_id,
+                    "contentDigest": digest,
+                    "source": "upload",
+                },
+                retryable=False,
+            )
+            self.job_storage.write_audio_preview(job.id, wav_content)
+            now = datetime.now(timezone.utc)
+            job.status = JobStatus.SUCCEEDED
+            job.progress = 100
+            job.result_type = "audio_preview"
+            job.result_id = job.id
+            job.started_at = now
+            job.finished_at = now
+            session.commit()
+            return AudioPreviewSubmission(job, digest)
+        except Exception:
+            session.rollback()
+            if job is not None:
+                self.job_storage.cleanup(job.id)
+            raise
+
+    @staticmethod
+    def _validate_wav_content(content: bytes) -> None:
+        try:
+            with wave.open(io.BytesIO(content), "rb") as audio_file:
+                sample_rate = audio_file.getframerate()
+                frame_count = audio_file.getnframes()
+                if audio_file.getcomptype() != "NONE":
+                    raise wave.Error("Compressed WAV is unsupported")
+        except (EOFError, wave.Error) as exc:
+            raise DomainValidationError(
+                "Audio preview could not be decoded",
+                details={"field": "file"},
+            ) from exc
+        if sample_rate <= 0 or frame_count <= 0:
+            raise DomainValidationError(
+                "Audio preview contains no playable samples",
+                details={"field": "file"},
+            )
+        duration_seconds = frame_count / sample_rate
+        if duration_seconds > MAX_PREVIEW_UPLOAD_DURATION_SECONDS:
+            raise DomainValidationError(
+                "Audio preview is too long",
+                details={
+                    "field": "file",
+                    "maxDurationSeconds": MAX_PREVIEW_UPLOAD_DURATION_SECONDS,
+                },
+            )
+
+    def _validated_upload(self, filename: str, content: bytes) -> bytes:
+        if not isinstance(filename, str) or not filename.strip():
+            raise DomainValidationError(
+                "Audio preview filename is required",
+                details={"field": "file"},
+            )
+        extension = Path(filename).suffix.casefold()
+        if extension not in SUPPORTED_PREVIEW_UPLOAD_EXTENSIONS:
+            raise DomainValidationError(
+                "Audio preview format is not supported",
+                details={"field": "file"},
+            )
+        if not isinstance(content, bytes) or not content:
+            raise DomainValidationError(
+                "Audio preview cannot be empty",
+                details={"field": "file"},
+            )
+        if len(content) > self.max_upload_bytes:
+            raise DomainValidationError(
+                "Audio preview exceeds the upload size limit",
+                details={"field": "file", "maxBytes": self.max_upload_bytes},
+            )
+        if extension == ".wav":
+            return content
+        try:
+            return self.audio_transcoder.convert_to_wav(
+                content,
+                extension=extension,
+                max_duration_seconds=MAX_PREVIEW_UPLOAD_DURATION_SECONDS,
+            )
+        except AudioConversionError as exc:
+            raise DomainValidationError(
+                "Audio preview could not be decoded",
+                details={"field": "file"},
+            ) from exc
+
     def process(
         self,
         session: Session,
@@ -189,7 +325,10 @@ class AudioPreviewService:
             )
         except (OSError, ValueError, TypeError, DomainValidationError) as exc:
             raise JobFailedError("Audio preview input is unavailable") from exc
-        if self.content_digest(preview_input) != expected_digest:
+        if expected_digest not in {
+            self.content_digest(preview_input),
+            self.legacy_content_digest(preview_input),
+        }:
             raise JobFailedError("Audio preview input does not match its task")
         checkpoint(15)
         voice = self.synthesis_service.authorized_voice(
@@ -259,7 +398,8 @@ class AudioPreviewService:
             if (
                 job.status is not JobStatus.SUCCEEDED
                 or job.input_summary.get("voiceId") != value.voice_id
-                or job.input_summary.get("contentDigest") != digest
+                or job.input_summary.get("contentDigest")
+                not in {digest, self.legacy_content_digest(value)}
                 or not self.job_storage.audio_preview_path(job.id).is_file()
             ):
                 raise ConflictError("Audio preview is missing or out of date")

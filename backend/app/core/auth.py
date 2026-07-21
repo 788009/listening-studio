@@ -111,3 +111,11 @@ async def require_super_admin(
     if user.role is not UserRole.SUPER_ADMIN:
         raise ForbiddenError("Super Admin access is required")
     return user
+
+
+async def require_admin(
+    user: User = Depends(require_completed_profile),
+) -> User:
+    if user.role not in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+        raise ForbiddenError("Admin access is required")
+    return user

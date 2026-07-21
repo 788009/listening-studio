@@ -9,6 +9,7 @@ import {
   deleteAudioPreview,
   listAudioCreationTags,
   publishAudioFromPreviews,
+  uploadAudioPreview,
   type AudioTag,
   type AudioQuestionInput,
   type AudioPreviewInput,
@@ -31,12 +32,14 @@ import type {
 import type { TagTranslation } from '@/api/voices'
 import { useI18n } from '@/i18n'
 import { useListeningDraftsStore, type ListeningDraft } from '@/stores/listeningDrafts'
+import { useAuthStore } from '@/stores/auth'
 
 type CreationTagType = 'topic' | 'category'
 
 const route = useRoute()
 const { locale, t } = useI18n()
 const draftStore = useListeningDraftsStore()
+const auth = useAuthStore()
 const title = ref('')
 const speakers = ref<SpeakerDraft[]>([])
 const turns = ref<DialogueTurnDraft[]>([])
@@ -572,6 +575,81 @@ async function generatePreview(
   }
 }
 
+async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
+  formError.value = ''
+  const content = turnContent(turnKey)
+  const turn = turns.value.find((item) => item.key === turnKey)
+  if (!content || !turn) {
+    formError.value = t('Select a speaker and enter text for every item')
+    return
+  }
+  const signature = contentSignature(content, Number(turn.speakerKey))
+  const states = previewBucket()
+  const previous = states[turnKey]
+  const requestId = ++nextPreviewRequestId
+  replacePreviewBucket({
+    ...states,
+    [turnKey]: {
+      requestId,
+      pendingSignature: signature,
+      pendingSpeakerKey: Number(turn.speakerKey),
+      pendingContent: content,
+      pendingJobId: null,
+      status: 'submitting',
+      progress: 0,
+      generated: previous?.generated,
+    },
+  })
+  try {
+    const accepted = await uploadAudioPreview(content, file)
+    if (previewStates.value[turnKey]?.requestId !== requestId) {
+      void deleteAudioPreview(accepted.jobId).catch(() => undefined)
+      return
+    }
+    replacePreviewBucket({
+      ...previewStates.value,
+      [turnKey]: {
+        requestId,
+        pendingSignature: signature,
+        pendingSpeakerKey: Number(turn.speakerKey),
+        pendingContent: content,
+        pendingJobId: null,
+        status: 'succeeded',
+        progress: 100,
+        generated: {
+          signature,
+          jobId: accepted.jobId,
+          speakerKey: Number(turn.speakerKey),
+          content,
+        },
+      },
+    })
+    if (previous?.pendingJobId && previous.pendingJobId !== accepted.jobId) {
+      void deleteAudioPreview(previous.pendingJobId).catch(() => undefined)
+    }
+    if (previous?.generated?.jobId && previous.generated.jobId !== accepted.jobId) {
+      void deleteAudioPreview(previous.generated.jobId).catch(() => undefined)
+    }
+  } catch (error) {
+    if (previewStates.value[turnKey]?.requestId !== requestId) return
+    replacePreviewBucket({
+      ...previewStates.value,
+      [turnKey]: {
+        requestId,
+        pendingSignature: signature,
+        pendingSpeakerKey: Number(turn.speakerKey),
+        pendingContent: content,
+        pendingJobId: null,
+        status: 'failed',
+        progress: 0,
+        generated: previous?.generated,
+        errorMessage:
+          error instanceof ApiError ? error.message : t('Audio preview could not be uploaded'),
+      },
+    })
+  }
+}
+
 async function generateMissingPreviews(): Promise<void> {
   formError.value = ''
   const content = validateContent()
@@ -1062,7 +1140,9 @@ onUnmounted(() => clearTimeout(previewPollTimer))
         v-model="turns"
         :speakers="speakers"
         :previews="previewPresentations"
+        :can-upload="auth.isAdmin"
         @generate="generateTurnPreview"
+        @upload="uploadTurnPreview"
         @remove="removeTurnPreview"
       />
 

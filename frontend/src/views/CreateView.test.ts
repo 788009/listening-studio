@@ -1,10 +1,11 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia } from 'pinia'
+import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import { setLocale } from '@/i18n'
 import { useListeningDraftsStore } from '@/stores/listeningDrafts'
+import { useAuthStore, type UserRole } from '@/stores/auth'
 import CreateView from './CreateView.vue'
 
 const voices = {
@@ -87,7 +88,21 @@ function publishedAudio(id: number) {
   }
 }
 
-async function mountView() {
+async function mountView(role: UserRole | null = null) {
+  const pinia = createPinia()
+  setActivePinia(pinia)
+  const auth = useAuthStore()
+  if (role) {
+    auth.setCurrentUser({
+      userId: 'TeacherOne',
+      username: 'Teacher',
+      locale: 'en',
+      profileComplete: true,
+      role,
+    })
+  } else {
+    auth.loaded = true
+  }
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -99,7 +114,7 @@ async function mountView() {
   await router.push('/create?voice=2')
   await router.isReady()
   return mount({ template: '<router-view />' }, {
-    global: { plugins: [createPinia(), router] },
+    global: { plugins: [pinia, router] },
   })
 }
 
@@ -153,10 +168,50 @@ describe('direct creation view', () => {
     expect(wrapper.get('#turn-speaker-1').text()).toContain('Speaker 1')
     expect(button(wrapper, 'Generate preview').exists()).toBe(true)
     expect(button(wrapper, 'Generate audio').exists()).toBe(true)
+    expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(wrapper.get('input[type="checkbox"]').element).toHaveProperty(
       'checked',
       true,
     )
+    wrapper.unmount()
+  })
+
+  it('lets an admin upload and preview a turn audio file', async () => {
+    let uploadBody: FormData | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if (path === '/api/audio-previews/upload' && init?.method === 'POST') {
+          uploadBody = init.body as FormData
+          return Promise.resolve(
+            jsonResponse({ jobId: 77, contentDigest: 'd'.repeat(64) }, 201),
+          )
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const wrapper = await mountView('admin')
+    await flushPromises()
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue('Uploaded text.')
+    const file = new File(['audio'], 'turn.mp3', { type: 'audio/mpeg' })
+    const fileInput = wrapper.get('input[type="file"]')
+    Object.defineProperty(fileInput.element, 'files', {
+      value: [file],
+      configurable: true,
+    })
+    await fileInput.trigger('change')
+    await flushPromises()
+
+    expect(uploadBody?.get('voice_id')).toBe('2')
+    expect(uploadBody?.get('speaker_display_name')).toBe('Woman')
+    expect(uploadBody?.get('text')).toBe('Uploaded text.')
+    expect(uploadBody?.get('file')).toBe(file)
+    expect(wrapper.get('audio').attributes('src')).toBe('/media/audio-preview/77')
+    expect(button(wrapper, 'Publish').exists()).toBe(true)
     wrapper.unmount()
   })
 

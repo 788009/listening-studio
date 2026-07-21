@@ -197,6 +197,21 @@ export function createAudioPreview(
   })
 }
 
+export function uploadAudioPreview(
+  input: AudioPreviewInput,
+  file: File,
+): Promise<AudioPreviewAccepted> {
+  const form = new FormData()
+  form.set('voice_id', String(input.voiceId))
+  form.set('speaker_display_name', input.speakerDisplayName)
+  form.set('text', input.text)
+  form.set('file', file)
+  return apiRequest<AudioPreviewAccepted>('/audio-previews/upload', {
+    method: 'POST',
+    body: form,
+  })
+}
+
 export function deleteAudioPreview(jobId: number): Promise<void> {
   return apiRequest<void>(`/audio-previews/${positiveId(jobId)}`, {
     method: 'DELETE',

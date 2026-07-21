@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 import httpx
@@ -18,6 +20,7 @@ from backend.app.db.models.audio import (
     AudioVisibility,
 )
 from backend.app.db.models.job import Job, JobStatus
+from backend.app.db.models.user import UserRole
 from backend.app.db.models.voice import VoiceStatus, VoiceVisibility
 from backend.app.factory import create_app
 from backend.app.integrations.cosyvoice import FakeCosyVoiceIntegration
@@ -138,6 +141,35 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
                 "speakerDisplayName": speaker,
                 "text": text,
             },
+        )
+
+    @staticmethod
+    def wav_bytes() -> bytes:
+        output = io.BytesIO()
+        with wave.open(output, "wb") as audio_file:
+            audio_file.setnchannels(1)
+            audio_file.setsampwidth(2)
+            audio_file.setframerate(8000)
+            audio_file.writeframes(b"\x00\x00" * 2400)
+        return output.getvalue()
+
+    def upload_preview(
+        self,
+        subject: str,
+        *,
+        filename: str = "turn.wav",
+        content: bytes | None = None,
+    ) -> httpx.Response:
+        return self.send(
+            "POST",
+            "/api/audio-previews/upload",
+            headers=self.headers(subject),
+            data={
+                "voice_id": str(self.voice_id),
+                "speaker_display_name": "Woman",
+                "text": "Uploaded line.",
+            },
+            files={"file": (filename, content or self.wav_bytes(), "audio/wav")},
         )
 
     def worker(self, fake: FakeCosyVoiceIntegration) -> JobWorker:
@@ -278,6 +310,119 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             assert audio is not None
             self.assertGreater(audio.duration_seconds or 0, 0.2)
 
+    def test_admin_uploads_preview_and_publishes_with_voice_tag(self) -> None:
+        with self.app.state.session_factory() as session:
+            admin = UserRepository().get_by_user_id(session, "TeacherOne")
+            assert admin is not None
+            admin.role = UserRole.ADMIN
+            session.commit()
+
+        uploaded = self.upload_preview("first")
+        self.assertEqual(uploaded.status_code, 201, uploaded.text)
+        job_id = uploaded.json()["jobId"]
+        with self.app.state.session_factory() as session:
+            job = session.get(Job, job_id)
+            assert job is not None
+            self.assertEqual(job.status, JobStatus.SUCCEEDED)
+            self.assertEqual(job.progress, 100)
+            self.assertEqual(job.input_summary["source"], "upload")
+            self.assertFalse(job.retryable)
+        self.assertTrue(self.job_storage.audio_preview_path(job_id).is_file())
+
+        media = self.send(
+            "GET",
+            f"/media/audio-preview/{job_id}",
+            headers=self.headers("first"),
+        )
+        self.assertEqual(media.status_code, 200)
+        published = self.send(
+            "POST",
+            "/api/audios/from-previews",
+            headers=self.headers("first"),
+            json={
+                "title": "Uploaded turn",
+                "utterances": [
+                    {
+                        "previewJobId": job_id,
+                        "voiceId": self.voice_id,
+                        "speakerDisplayName": "Woman",
+                        "text": "Uploaded line.",
+                    }
+                ],
+                "tagIds": [],
+                "visibility": "public",
+            },
+        )
+        self.assertEqual(published.status_code, 201, published.text)
+        self.assertIn(
+            ("voice", "Preview_voice"),
+            {
+                (tag["type"], tag["englishValue"])
+                for tag in published.json()["tags"]
+            },
+        )
+        self.assertFalse(self.job_storage.directory(job_id).exists())
+
+    def test_regular_user_cannot_upload_preview(self) -> None:
+        response = self.upload_preview("first")
+
+        self.assertEqual(response.status_code, 403)
+        with self.app.state.session_factory() as session:
+            jobs = session.query(Job).all()
+        self.assertEqual(jobs, [])
+
+    def test_invalid_admin_upload_does_not_leave_a_job(self) -> None:
+        with self.app.state.session_factory() as session:
+            admin = UserRepository().get_by_user_id(session, "TeacherOne")
+            assert admin is not None
+            admin.role = UserRole.SUPER_ADMIN
+            session.commit()
+
+        response = self.upload_preview(
+            "first",
+            filename="turn.wav",
+            content=b"not audio",
+        )
+
+        self.assertEqual(response.status_code, 422)
+        with self.app.state.session_factory() as session:
+            jobs = session.query(Job).all()
+        self.assertEqual(jobs, [])
+
+    def test_speaker_rename_does_not_invalidate_uploaded_preview(self) -> None:
+        with self.app.state.session_factory() as session:
+            admin = UserRepository().get_by_user_id(session, "TeacherOne")
+            assert admin is not None
+            admin.role = UserRole.ADMIN
+            session.commit()
+        uploaded = self.upload_preview("first")
+        self.assertEqual(uploaded.status_code, 201)
+
+        published = self.send(
+            "POST",
+            "/api/audios/from-previews",
+            headers=self.headers("first"),
+            json={
+                "title": "Renamed uploaded turn",
+                "utterances": [
+                    {
+                        "previewJobId": uploaded.json()["jobId"],
+                        "voiceId": self.voice_id,
+                        "speakerDisplayName": "Narrator",
+                        "text": "Uploaded line.",
+                    }
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+
+        self.assertEqual(published.status_code, 201, published.text)
+        self.assertEqual(
+            published.json()["utterances"][0]["speakerDisplayName"],
+            "Narrator",
+        )
+
     def test_publish_rejects_stale_and_foreign_previews(self) -> None:
         response = self.submit_preview("Woman", "Original line.")
         job_id = response.json()["jobId"]
@@ -309,6 +454,36 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(stale.status_code, 409)
         self.assertEqual(foreign.status_code, 404)
+
+    def test_speaker_rename_does_not_invalidate_generated_preview(self) -> None:
+        response = self.submit_preview("Woman", "Generated line.")
+        job_id = response.json()["jobId"]
+        self.assertTrue(self.worker(FakeCosyVoiceIntegration()).run_once())
+
+        published = self.send(
+            "POST",
+            "/api/audios/from-previews",
+            headers=self.headers("first"),
+            json={
+                "title": "Renamed generated turn",
+                "utterances": [
+                    {
+                        "previewJobId": job_id,
+                        "voiceId": self.voice_id,
+                        "speakerDisplayName": "Narrator",
+                        "text": "Generated line.",
+                    }
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+
+        self.assertEqual(published.status_code, 201, published.text)
+        self.assertEqual(
+            published.json()["utterances"][0]["speakerDisplayName"],
+            "Narrator",
+        )
 
     def test_multiple_turns_with_one_speaker_publish_as_single_speaker(self) -> None:
         first_id = self.submit_preview("Narrator", "First part.").json()["jobId"]

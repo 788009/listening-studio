@@ -1,6 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from loguru import logger
 from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
@@ -14,7 +25,11 @@ from backend.app.api.audio_schemas import (
 from backend.app.api.audios import _response
 from backend.app.api.media import stream_wav
 from backend.app.api.schemas import ResourceId
-from backend.app.core.auth import Principal, require_completed_profile
+from backend.app.core.auth import (
+    Principal,
+    require_admin,
+    require_completed_profile,
+)
 from backend.app.core.exceptions import ConflictError
 from backend.app.db.models.job import JobStatus
 from backend.app.db.models.user import User
@@ -40,6 +55,7 @@ def _service(request: Request, *, publishing: bool = False) -> AudioPreviewServi
         job_storage=JobStorage(settings.data_dir),
         voice_storage=VoiceStorage(settings.data_dir),
         audio_storage=AudioStorage(settings.data_dir) if publishing else None,
+        max_upload_bytes=settings.max_upload_bytes,
     )
 
 
@@ -66,6 +82,44 @@ async def create_audio_preview(
         resource_type="job",
         resource_id=submission.job.id,
     ).info("Audio preview submitted job_id={}", submission.job.id)
+    return AudioPreviewAccepted(
+        job_id=submission.job.id,
+        content_digest=submission.content_digest,
+    )
+
+
+@router.post(
+    "/upload",
+    response_model=AudioPreviewAccepted,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_audio_preview(
+    request: Request,
+    voice_id: Annotated[int, Form(gt=0)],
+    speaker_display_name: Annotated[str, Form(min_length=1, max_length=200)],
+    text: Annotated[str, Form(min_length=1)],
+    file: Annotated[UploadFile, File()],
+    user: User = Depends(require_admin),
+    session: Session = Depends(get_db_session),
+) -> AudioPreviewAccepted:
+    settings = request.app.state.settings
+    content = await file.read(settings.max_upload_bytes + 1)
+    submission = _service(request).upload(
+        session,
+        owner=user,
+        voice_id=voice_id,
+        speaker_display_name=speaker_display_name,
+        text=text,
+        filename=file.filename or "",
+        content=content,
+    )
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=user.id,
+        resource_type="job",
+        resource_id=submission.job.id,
+    ).info("Audio preview uploaded job_id={}", submission.job.id)
     return AudioPreviewAccepted(
         job_id=submission.job.id,
         content_digest=submission.content_digest,

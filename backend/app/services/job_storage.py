@@ -76,6 +76,15 @@ class JobStorage:
         os.replace(source, target)
         return target
 
+    def write_audio_preview(self, job_id: int, content: bytes) -> Path:
+        temporary = self.audio_preview_temporary_path(job_id)
+        try:
+            temporary.write_bytes(content)
+            return self.finalize_audio_preview(job_id)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
+
     def write_reference(self, job_id: int, content: bytes) -> Path:
         directory = self.directory(job_id)
         directory.mkdir(parents=True, exist_ok=True)

@@ -14,6 +14,7 @@ import {
   listAudios,
   listAudioCreationTags,
   publishAudioFromPreviews,
+  uploadAudioPreview,
   updateAudio,
 } from './audios'
 
@@ -144,6 +145,29 @@ describe('audio API', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/audio-previews/21')
     expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/audios/from-previews')
     expect(audioPreviewMediaPath(21)).toBe('/media/audio-preview/21')
+  })
+
+  it('uploads a turn preview as multipart form data', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse({ jobId: 22, contentDigest: 'b'.repeat(64) }, 201),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['audio'], 'turn.mp3', { type: 'audio/mpeg' })
+
+    await uploadAudioPreview(
+      { voiceId: 2, speakerDisplayName: 'Woman', text: 'Hello' },
+      file,
+    )
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audio-previews/upload')
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(request.method).toBe('POST')
+    expect(request.body).toBeInstanceOf(FormData)
+    const body = request.body as FormData
+    expect(body.get('voice_id')).toBe('2')
+    expect(body.get('speaker_display_name')).toBe('Woman')
+    expect(body.get('text')).toBe('Hello')
+    expect(body.get('file')).toBe(file)
   })
 
   it('loads only topic and category creation tags', async () => {

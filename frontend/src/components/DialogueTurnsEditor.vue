@@ -12,10 +12,12 @@ const props = defineProps<{
   modelValue: DialogueTurnDraft[]
   speakers: SpeakerDraft[]
   previews: Record<number, DialogueTurnPreview>
+  canUpload: boolean
 }>()
 const emit = defineEmits<{
   'update:modelValue': [value: DialogueTurnDraft[]]
   generate: [turnKey: number]
+  upload: [turnKey: number, file: File]
   remove: [turnKey: number]
 }>()
 
@@ -83,6 +85,13 @@ function moveTurn(index: number, offset: -1 | 1): void {
 
 function speakerLabel(speaker: SpeakerDraft, index: number): string {
   return speaker.name.trim() || t('Speaker {position}', { position: index + 1 })
+}
+
+function selectUpload(turnKey: number, event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) emit('upload', turnKey, file)
 }
 </script>
 
@@ -153,6 +162,24 @@ function speakerLabel(speaker: SpeakerDraft, index: number): string {
             </svg>
             <span class="min-w-0 truncate">{{ generateLabel(turn.key) }}</span>
           </button>
+          <label
+            v-if="canUpload"
+            class="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
+            :class="{ 'pointer-events-none opacity-50': isBusy(turn.key) }"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4 shrink-0" aria-hidden="true">
+              <path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <span class="min-w-0 truncate">{{ t('Upload preview audio') }}</span>
+            <input
+              type="file"
+              class="sr-only"
+              accept="audio/wav,audio/mpeg,audio/mp4,audio/aac,audio/flac,audio/ogg,audio/webm,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus,.webm"
+              :disabled="isBusy(turn.key)"
+              :aria-label="t('Upload audio for turn {position}', { position: index + 1 })"
+              @change="selectUpload(turn.key, $event)"
+            />
+          </label>
         </div>
       </li>
     </ol>
