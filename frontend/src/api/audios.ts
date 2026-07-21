@@ -82,6 +82,21 @@ export interface AudioListOptions {
   visibility?: ResourceVisibility
 }
 
+export interface AudioCreationDraftUtterance {
+  voiceId: number | null
+  speakerDisplayName: string
+  text: string
+}
+
+export interface AudioCreationDraft {
+  sourceAudioId: number
+  title: string
+  text: string
+  utterances: AudioCreationDraftUtterance[]
+  tagIds: number[]
+  questions: AudioQuestionInput[]
+}
+
 export interface AudioUpdate {
   title?: string
   visibility?: ResourceVisibility
@@ -156,6 +171,12 @@ export function listAudios(options: AudioListOptions = {}): Promise<AudioList> {
 export function getAudio(audioId: number, language = 'en'): Promise<Audio> {
   return apiRequest<Audio>(
     `/audios/${positiveId(audioId)}?language=${encodeURIComponent(language)}`,
+  )
+}
+
+export function getAudioCreationDraft(audioId: number): Promise<AudioCreationDraft> {
+  return apiRequest<AudioCreationDraft>(
+    `/audios/${positiveId(audioId)}/creation-draft`,
   )
 }
 

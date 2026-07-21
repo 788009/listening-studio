@@ -7,7 +7,10 @@ from starlette.responses import StreamingResponse
 
 from backend.app.api.audio_schemas import (
     AudioAuthorResponse,
+    AudioCreationDraftResponse,
+    AudioCreationDraftUtteranceResponse,
     AudioListResponse,
+    AudioQuestionRequest,
     AudioQuestionResponse,
     AudioResponse,
     AudioSynthesisAccepted,
@@ -22,7 +25,7 @@ from backend.app.api.tag_schemas import AudioTagResponse, TagTranslationResponse
 from backend.app.core.auth import Principal, get_principal, require_completed_profile
 from backend.app.core.locales import get_request_locale
 from backend.app.db.models.audio import Audio, AudioStatus, AudioVisibility
-from backend.app.db.models.audio_tag import AudioTag
+from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_management import AudioManagementService
@@ -249,6 +252,50 @@ async def get_audio(
 ) -> AudioResponse:
     audio = _service(request).get_visible(session, principal, audio_id)
     return _response(audio, principal, language)
+
+
+@router.get(
+    "/{audio_id}/creation-draft",
+    response_model=AudioCreationDraftResponse,
+)
+async def get_audio_creation_draft(
+    audio_id: ResourceId,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> AudioCreationDraftResponse:
+    draft = _service(request).creation_draft(session, Principal(user), audio_id)
+    audio = draft.source
+    return AudioCreationDraftResponse(
+        source_audio_id=audio.id,
+        title=draft.title,
+        text=audio.text,
+        utterances=[
+            AudioCreationDraftUtteranceResponse(
+                voice_id=item.voice_id,
+                speaker_display_name=item.speaker_display_name,
+                text=item.text,
+            )
+            for item in audio.utterances
+        ],
+        tag_ids=[
+            tag.id
+            for tag in audio.tags
+            if tag.type in {AudioTagType.TOPIC, AudioTagType.CATEGORY}
+        ],
+        questions=[
+            AudioQuestionRequest(
+                prompt=question.prompt,
+                correct_answers=[
+                    answer.text for answer in question.answers if answer.is_correct
+                ],
+                incorrect_answers=[
+                    answer.text for answer in question.answers if not answer.is_correct
+                ],
+            )
+            for question in audio.questions
+        ],
+    )
 
 
 @router.patch(

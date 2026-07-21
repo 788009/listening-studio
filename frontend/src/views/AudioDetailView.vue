@@ -252,6 +252,17 @@ watch(() => route.params.id, loadAudio, { immediate: true })
           </RouterLink>
         </div>
         <div v-if="!editing" class="flex flex-wrap items-center gap-2">
+          <RouterLink
+            v-if="auth.profileComplete && audio.visibility === 'public'"
+            :to="{ name: 'create', query: { fromAudio: String(audio.id) } }"
+            class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
+              <path d="M4 4h6M4 4v6" stroke="currentColor" stroke-width="2" />
+            </svg>
+            {{ t('Create from this audio') }}
+          </RouterLink>
           <button
             v-if="isOwner"
             type="button"

@@ -263,6 +263,17 @@ class AudioService:
             raise
         return audio
 
+    def next_available_title(self, session: Session, title: str) -> str:
+        base_title, normalized_title = normalize_audio_title(title)
+        candidate = base_title
+        suffix_number = 2
+        while self.repository.get_by_normalized_title(session, normalized_title):
+            suffix = f" {suffix_number}"
+            candidate = f"{base_title[: 200 - len(suffix)].rstrip()}{suffix}"
+            candidate, normalized_title = normalize_audio_title(candidate)
+            suffix_number += 1
+        return candidate
+
     def replace_user_tags(
         self,
         session: Session,

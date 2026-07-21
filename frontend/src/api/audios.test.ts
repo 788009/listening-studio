@@ -11,6 +11,7 @@ import {
   deleteAudio,
   deleteAudioPreview,
   getAudio,
+  getAudioCreationDraft,
   listAudios,
   listAudioCreationTags,
   publishAudioFromPreviews,
@@ -49,6 +50,15 @@ describe('audio API', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toContain('q=topic%3Aclimate_change')
     expect(fetchMock.mock.calls[0]?.[0]).toContain('visibility=public')
     expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/audios/5?language=zh-CN')
+  })
+
+  it('loads a creation draft for an existing audio', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ sourceAudioId: 5 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getAudioCreationDraft(5)
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audios/5/creation-draft')
   })
 
   it('updates and deletes owner audio', async () => {

@@ -106,6 +106,7 @@ function testRouter() {
     routes: [
       { path: '/audio', component: LibraryView, name: 'library' },
       { path: '/audio/:id', component: AudioDetailView },
+      { path: '/create', name: 'create', component: { template: '<div />' } },
       { path: '/user/:userId', component: { template: '<div />' } },
     ],
   })
@@ -379,6 +380,7 @@ describe('audio views', () => {
     expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
     expect(wrapper.text()).not.toContain('Edit')
+    expect(wrapper.text()).not.toContain('Create from this audio')
   })
 
   it('shows edit and keyboard-accessible deletion only to the owner', async () => {
@@ -392,7 +394,9 @@ describe('audio views', () => {
     })
     await flushPromises()
 
-    await wrapper.get('button').trigger('click')
+    const createFromLink = wrapper.get('a[href="/create?fromAudio=5"]')
+    expect(createFromLink.text()).toBe('Create from this audio')
+    await wrapper.findAll('button').find((button) => button.text() === 'Edit')?.trigger('click')
     expect(wrapper.find('#audio-visibility').exists()).toBe(true)
     expect(wrapper.findAll('dt').map((item) => item.text())).not.toContain('Visibility')
     const deleteButton = wrapper.findAll('button').find((button) =>

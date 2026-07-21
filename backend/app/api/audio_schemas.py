@@ -59,6 +59,21 @@ class AudioListResponse(TagApiModel):
     total: int = Field(ge=0)
 
 
+class AudioCreationDraftUtteranceResponse(TagApiModel):
+    voice_id: int | None
+    speaker_display_name: str
+    text: str
+
+
+class AudioCreationDraftResponse(TagApiModel):
+    source_audio_id: int
+    title: str
+    text: str
+    utterances: list[AudioCreationDraftUtteranceResponse]
+    tag_ids: list[int]
+    questions: list[AudioQuestionRequest]
+
+
 class AudioSynthesisRequest(TagApiModel):
     title: Title
     text: str = Field(min_length=1)

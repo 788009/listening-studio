@@ -7,10 +7,12 @@ import {
   createAudioPreview,
   createAudioTag,
   deleteAudioPreview,
+  getAudioCreationDraft,
   listAudioCreationTags,
   publishAudioFromPreviews,
   uploadAudioPreview,
   type AudioTag,
+  type AudioCreationDraft,
   type AudioQuestionInput,
   type AudioPreviewInput,
   type ResourceVisibility,
@@ -258,6 +260,33 @@ function applyDraft(draft: ListeningDraft): void {
   selectedTagIds.value = [...draft.tagIds]
   visibility.value = 'public'
   formError.value = ''
+}
+
+function applyCreationDraft(draft: AudioCreationDraft): void {
+  const sourceUtterances = draft.utterances.length > 0
+    ? draft.utterances
+    : [{
+        voiceId: null,
+        speakerDisplayName: t('Speaker {position}', { position: 1 }),
+        text: draft.text,
+      }]
+  applyDraft({
+    title: draft.title,
+    questionType: 'monologue',
+    utterances: sourceUtterances.map((utterance, index) => ({
+      ...utterance,
+      speakerKey: index + 1,
+      voiceId: utterance.voiceId ?? 0,
+    })),
+    questions: draft.questions,
+    tagIds: draft.tagIds,
+  })
+  const availableVoiceIds = new Set(voices.value.map((voice) => voice.id))
+  if (sourceUtterances.some((utterance) => !availableVoiceIds.has(utterance.voiceId ?? 0))) {
+    formError.value = t(
+      'Some voices from this audio are unavailable. Select replacement voices to continue.',
+    )
+  }
 }
 
 function currentDraft(): ListeningDraft | null {
@@ -732,9 +761,14 @@ async function loadOptions(): Promise<void> {
   loadingOptions.value = true
   formError.value = ''
   try {
-    const [voiceResponse, tagResponse] = await Promise.all([
+    const sourceAudioId = Number(route.query.fromAudio)
+    const creationDraftRequest = Number.isInteger(sourceAudioId) && sourceAudioId > 0
+      ? getAudioCreationDraft(sourceAudioId)
+      : Promise.resolve(null)
+    const [voiceResponse, tagResponse, creationDraft] = await Promise.all([
       listVoices({ language: locale.value }),
       listAudioCreationTags(locale.value),
+      creationDraftRequest,
     ])
     voices.value = voiceResponse.items.filter((voice) => voice.status === 'ready')
     tags.value = tagResponse
@@ -747,6 +781,8 @@ async function loadOptions(): Promise<void> {
         : ''
     if (batchMode.value && draftStore.activeDraft) {
       applyDraft(draftStore.activeDraft)
+    } else if (creationDraft) {
+      applyCreationDraft(creationDraft)
     } else {
       if (speakers.value.length === 0) speakers.value = [newSpeaker(voiceId)]
       if (turns.value.length === 0) turns.value = [newTurn(speakers.value[0]?.key)]

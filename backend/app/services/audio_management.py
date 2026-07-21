@@ -25,6 +25,12 @@ class AudioListResult:
     total: int
 
 
+@dataclass(frozen=True)
+class AudioCreationDraft:
+    source: Audio
+    title: str
+
+
 class AudioManagementService:
     def __init__(
         self,
@@ -84,6 +90,20 @@ class AudioManagementService:
         return AudioListResult(
             self.repository.list_by_ids(session, page_ids),
             len(visible_ids),
+        )
+
+    def creation_draft(
+        self,
+        session: Session,
+        principal: AuthorizationPrincipal,
+        audio_id: int,
+    ) -> AudioCreationDraft:
+        audio = self.get_visible(session, principal, audio_id)
+        if audio.visibility is not AudioVisibility.PUBLIC:
+            raise ConflictError("Only public audio can be used as a creation source")
+        return AudioCreationDraft(
+            source=audio,
+            title=self.audio_service.next_available_title(session, audio.title),
         )
 
     def update(

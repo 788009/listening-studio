@@ -88,7 +88,7 @@ function publishedAudio(id: number) {
   }
 }
 
-async function mountView(role: UserRole | null = null) {
+async function mountView(role: UserRole | null = null, path = '/create?voice=2') {
   const pinia = createPinia()
   setActivePinia(pinia)
   const auth = useAuthStore()
@@ -111,7 +111,7 @@ async function mountView(role: UserRole | null = null) {
       { path: '/voices/create', component: { template: '<div />' } },
     ],
   })
-  await router.push('/create?voice=2')
+  await router.push(path)
   await router.isReady()
   return mount({ template: '<router-view />' }, {
     global: { plugins: [pinia, router] },
@@ -173,6 +173,72 @@ describe('direct creation view', () => {
       'checked',
       true,
     )
+    wrapper.unmount()
+  })
+
+  it('prefills every editable field from a public audio creation draft', async () => {
+    const topic = {
+      id: 4,
+      type: 'topic',
+      englishValue: 'climate',
+      displayValue: 'Climate',
+      fullTag: 'topic:climate',
+      translations: [],
+    }
+    const category = {
+      id: 5,
+      type: 'category',
+      englishValue: 'long',
+      displayValue: 'Long',
+      fullTag: 'category:long',
+      translations: [],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const path = String(input)
+        if (path.startsWith('/api/voices')) return Promise.resolve(jsonResponse(voices))
+        if (path.includes('type=topic')) return Promise.resolve(jsonResponse([topic]))
+        if (path.includes('type=category')) return Promise.resolve(jsonResponse([category]))
+        if (path === '/api/audios/5/creation-draft') {
+          return Promise.resolve(jsonResponse({
+            sourceAudioId: 5,
+            title: 'Climate briefing 2',
+            text: 'First line.\nSecond line.\nThird line.',
+            utterances: [
+              { voiceId: 2, speakerDisplayName: 'Woman', text: 'First line.' },
+              { voiceId: 3, speakerDisplayName: 'Student', text: 'Second line.' },
+              { voiceId: 2, speakerDisplayName: 'Woman', text: 'Third line.' },
+            ],
+            tagIds: [4, 5],
+            questions: [{
+              prompt: 'Who spoke first?',
+              correctAnswers: ['Woman'],
+              incorrectAnswers: ['Student'],
+            }],
+          }))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+
+    const wrapper = await mountView('user', '/create?fromAudio=5')
+    await flushPromises()
+
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Climate briefing 2')
+    expect(wrapper.findAll('[id^="speaker-name-"]')).toHaveLength(2)
+    expect(wrapper.get('#speaker-name-1').element).toHaveProperty('value', 'Woman')
+    expect(wrapper.get('#speaker-voice-1').element).toHaveProperty('value', '2')
+    expect(wrapper.get('#speaker-name-2').element).toHaveProperty('value', 'Student')
+    expect(wrapper.get('#speaker-voice-2').element).toHaveProperty('value', '3')
+    expect(wrapper.get('#turn-text-1').element).toHaveProperty('value', 'First line.')
+    expect(wrapper.get('#turn-text-2').element).toHaveProperty('value', 'Second line.')
+    expect(wrapper.get('#turn-text-3').element).toHaveProperty('value', 'Third line.')
+    expect(wrapper.get('#question-prompt-0').element).toHaveProperty('value', 'Who spoke first?')
+    expect(wrapper.get('#question-0-correctAnswers-0').element).toHaveProperty('value', 'Woman')
+    expect(wrapper.get('#question-0-incorrectAnswers-0').element).toHaveProperty('value', 'Student')
+    expect(wrapper.text()).toContain('Climate')
+    expect(wrapper.text()).toContain('Long')
     wrapper.unmount()
   })
 
