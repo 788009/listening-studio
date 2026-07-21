@@ -154,19 +154,14 @@ describe('audio API', () => {
     vi.stubGlobal('fetch', fetchMock)
     const file = new File(['audio'], 'turn.mp3', { type: 'audio/mpeg' })
 
-    await uploadAudioPreview(
-      { voiceId: 2, speakerDisplayName: 'Woman', text: 'Hello' },
-      file,
-    )
+    await uploadAudioPreview(file)
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/audio-previews/upload')
     const request = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(request.method).toBe('POST')
     expect(request.body).toBeInstanceOf(FormData)
     const body = request.body as FormData
-    expect(body.get('voice_id')).toBe('2')
-    expect(body.get('speaker_display_name')).toBe('Woman')
-    expect(body.get('text')).toBe('Hello')
+    expect([...body.keys()]).toEqual(['file'])
     expect(body.get('file')).toBe(file)
   })
 

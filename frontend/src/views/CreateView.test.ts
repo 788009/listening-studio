@@ -178,6 +178,7 @@ describe('direct creation view', () => {
 
   it('lets an admin upload and preview a turn audio file', async () => {
     let uploadBody: FormData | undefined
+    let publishBody: unknown
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -190,13 +191,15 @@ describe('direct creation view', () => {
             jsonResponse({ jobId: 77, contentDigest: 'd'.repeat(64) }, 201),
           )
         }
+        if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+          publishBody = JSON.parse(String(init.body))
+          return Promise.resolve(jsonResponse(publishedAudio(12), 201))
+        }
         throw new Error(`Unexpected request: ${path}`)
       }),
     )
     const wrapper = await mountView('admin')
     await flushPromises()
-    await wrapper.get('#speaker-name-1').setValue('Woman')
-    await wrapper.get('#turn-text-1').setValue('Uploaded text.')
     const file = new File(['audio'], 'turn.mp3', { type: 'audio/mpeg' })
     const fileInput = wrapper.get('input[type="file"]')
     Object.defineProperty(fileInput.element, 'files', {
@@ -206,12 +209,86 @@ describe('direct creation view', () => {
     await fileInput.trigger('change')
     await flushPromises()
 
-    expect(uploadBody?.get('voice_id')).toBe('2')
-    expect(uploadBody?.get('speaker_display_name')).toBe('Woman')
-    expect(uploadBody?.get('text')).toBe('Uploaded text.')
+    expect([...(uploadBody?.keys() ?? [])]).toEqual(['file'])
     expect(uploadBody?.get('file')).toBe(file)
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio-preview/77')
     expect(button(wrapper, 'Publish').exists()).toBe(true)
+
+    await wrapper.get('#audio-title').setValue('Uploaded listening')
+    await wrapper.get('#speaker-name-1').setValue('Narrator')
+    await wrapper.get('#speaker-voice-1').setValue('3')
+    await wrapper.get('#turn-text-1').setValue('Text entered after upload.')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect(publishBody).toMatchObject({
+      utterances: [
+        {
+          previewJobId: 77,
+          voiceId: 3,
+          speakerDisplayName: 'Narrator',
+          text: 'Text entered after upload.',
+        },
+      ],
+    })
+    wrapper.unmount()
+  })
+
+  it('returns an uploaded turn to generated snapshot behavior after generation', async () => {
+    let publishBody: unknown
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if (path === '/api/audio-previews/upload' && init?.method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({ jobId: 80, contentDigest: 'e'.repeat(64) }, 201),
+          )
+        }
+        if (path === '/api/audio-previews' && init?.method === 'POST') {
+          return Promise.resolve(
+            jsonResponse({ jobId: 81, contentDigest: 'f'.repeat(64) }, 202),
+          )
+        }
+        if (path === '/api/jobs/81') {
+          return Promise.resolve(jobResponse(81, 'succeeded'))
+        }
+        if (path === '/api/audio-previews/80' && init?.method === 'DELETE') {
+          return Promise.resolve(emptyResponse())
+        }
+        if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+          publishBody = JSON.parse(String(init.body))
+          return Promise.resolve(jsonResponse(publishedAudio(13), 201))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const wrapper = await mountView('super_admin')
+    await flushPromises()
+    const fileInput = wrapper.get('input[type="file"]')
+    Object.defineProperty(fileInput.element, 'files', {
+      value: [new File(['audio'], 'turn.wav', { type: 'audio/wav' })],
+      configurable: true,
+    })
+    await fileInput.trigger('change')
+    await flushPromises()
+    await wrapper.get('#audio-title').setValue('Generated replacement')
+    await wrapper.get('#speaker-name-1').setValue('Woman')
+    await wrapper.get('#turn-text-1').setValue('Generated text.')
+    await button(wrapper, 'Regenerate preview').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('#turn-text-1').setValue('Changed after generation.')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[role="dialog"]').text()).toContain(
+      'Changes made after preview generation will be discarded',
+    )
+    expect(publishBody).toBeUndefined()
     wrapper.unmount()
   })
 

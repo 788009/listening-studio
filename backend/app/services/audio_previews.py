@@ -194,17 +194,12 @@ class AudioPreviewService:
         session: Session,
         *,
         owner: User,
-        voice_id: int,
-        speaker_display_name: str,
-        text: str,
         filename: str,
         content: bytes,
     ) -> AudioPreviewSubmission:
-        preview_input = self.normalize_input(voice_id, speaker_display_name, text)
-        self.synthesis_service.authorized_voice(session, owner, preview_input.voice_id)
         wav_content = self._validated_upload(filename, content)
         self._validate_wav_content(wav_content)
-        digest = self.content_digest(preview_input)
+        digest = hashlib.sha256(wav_content).hexdigest()
         job: Job | None = None
         try:
             job = self.job_service.create_job(
@@ -212,7 +207,6 @@ class AudioPreviewService:
                 owner=owner,
                 job_type=AUDIO_PREVIEW_JOB_TYPE,
                 input_summary={
-                    "voiceId": preview_input.voice_id,
                     "contentDigest": digest,
                     "source": "upload",
                 },
@@ -395,12 +389,18 @@ class AudioPreviewService:
             )
             job = self.get_owned_preview(session, author, item.preview_job_id)
             digest = self.content_digest(value)
+            uploaded = job.input_summary.get("source") == "upload"
             if (
                 job.status is not JobStatus.SUCCEEDED
-                or job.input_summary.get("voiceId") != value.voice_id
-                or job.input_summary.get("contentDigest")
-                not in {digest, self.legacy_content_digest(value)}
                 or not self.job_storage.audio_preview_path(job.id).is_file()
+                or (
+                    not uploaded
+                    and (
+                        job.input_summary.get("voiceId") != value.voice_id
+                        or job.input_summary.get("contentDigest")
+                        not in {digest, self.legacy_content_digest(value)}
+                    )
+                )
             ):
                 raise ConflictError("Audio preview is missing or out of date")
             self.inspection_storage.inspect_file(

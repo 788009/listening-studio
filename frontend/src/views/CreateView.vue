@@ -61,6 +61,7 @@ const batchResults = ref<{ title: string; audioId: number }[]>([])
 const batchFailures = ref<string[]>([])
 
 interface GeneratedTurnPreview {
+  source: 'generated' | 'upload'
   signature: string
   jobId: number
   speakerKey: number
@@ -149,7 +150,11 @@ const allBatchPreviewsReady = computed(
 const hasUnpublishedTurnChanges = computed(() =>
   turns.value.some((turn) => {
     const generated = previewStates.value[turn.key]?.generated
-    return Boolean(generated && generated.signature !== turnSignature(turn.key))
+    return Boolean(
+      generated &&
+      generated.source === 'generated' &&
+      generated.signature !== turnSignature(turn.key),
+    )
   }),
 )
 
@@ -159,6 +164,7 @@ const batchHasUnpublishedTurnChanges = computed(() =>
       const generated = batchPreviewStates.value[draftIndex]?.[turnIndex + 1]?.generated
       return Boolean(
         generated &&
+        generated.source === 'generated' &&
         generated.signature !== contentSignature(utterance, utterance.speakerKey),
       )
     }),
@@ -428,6 +434,7 @@ async function refreshPreviewJobs(): Promise<void> {
               status: 'succeeded',
               progress: job.progress,
               generated: {
+                source: 'generated',
                 signature: current.pendingSignature,
                 jobId,
                 speakerKey: current.pendingSpeakerKey,
@@ -577,13 +584,15 @@ async function generatePreview(
 
 async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
   formError.value = ''
-  const content = turnContent(turnKey)
   const turn = turns.value.find((item) => item.key === turnKey)
-  if (!content || !turn) {
-    formError.value = t('Select a speaker and enter text for every item')
-    return
+  if (!turn) return
+  const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
+  const content: AudioPreviewInput = {
+    voiceId: Number(speaker?.voiceId) || 0,
+    speakerDisplayName: speaker?.name.trim() ?? '',
+    text: turn.text.trim(),
   }
-  const signature = contentSignature(content, Number(turn.speakerKey))
+  const signature = 'upload'
   const states = previewBucket()
   const previous = states[turnKey]
   const requestId = ++nextPreviewRequestId
@@ -601,7 +610,7 @@ async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
     },
   })
   try {
-    const accepted = await uploadAudioPreview(content, file)
+    const accepted = await uploadAudioPreview(file)
     if (previewStates.value[turnKey]?.requestId !== requestId) {
       void deleteAudioPreview(accepted.jobId).catch(() => undefined)
       return
@@ -617,6 +626,7 @@ async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
         status: 'succeeded',
         progress: 100,
         generated: {
+          source: 'upload',
           signature,
           jobId: accepted.jobId,
           speakerKey: Number(turn.speakerKey),
@@ -909,15 +919,28 @@ async function publishDraftBatchFromPreviews(): Promise<void> {
       const states = batchPreviewStates.value[index] ?? {}
       const utterances = draft.utterances.map((utterance, turnIndex) => {
         const generated = states[turnIndex + 1]?.generated
+        const current = {
+          voiceId: utterance.voiceId,
+          speakerDisplayName: utterance.speakerDisplayName.trim(),
+          text: utterance.text.trim(),
+        }
         return generated
           ? {
               previewJobId: generated.jobId,
-              voiceId: generated.content.voiceId,
+              voiceId:
+                generated.source === 'upload'
+                  ? current.voiceId
+                  : generated.content.voiceId,
               speakerDisplayName:
-                utterance.speakerKey === generated.speakerKey
-                  ? utterance.speakerDisplayName.trim()
-                  : generated.content.speakerDisplayName,
-              text: generated.content.text,
+                generated.source === 'upload'
+                  ? current.speakerDisplayName
+                  : utterance.speakerKey === generated.speakerKey
+                    ? current.speakerDisplayName
+                    : generated.content.speakerDisplayName,
+              text:
+                generated.source === 'upload'
+                  ? current.text
+                  : generated.content.text,
             }
           : null
       })
@@ -970,18 +993,32 @@ async function publishGeneratedAudio(): Promise<void> {
   }
   const normalizedQuestionValues = normalizedQuestions()
   if (!normalizedQuestionValues) return
+  const currentContent = validateContent()
+  if (!currentContent) return
+  const contentByTurnKey = new Map(
+    currentContent.map((content) => [content.turnKey, content]),
+  )
   const utterances = turns.value.map((turn) => {
     const generated = previewStates.value[turn.key]?.generated
     const speaker = speakers.value.find((item) => item.key === turn.speakerKey)
+    const current = contentByTurnKey.get(turn.key)
     return generated
       ? {
           previewJobId: generated.jobId,
-          voiceId: generated.content.voiceId,
+          voiceId:
+            generated.source === 'upload' && current
+              ? current.voiceId
+              : generated.content.voiceId,
           speakerDisplayName:
-            Number(turn.speakerKey) === generated.speakerKey
-              ? speaker?.name.trim() || generated.content.speakerDisplayName
-              : generated.content.speakerDisplayName,
-          text: generated.content.text,
+            generated.source === 'upload' && current
+              ? current.speakerDisplayName
+              : Number(turn.speakerKey) === generated.speakerKey
+                ? speaker?.name.trim() || generated.content.speakerDisplayName
+                : generated.content.speakerDisplayName,
+          text:
+            generated.source === 'upload' && current
+              ? current.text
+              : generated.content.text,
         }
       : null
   })

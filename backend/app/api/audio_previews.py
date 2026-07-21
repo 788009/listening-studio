@@ -6,7 +6,6 @@ from fastapi import (
     APIRouter,
     Depends,
     File,
-    Form,
     Request,
     Response,
     UploadFile,
@@ -95,9 +94,6 @@ async def create_audio_preview(
 )
 async def upload_audio_preview(
     request: Request,
-    voice_id: Annotated[int, Form(gt=0)],
-    speaker_display_name: Annotated[str, Form(min_length=1, max_length=200)],
-    text: Annotated[str, Form(min_length=1)],
     file: Annotated[UploadFile, File()],
     user: User = Depends(require_admin),
     session: Session = Depends(get_db_session),
@@ -107,9 +103,6 @@ async def upload_audio_preview(
     submission = _service(request).upload(
         session,
         owner=user,
-        voice_id=voice_id,
-        speaker_display_name=speaker_display_name,
-        text=text,
         filename=file.filename or "",
         content=content,
     )

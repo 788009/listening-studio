@@ -164,11 +164,6 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             "POST",
             "/api/audio-previews/upload",
             headers=self.headers(subject),
-            data={
-                "voice_id": str(self.voice_id),
-                "speaker_display_name": "Woman",
-                "text": "Uploaded line.",
-            },
             files={"file": (filename, content or self.wav_bytes(), "audio/wav")},
         )
 
@@ -326,6 +321,7 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
             self.assertEqual(job.progress, 100)
             self.assertEqual(job.input_summary["source"], "upload")
+            self.assertNotIn("voiceId", job.input_summary)
             self.assertFalse(job.retryable)
         self.assertTrue(self.job_storage.audio_preview_path(job_id).is_file())
 
@@ -389,7 +385,7 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             jobs = session.query(Job).all()
         self.assertEqual(jobs, [])
 
-    def test_speaker_rename_does_not_invalidate_uploaded_preview(self) -> None:
+    def test_uploaded_preview_uses_publish_time_metadata(self) -> None:
         with self.app.state.session_factory() as session:
             admin = UserRepository().get_by_user_id(session, "TeacherOne")
             assert admin is not None
@@ -409,7 +405,7 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
                         "previewJobId": uploaded.json()["jobId"],
                         "voiceId": self.voice_id,
                         "speakerDisplayName": "Narrator",
-                        "text": "Uploaded line.",
+                        "text": "Text entered after upload.",
                     }
                 ],
                 "tagIds": [],
@@ -421,6 +417,10 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
         self.assertEqual(
             published.json()["utterances"][0]["speakerDisplayName"],
             "Narrator",
+        )
+        self.assertEqual(
+            published.json()["utterances"][0]["text"],
+            "Text entered after upload.",
         )
 
     def test_publish_rejects_stale_and_foreign_previews(self) -> None:
