@@ -22,7 +22,11 @@ from backend.app.db.models.voice import (
     VoiceVisibility,
 )
 from backend.app.services.audio_storage import AudioStorage, StoredAudioMetadata
-from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
+from backend.app.services.job_storage import (
+    ASSEMBLY_PREVIEW_JOB_TYPE,
+    AUDIO_PREVIEW_JOB_TYPE,
+    JobStorage,
+)
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 
 
@@ -344,7 +348,7 @@ class ConsistencyService:
                     JobStatus.FAILED,
                     JobStatus.CANCELLED,
                 }:
-                    if self._is_retained_audio_preview(job, entry):
+                    if self._is_retained_preview(job, entry):
                         continue
                     issues.append(
                         ConsistencyIssue(
@@ -362,13 +366,18 @@ class ConsistencyService:
             issues.append(self._orphan_issue("job", None, entry))
         return issues
 
-    def _is_retained_audio_preview(self, job: Job, directory: Path) -> bool:
-        if job.type != AUDIO_PREVIEW_JOB_TYPE or job.status is not JobStatus.SUCCEEDED:
+    def _is_retained_preview(self, job: Job, directory: Path) -> bool:
+        filenames = {
+            AUDIO_PREVIEW_JOB_TYPE: JobStorage.AUDIO_PREVIEW_FILENAME,
+            ASSEMBLY_PREVIEW_JOB_TYPE: JobStorage.ASSEMBLY_PREVIEW_FILENAME,
+        }
+        filename = filenames.get(job.type)
+        if filename is None or job.status is not JobStatus.SUCCEEDED:
             return False
         entries = list(directory.iterdir())
         matches_layout = (
             len(entries) == 1
-            and entries[0].name == JobStorage.AUDIO_PREVIEW_FILENAME
+            and entries[0].name == filename
             and entries[0].is_file()
             and not entries[0].is_symlink()
         )

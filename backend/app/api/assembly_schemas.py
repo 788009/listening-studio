@@ -62,3 +62,22 @@ class AssemblyCreateRequest(TagApiModel):
 class AssemblyAccepted(TagApiModel):
     audio_id: int
     job_id: int
+
+
+class AssemblyPreviewRequest(TagApiModel):
+    segments: list[AssemblySegmentRequest] = Field(min_length=1, max_length=40)
+    start_index: int = Field(ge=0, le=39)
+    end_index: int | None = Field(default=None, ge=0, le=39)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> AssemblyPreviewRequest:
+        end_index = self.end_index if self.end_index is not None else len(self.segments) - 1
+        if self.start_index >= len(self.segments) or end_index >= len(self.segments):
+            raise ValueError("Preview range is outside the segment list")
+        if end_index < self.start_index:
+            raise ValueError("Preview end index must not precede its start index")
+        return self
+
+
+class AssemblyPreviewAccepted(TagApiModel):
+    job_id: int

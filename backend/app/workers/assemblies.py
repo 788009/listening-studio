@@ -44,3 +44,22 @@ class AssemblyJobHandler:
             raise JobExecutionError("Assembly rendering failed") from exc
         context.update_progress(95)
         return JobResult("audio", audio.id)
+
+
+class AssemblyPreviewJobHandler:
+    def __init__(self, service: AssemblyService) -> None:
+        self.service = service
+
+    def __call__(self, context: JobContext, job: JobPayload) -> JobResult:
+        context.update_progress(5)
+        try:
+            with context.session_factory() as session:
+                self.service.process_preview(
+                    session,
+                    job_id=job.id,
+                    owner_id=job.owner_id,
+                    checkpoint=context.update_progress,
+                )
+        except JobFailedError as exc:
+            raise JobExecutionError("Assembly preview rendering failed") from exc
+        return JobResult("assembly_preview", job.id)

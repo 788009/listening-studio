@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response, status
+from loguru import logger
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
 from backend.app.api.assembly_schemas import (
     AssemblyAccepted,
     AssemblyCreateRequest,
+    AssemblyPreviewAccepted,
+    AssemblyPreviewRequest,
     AssemblySegmentRequest,
     AssemblyTemplateResponse,
     AssemblyTemplateSegmentResponse,
     AssemblyTemplateWriteRequest,
 )
+from backend.app.api.media import stream_wav
 from backend.app.api.schemas import ResourceId
 from backend.app.core.auth import require_admin, require_completed_profile
+from backend.app.core.exceptions import ConflictError
 from backend.app.db.models.assembly import AssemblyTemplate
+from backend.app.db.models.job import JobStatus
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.services.assemblies import AssemblySegmentInput, AssemblyService
@@ -25,6 +32,14 @@ template_router = APIRouter(
     tags=["assembly-templates"],
 )
 router = APIRouter(prefix="/api/assemblies", tags=["assemblies"])
+preview_router = APIRouter(
+    prefix="/api/assembly-previews",
+    tags=["assembly-previews"],
+)
+preview_media_router = APIRouter(
+    prefix="/media/assembly-preview",
+    tags=["media"],
+)
 
 
 def _service(request: Request) -> AssemblyService:
@@ -150,3 +165,60 @@ async def create_assembly(
         visibility=payload.visibility,
     )
     return AssemblyAccepted(audio_id=submission.audio.id, job_id=submission.job_id)
+
+
+@preview_router.post(
+    "",
+    response_model=AssemblyPreviewAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_assembly_preview(
+    payload: AssemblyPreviewRequest,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> AssemblyPreviewAccepted:
+    submission = _service(request).submit_preview(
+        session,
+        user,
+        segments=[_input(item) for item in payload.segments],
+        start_index=payload.start_index,
+        end_index=payload.end_index,
+    )
+    logger.bind(
+        request_id=request.state.request_id,
+        job_id=submission.job.id,
+        user_db_id=user.id,
+        resource_type="job",
+        resource_id=submission.job.id,
+    ).info("Assembly preview submitted job_id={}", submission.job.id)
+    return AssemblyPreviewAccepted(job_id=submission.job.id)
+
+
+@preview_router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_assembly_preview(
+    job_id: ResourceId,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> Response:
+    _service(request).delete_preview(session, owner=user, job_id=job_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@preview_media_router.get("/{job_id}")
+async def play_assembly_preview(
+    job_id: ResourceId,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> StreamingResponse:
+    service = _service(request)
+    job = service.get_owned_preview(session, user, job_id)
+    if job.status is not JobStatus.SUCCEEDED:
+        raise ConflictError("Assembly preview is not ready")
+    return stream_wav(
+        request,
+        service.job_storage.assembly_preview_path(job.id),
+        cache_control="private, no-store",
+    )

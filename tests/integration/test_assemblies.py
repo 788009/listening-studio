@@ -21,7 +21,11 @@ from backend.app.repositories.users import UserRepository
 from backend.app.services.assemblies import ASSEMBLY_JOB_TYPE, AssemblyService
 from backend.app.services.audio_storage import AudioStorage
 from backend.app.services.audios import AudioQuestionInput, AudioService
-from backend.app.workers.assemblies import AssemblyJobHandler
+from backend.app.services.job_storage import ASSEMBLY_PREVIEW_JOB_TYPE, JobStorage
+from backend.app.workers.assemblies import (
+    AssemblyJobHandler,
+    AssemblyPreviewJobHandler,
+)
 from backend.app.workers.jobs import JobWorker
 
 
@@ -237,6 +241,76 @@ class AssemblyIntegrationTest(unittest.TestCase):
             created.json()["segments"][1]["suggestedQuery"],
             "topic:news",
         )
+
+    def test_preview_renders_selected_suffix_and_protects_temporary_media(self) -> None:
+        previous = self.ready_audio("Three questions", 3, "Previous")
+        prefix = self.ready_audio("pre_4", 0, "Question number")
+        placeholder = self.ready_audio("One question", 1, "Selected")
+        response = self.send(
+            "POST",
+            "/api/assembly-previews",
+            headers=self.headers("user"),
+            json={
+                "segments": [
+                    {"type": "audio", "audioId": previous},
+                    {"type": "silence", "silenceMilliseconds": 25},
+                    {"type": "smart", "includeText": False},
+                    {
+                        "type": "placeholder",
+                        "audioId": placeholder,
+                        "repeatCount": 2,
+                        "repeatIntervalMilliseconds": 50,
+                    },
+                ],
+                "startIndex": 1,
+            },
+        )
+        self.assertEqual(response.status_code, 202, response.text)
+        job_id = response.json()["jobId"]
+        pending_media = self.send(
+            "GET",
+            f"/media/assembly-preview/{job_id}",
+            headers=self.headers("user"),
+        )
+        self.assertEqual(pending_media.status_code, 409, pending_media.text)
+
+        worker = JobWorker(
+            self.app.state.session_factory,
+            {
+                ASSEMBLY_PREVIEW_JOB_TYPE: AssemblyPreviewJobHandler(
+                    AssemblyService(self.storage)
+                )
+            },
+            poll_interval_seconds=0.01,
+            job_storage=JobStorage(self.settings.data_dir),
+        )
+        self.assertTrue(worker.run_once())
+        foreign_media = self.send(
+            "GET",
+            f"/media/assembly-preview/{job_id}",
+            headers=self.headers("admin"),
+        )
+        self.assertEqual(foreign_media.status_code, 404, foreign_media.text)
+        media = self.send(
+            "GET",
+            f"/media/assembly-preview/{job_id}",
+            headers=self.headers("user"),
+        )
+        self.assertEqual(media.status_code, 200, media.text)
+        self.assertEqual(media.headers["cache-control"], "private, no-store")
+
+        preview_path = JobStorage(self.settings.data_dir).assembly_preview_path(job_id)
+        with wave.open(str(preview_path), "rb") as output:
+            self.assertAlmostEqual(output.getnframes() / 8000, 0.375, delta=0.02)
+        self.assertTrue(self.storage.path(prefix).is_file())
+
+        deleted = self.send(
+            "DELETE",
+            f"/api/assembly-previews/{job_id}",
+            headers=self.headers("user"),
+        )
+        self.assertEqual(deleted.status_code, 204, deleted.text)
+        self.assertFalse(JobStorage(self.settings.data_dir).directory(job_id).exists())
 
 
 if __name__ == "__main__":

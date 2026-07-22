@@ -27,6 +27,7 @@ from backend.app.db.models.audio import (
     AudioVisibility,
 )
 from backend.app.db.models.audio_tag import AudioTag, AudioTagType
+from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.user import User
 from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.audios import AudioRepository
@@ -41,6 +42,7 @@ from backend.app.services.audios import (
     normalize_audio_title,
 )
 from backend.app.services.authorization import AuthorizationService
+from backend.app.services.job_storage import ASSEMBLY_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.jobs import JobService
 from backend.app.services.tag_values import (
     TagTranslationInput,
@@ -71,14 +73,142 @@ class AssemblySubmission:
     job_id: int
 
 
+@dataclass(frozen=True)
+class AssemblyPreviewSubmission:
+    job: Job
+
+
 class AssemblyService:
     def __init__(self, storage: AudioStorage) -> None:
         self.storage = storage
+        self.job_storage = JobStorage(storage.job_root.parent)
         self.audio_repository = AudioRepository()
         self.tag_repository = AudioTagRepository()
         self.audio_service = AudioService(storage, self.audio_repository)
         self.authorization = AuthorizationService()
         self.jobs = JobService()
+
+    def submit_preview(
+        self,
+        session: Session,
+        owner: User,
+        *,
+        segments: list[AssemblySegmentInput],
+        start_index: int,
+        end_index: int | None,
+    ) -> AssemblyPreviewSubmission:
+        if not segments or len(segments) > MAX_SEGMENTS:
+            raise DomainValidationError(
+                "Assembly segment count is outside the allowed range",
+                details={"field": "segments", "maxItems": MAX_SEGMENTS},
+            )
+        if (
+            isinstance(start_index, bool)
+            or not isinstance(start_index, int)
+            or start_index < 0
+            or start_index >= len(segments)
+        ):
+            raise DomainValidationError(
+                "Assembly preview start index is invalid",
+                details={"field": "startIndex"},
+            )
+        last_index = len(segments) - 1 if end_index is None else end_index
+        if (
+            isinstance(last_index, bool)
+            or not isinstance(last_index, int)
+            or last_index < start_index
+            or last_index >= len(segments)
+        ):
+            raise DomainValidationError(
+                "Assembly preview end index is invalid",
+                details={"field": "endIndex"},
+            )
+        selected = self._resolve_preview_range(
+            session,
+            owner,
+            segments,
+            start_index,
+            last_index,
+        )
+        if not any(item.audio is not None for item in selected):
+            raise DomainValidationError(
+                "Assembly preview requires an audio segment",
+                details={"field": "segments"},
+            )
+        job: Job | None = None
+        try:
+            job = self.jobs.create_job(
+                session,
+                owner=owner,
+                job_type=ASSEMBLY_PREVIEW_JOB_TYPE,
+                input_summary={
+                    "startIndex": start_index,
+                    "endIndex": last_index,
+                    "segmentCount": len(selected),
+                },
+            )
+            session.flush()
+            self.job_storage.write_assembly_preview_input(
+                job.id,
+                {"segments": [item.summary() for item in selected]},
+            )
+            session.commit()
+            return AssemblyPreviewSubmission(job)
+        except Exception:
+            session.rollback()
+            if job is not None and job.id is not None:
+                self.job_storage.cleanup(job.id)
+            raise
+
+    def process_preview(
+        self,
+        session: Session,
+        *,
+        job_id: int,
+        owner_id: int,
+        checkpoint: Callable[[int], None],
+    ) -> None:
+        preview_path = self.job_storage.assembly_preview_path(job_id)
+        if preview_path.is_file() and not preview_path.is_symlink():
+            self.storage.inspect_file(preview_path)
+            return
+        try:
+            payload = self.job_storage.read_assembly_preview_input(job_id)
+            values = payload.get("segments")
+            if not isinstance(values, list) or not all(
+                isinstance(item, dict) for item in values
+            ):
+                raise JobFailedError("Assembly preview task segments are invalid")
+            checkpoint(15)
+            plans = self._render_segments(session, owner_id, values)
+            checkpoint(30)
+            temporary = self.job_storage.assembly_preview_temporary_path(job_id)
+            AssemblyAudioRenderer().render(plans, temporary)
+            checkpoint(80)
+            self.storage.inspect_file(temporary)
+            self.job_storage.finalize_assembly_preview(job_id)
+            self.job_storage.assembly_preview_input_path(job_id).unlink(missing_ok=True)
+            checkpoint(95)
+        except Exception as exc:
+            self.job_storage.cleanup(job_id)
+            raise JobFailedError("Assembly preview rendering failed") from exc
+
+    def get_owned_preview(self, session: Session, owner: User, job_id: int) -> Job:
+        job = self.jobs.get_owned_job(session, owner, job_id)
+        if job.type != ASSEMBLY_PREVIEW_JOB_TYPE:
+            raise ConflictError("Job is not an assembly preview")
+        return job
+
+    def delete_preview(
+        self, session: Session, *, owner: User, job_id: int
+    ) -> None:
+        job = self.get_owned_preview(session, owner, job_id)
+        if job.status in {JobStatus.QUEUED, JobStatus.RUNNING}:
+            self.jobs.request_cancel(session, owner, job_id)
+            session.commit()
+            if job.status is JobStatus.RUNNING:
+                return
+        self.job_storage.cleanup(job_id)
 
     def list_templates(self, session: Session) -> list[AssemblyTemplate]:
         statement = (
@@ -304,6 +434,48 @@ class AssemblyService:
             audio = self._visible_audio(session, owner, item.audio_id, index)
             result.append(_ResolvedSegment(item, audio))
             question_count += len(audio.questions)
+        return result
+
+    def _resolve_preview_range(
+        self,
+        session: Session,
+        owner: User,
+        segments: list[AssemblySegmentInput],
+        start_index: int,
+        end_index: int,
+    ) -> list[_ResolvedSegment]:
+        smart_positions = [
+            position
+            for position in range(start_index, end_index + 1)
+            if segments[position].type is AssemblySegmentType.SMART
+        ]
+        if smart_positions:
+            resolution_end = max(end_index, max(smart_positions) + 1)
+            if resolution_end >= len(segments):
+                raise DomainValidationError(
+                    "A smart segment must be followed by a placeholder",
+                    details={"field": "segments", "position": max(smart_positions)},
+                )
+            relevant = segments[: resolution_end + 1]
+            self._validate_segments(relevant, allow_placeholders=True)
+            return self._resolve_segments(session, owner, relevant)[
+                start_index : end_index + 1
+            ]
+
+        relevant = segments[start_index : end_index + 1]
+        self._validate_segments(relevant, allow_placeholders=True)
+        result: list[_ResolvedSegment] = []
+        for offset, item in enumerate(relevant):
+            if item.type is AssemblySegmentType.SILENCE:
+                result.append(_ResolvedSegment(item, None))
+                continue
+            audio = self._visible_audio(
+                session,
+                owner,
+                item.audio_id,
+                start_index + offset,
+            )
+            result.append(_ResolvedSegment(item, audio))
         return result
 
     def _visible_audio(

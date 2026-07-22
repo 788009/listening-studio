@@ -26,7 +26,7 @@ from backend.app.services.audio_synthesis import (
 from backend.app.services.corpus_generation import CorpusGenerationService
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.generation_batches import CORPUS_GENERATION_JOB_TYPE
-from backend.app.services.job_storage import JobStorage
+from backend.app.services.job_storage import ASSEMBLY_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.paper_rendering import (
     PAPER_RENDER_JOB_TYPE,
     PaperRenderService,
@@ -37,7 +37,7 @@ from backend.app.services.voice_uploads import (
     VoiceUploadService,
 )
 from backend.app.workers.audio_synthesis import AudioSynthesisJobHandler
-from backend.app.workers.assemblies import AssemblyJobHandler
+from backend.app.workers.assemblies import AssemblyJobHandler, AssemblyPreviewJobHandler
 from backend.app.workers.audio_preview import AudioPreviewJobHandler
 from backend.app.workers.corpus_generation import CorpusGenerationJobHandler
 from backend.app.workers.jobs import JobHandler, JobWorker
@@ -82,6 +82,9 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         CORPUS_GENERATION_JOB_TYPE: CorpusGenerationJobHandler(corpus_service),
         PAPER_RENDER_JOB_TYPE: PaperRenderJobHandler(PaperRenderService(audio_storage)),
         ASSEMBLY_JOB_TYPE: AssemblyJobHandler(AssemblyService(audio_storage)),
+        ASSEMBLY_PREVIEW_JOB_TYPE: AssemblyPreviewJobHandler(
+            AssemblyService(audio_storage)
+        ),
     }
 
 

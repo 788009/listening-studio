@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
   createAssembly,
+  createAssemblyPreview,
   createAssemblyTemplate,
+  deleteAssemblyPreview,
   deleteAssemblyTemplate,
   listAssemblyTemplates,
+  assemblyPreviewMediaPath,
   type AssemblySegmentInput,
   type AssemblySegmentType,
   type AssemblyTemplate,
@@ -71,7 +74,16 @@ const savingTemplate = ref(false)
 const errorMessage = ref('')
 const accepted = ref<{ audioId: number; jobId: number } | null>(null)
 const job = ref<Job | null>(null)
-let pollTimer: number | undefined
+const previewPlayer = ref<HTMLAudioElement | null>(null)
+const previewJob = ref<Job | null>(null)
+const previewJobId = ref<number | null>(null)
+const previewMediaUrl = ref('')
+const previewBusy = ref(false)
+const previewPlaying = ref(false)
+const activePreview = ref<{ segmentKey: number; fromHere: boolean } | null>(null)
+let publishPollTimer: number | undefined
+let previewPollTimer: number | undefined
+let previewRequestVersion = 0
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
 const tagCatalog = computed(() => {
@@ -115,6 +127,9 @@ const previewQuestions = computed<AudioQuestion[]>(() => {
     })),
   )
 })
+const segmentFingerprint = computed(() =>
+  JSON.stringify(segments.value.map(segmentInput)),
+)
 
 function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): DraftSegment {
   return {
@@ -275,6 +290,14 @@ function remove(index: number): void {
   activePlaceholder.value = null
 }
 
+function canPlaySegment(segment: DraftSegment, index: number): boolean {
+  if (segment.type === 'silence') return false
+  if (segment.type === 'audio') return Boolean(segment.audioId)
+  if (segment.type === 'placeholder') return Boolean(segment.audioId)
+  const next = segments.value[index + 1]
+  return next?.type === 'placeholder' && Boolean(next.audioId)
+}
+
 function segmentInput(segment: DraftSegment): AssemblySegmentInput {
   return {
     type: segment.type,
@@ -303,6 +326,114 @@ function validate(): string | null {
   return null
 }
 
+async function playPreview(index: number, fromHere: boolean): Promise<void> {
+  const segment = segments.value[index]
+  if (!segment || !canPlaySegment(segment, index)) return
+  const samePreview =
+    activePreview.value?.segmentKey === segment.key &&
+    activePreview.value.fromHere === fromHere
+  if (samePreview && previewMediaUrl.value) {
+    const player = previewPlayer.value
+    if (!player) return
+    if (!player.paused) {
+      player.pause()
+      player.currentTime = 0
+      return
+    }
+    try {
+      await player.play()
+    } catch {
+      errorMessage.value = t('Use the audio controls to start playback')
+    }
+    return
+  }
+  if (previewBusy.value) return
+
+  const requestVersion = ++previewRequestVersion
+  previewBusy.value = true
+  await discardPreview(false, true)
+  if (requestVersion !== previewRequestVersion) return
+  activePreview.value = { segmentKey: segment.key, fromHere }
+  errorMessage.value = ''
+  try {
+    const acceptedPreview = await createAssemblyPreview({
+      segments: segments.value.map(segmentInput),
+      startIndex: index,
+      endIndex: fromHere ? undefined : index,
+    })
+    if (requestVersion !== previewRequestVersion) {
+      void deleteAssemblyPreview(acceptedPreview.jobId).catch(() => undefined)
+      return
+    }
+    previewJobId.value = acceptedPreview.jobId
+    await refreshPreviewJob(requestVersion)
+  } catch (error) {
+    if (requestVersion === previewRequestVersion) {
+      previewBusy.value = false
+      errorMessage.value =
+        error instanceof ApiError ? error.message : t('Playback preview could not be created')
+      activePreview.value = null
+    }
+  }
+}
+
+async function refreshPreviewJob(requestVersion: number): Promise<void> {
+  const jobId = previewJobId.value
+  if (jobId === null || requestVersion !== previewRequestVersion) return
+  try {
+    previewJob.value = await getJob(jobId)
+    if (requestVersion !== previewRequestVersion) return
+    if (previewJob.value.status === 'succeeded') {
+      previewBusy.value = false
+      previewMediaUrl.value = assemblyPreviewMediaPath(jobId)
+      await nextTick()
+      previewPlayer.value?.load()
+      try {
+        await previewPlayer.value?.play()
+      } catch {
+        errorMessage.value = t('Use the audio controls to start playback')
+      }
+      return
+    }
+    if (previewJob.value.status === 'queued' || previewJob.value.status === 'running') {
+      previewPollTimer = window.setTimeout(
+        () => void refreshPreviewJob(requestVersion),
+        500,
+      )
+      return
+    }
+    previewBusy.value = false
+    activePreview.value = null
+    errorMessage.value =
+      previewJob.value.errorSummary || t('Playback preview could not be created')
+  } catch (error) {
+    previewBusy.value = false
+    activePreview.value = null
+    errorMessage.value =
+      error instanceof ApiError ? error.message : t('Playback status could not be loaded')
+  }
+}
+
+async function discardPreview(
+  invalidate = true,
+  preserveBusy = false,
+): Promise<void> {
+  if (invalidate) previewRequestVersion += 1
+  if (previewPollTimer !== undefined) window.clearTimeout(previewPollTimer)
+  previewPollTimer = undefined
+  previewPlayer.value?.pause()
+  previewPlaying.value = false
+  previewMediaUrl.value = ''
+  previewJob.value = null
+  if (!preserveBusy) previewBusy.value = false
+  activePreview.value = null
+  const jobId = previewJobId.value
+  previewJobId.value = null
+  if (jobId !== null) {
+    await deleteAssemblyPreview(jobId).catch(() => undefined)
+  }
+}
+
 async function submit(): Promise<void> {
   const validationError = validate()
   if (validationError || submitting.value) {
@@ -312,6 +443,7 @@ async function submit(): Promise<void> {
   submitting.value = true
   errorMessage.value = ''
   try {
+    await discardPreview()
     accepted.value = await createAssembly({
       title: title.value.trim(),
       templateId: templateId.value ? Number(templateId.value) : undefined,
@@ -409,11 +541,11 @@ async function refreshJob(): Promise<void> {
   try {
     job.value = await getJob(accepted.value.jobId)
     if (job.value.status === 'succeeded') {
-      stopPolling()
+      stopPublishPolling()
       await router.push({ name: 'audio', params: { id: accepted.value.audioId } })
     } else if (job.value.status === 'queued' || job.value.status === 'running') {
-      stopPolling()
-      pollTimer = window.setTimeout(() => void refreshJob(), 1000)
+      stopPublishPolling()
+      publishPollTimer = window.setTimeout(() => void refreshJob(), 1000)
     }
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : t('Render progress could not be loaded')
@@ -423,12 +555,12 @@ async function refreshJob(): Promise<void> {
 async function cancel(): Promise<void> {
   if (!accepted.value) return
   job.value = await cancelJob(accepted.value.jobId)
-  stopPolling()
+  stopPublishPolling()
 }
 
-function stopPolling(): void {
-  if (pollTimer !== undefined) window.clearTimeout(pollTimer)
-  pollTimer = undefined
+function stopPublishPolling(): void {
+  if (publishPollTimer !== undefined) window.clearTimeout(publishPollTimer)
+  publishPollTimer = undefined
 }
 
 function duration(seconds: number): string {
@@ -439,7 +571,11 @@ function duration(seconds: number): string {
 onMounted(() => {
   void Promise.all([loadOptions(), loadPage()])
 })
-onUnmounted(stopPolling)
+watch(segmentFingerprint, () => void discardPreview())
+onUnmounted(() => {
+  stopPublishPolling()
+  void discardPreview()
+})
 </script>
 
 <template>
@@ -527,6 +663,27 @@ onUnmounted(stopPolling)
             </div>
           </div>
 
+          <div v-if="previewBusy || previewMediaUrl" class="mb-4 border-y border-line py-3">
+            <div class="flex items-center justify-between gap-3 text-sm">
+              <span>{{ t('Assembly playback preview') }}</span>
+              <div v-if="previewBusy" class="flex items-center gap-3">
+                <span class="text-muted">{{ t('Preparing playback') }} {{ previewJob?.progress ?? 0 }}%</span>
+                <button type="button" class="text-danger" @click="discardPreview()">{{ t('Cancel preview') }}</button>
+              </div>
+            </div>
+            <audio
+              v-if="previewMediaUrl"
+              ref="previewPlayer"
+              class="mt-3 h-9 w-full"
+              controls
+              preload="metadata"
+              :src="previewMediaUrl"
+              @play="previewPlaying = true"
+              @pause="previewPlaying = false"
+              @ended="previewPlaying = false"
+            />
+          </div>
+
           <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
           <ol v-else class="divide-y divide-line border-y border-line">
             <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
@@ -564,6 +721,26 @@ onUnmounted(stopPolling)
                     <label class="inline-flex items-center gap-2"><input :checked="segment.includeTopic" type="checkbox" @change="setSegmentTopic(segment, ($event.target as HTMLInputElement).checked)" />{{ t('Include topic') }}</label>
                   </div>
                 </template>
+                <div v-if="segment.type !== 'silence'" class="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    :disabled="previewBusy || !canPlaySegment(segment, index)"
+                    class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm disabled:opacity-40"
+                    @click="playPreview(index, false)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
+                    {{ activePreview?.segmentKey === segment.key && !activePreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && !activePreview.fromHere && previewPlaying ? t('Stop') : t('Play') }}
+                  </button>
+                  <button
+                    type="button"
+                    :disabled="previewBusy || !canPlaySegment(segment, index)"
+                    class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm disabled:opacity-40"
+                    @click="playPreview(index, true)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 5v14M9 5l10 7-10 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
+                    {{ activePreview?.segmentKey === segment.key && activePreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && activePreview.fromHere && previewPlaying ? t('Stop') : t('Play from here') }}
+                  </button>
+                </div>
               </div>
               <div class="flex justify-end gap-1">
                 <button type="button" :disabled="index === 0" class="flex h-8 w-7 items-center justify-center text-muted disabled:opacity-30" :title="t('Move up')" @click="move(index, -1)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" /></svg></button>

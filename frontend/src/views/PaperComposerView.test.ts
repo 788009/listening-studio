@@ -86,6 +86,73 @@ describe('paper composer view', () => {
     vi.unstubAllGlobals()
   })
 
+  it('previews one segment or the current suffix with a shared player', async () => {
+    const previewBodies: Record<string, unknown>[] = []
+    let nextPreviewId = 30
+    vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        if (path === '/api/assembly-templates') return Promise.resolve(response([]))
+        if (path.startsWith('/api/audio-tags')) {
+          return Promise.resolve(response([fullPaperTag, topicTag]))
+        }
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
+        }
+        if (path === '/api/assembly-previews' && init?.method === 'POST') {
+          previewBodies.push(JSON.parse(String(init.body)) as Record<string, unknown>)
+          nextPreviewId += 1
+          return Promise.resolve(response({ jobId: nextPreviewId }, 202))
+        }
+        if (path.match(/^\/api\/jobs\/3[12]$/)) {
+          const id = Number(path.slice(path.lastIndexOf('/') + 1))
+          return Promise.resolve(
+            response({
+              id,
+              type: 'assembly_preview',
+              status: 'succeeded',
+              progress: 100,
+              inputSummary: {},
+              result: { type: 'assembly_preview', id },
+              cancelRequested: false,
+              retryable: false,
+              attemptCount: 1,
+              createdAt: '',
+              updatedAt: '',
+            }),
+          )
+        }
+        if (path.match(/^\/api\/assembly-previews\/3[12]$/) && init?.method === 'DELETE') {
+          return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const { wrapper } = await mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Play')?.trigger('click')
+    await flushPromises()
+    expect(previewBodies[0]).toMatchObject({ startIndex: 0, endIndex: 0 })
+    expect(wrapper.find('audio[src="/media/assembly-preview/31"]').exists()).toBe(true)
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Play from here')
+      ?.trigger('click')
+    await flushPromises()
+    expect(previewBodies[1]).toMatchObject({ startIndex: 0 })
+    expect(previewBodies[1]).not.toHaveProperty('endIndex')
+    expect(wrapper.find('audio[src="/media/assembly-preview/32"]').exists()).toBe(true)
+    wrapper.unmount()
+    await flushPromises()
+  })
+
   it('adds configurable audio and silence segments and submits an assembly', async () => {
     vi.useFakeTimers()
     let submitted: Record<string, unknown> | undefined

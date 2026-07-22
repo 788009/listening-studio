@@ -41,6 +41,10 @@ export interface AssemblyAccepted {
   jobId: number
 }
 
+export interface AssemblyPreviewAccepted {
+  jobId: number
+}
+
 export function listAssemblyTemplates(): Promise<AssemblyTemplate[]> {
   return apiRequest<AssemblyTemplate[]>('/assembly-templates')
 }
@@ -66,6 +70,27 @@ export function createAssembly(input: AssemblyCreateInput): Promise<AssemblyAcce
     method: 'POST',
     body: JSON.stringify(input),
   })
+}
+
+export function createAssemblyPreview(input: {
+  segments: AssemblySegmentInput[]
+  startIndex: number
+  endIndex?: number
+}): Promise<AssemblyPreviewAccepted> {
+  return apiRequest<AssemblyPreviewAccepted>('/assembly-previews', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function deleteAssemblyPreview(jobId: number): Promise<void> {
+  return apiRequest<void>(`/assembly-previews/${positiveId(jobId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export function assemblyPreviewMediaPath(jobId: number): string {
+  return `/media/assembly-preview/${positiveId(jobId)}`
 }
 
 function positiveId(value: number): number {

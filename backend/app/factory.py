@@ -8,6 +8,8 @@ from backend.app.api.auth import router as auth_router
 from backend.app.api.audios import media_router as audio_media_router
 from backend.app.api.audios import router as audios_router
 from backend.app.api.assemblies import router as assemblies_router
+from backend.app.api.assemblies import preview_media_router as assembly_preview_media_router
+from backend.app.api.assemblies import preview_router as assembly_previews_router
 from backend.app.api.assemblies import template_router as assembly_templates_router
 from backend.app.api.audio_previews import media_router as audio_preview_media_router
 from backend.app.api.audio_previews import (
@@ -91,11 +93,13 @@ def create_app(
     app.include_router(voices_router)
     app.include_router(audios_router)
     app.include_router(assemblies_router)
+    app.include_router(assembly_previews_router)
     app.include_router(assembly_templates_router)
     app.include_router(audio_previews_router)
     app.include_router(audio_preview_publish_router)
     app.include_router(audio_media_router)
     app.include_router(audio_preview_media_router)
+    app.include_router(assembly_preview_media_router)
     app.include_router(voice_media_router)
     app.include_router(jobs_router)
     app.include_router(generation_batches_router)
