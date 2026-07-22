@@ -1066,7 +1066,7 @@ onUnmounted(() => {
                   v-if="moveOptionsSegmentKey === segment.key"
                   role="dialog"
                   :aria-label="t('Move options')"
-                  class="absolute right-0 top-9 z-10 w-96 max-w-[calc(100vw-2rem)] border border-line bg-surface p-3 shadow-lg"
+                  class="absolute right-0 top-9 z-10 w-80 max-w-[calc(100vw-2rem)] border border-line bg-surface p-3 shadow-lg"
                 >
                   <div class="flex flex-wrap items-center gap-2 text-sm">
                     <span>{{ t('Move direction') }}</span>
