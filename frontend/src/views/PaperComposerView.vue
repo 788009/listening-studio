@@ -78,6 +78,7 @@ const total = ref(0)
 const activePlaceholder = ref<number | null>(null)
 const segmentSelectionMode = ref(false)
 const selectedSegmentKeys = ref<number[]>([])
+const segmentList = ref<HTMLOListElement | null>(null)
 const loading = ref(true)
 const submitting = ref(false)
 const savingTemplate = ref(false)
@@ -237,8 +238,17 @@ function addAudio(audio: Audio): void {
       return
     }
   }
-  segments.value.push(draft('audio', { audio, audioId: audio.id }))
+  appendSegments(draft('audio', { audio, audioId: audio.id }))
   addAudioTopics(audio)
+}
+
+function appendSegments(...items: DraftSegment[]): void {
+  if (items.length === 0) return
+  segments.value.push(...items)
+  void nextTick(() => {
+    const list = segmentList.value
+    if (list) list.scrollTop = list.scrollHeight
+  })
 }
 
 function addAudioTopics(audio: Audio): void {
@@ -271,7 +281,7 @@ function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
 }
 
 function addSilence(): void {
-  segments.value.push(draft('silence', { silenceMilliseconds: 5000 }))
+  appendSegments(draft('silence', { silenceMilliseconds: 5000 }))
 }
 
 function seconds(milliseconds: number | undefined): number {
@@ -284,11 +294,11 @@ function millisecondsFromInput(event: Event): number {
 }
 
 function addPlaceholder(): void {
-  segments.value.push(draft('placeholder', { suggestedQuery: '' }))
+  appendSegments(draft('placeholder', { suggestedQuery: '' }))
 }
 
 function addSmart(): void {
-  segments.value.push(draft('smart', { includeText: false, includeTopic: false }))
+  appendSegments(draft('smart', { includeText: false, includeTopic: false }))
 }
 
 function setSmartMode(segment: DraftSegment, mode: AssemblySmartMode): void {
@@ -370,7 +380,7 @@ function copySelectedSegments(): void {
   const copies = segments.value
     .filter((segment) => selected.has(segment.key))
     .map((segment) => draft(segment.type, segment))
-  segments.value.push(...copies)
+  appendSegments(...copies)
   selectedSegmentKeys.value = []
 }
 
@@ -852,7 +862,7 @@ onUnmounted(() => {
           </div>
 
           <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
-          <ol v-else class="max-h-[80vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
+          <ol v-else ref="segmentList" class="max-h-[80vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
             <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
               <div class="flex flex-col items-center gap-2 pt-1">
                 <span class="text-sm tabular-nums text-muted">{{ index + 1 }}</span>
