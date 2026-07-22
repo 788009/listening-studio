@@ -233,6 +233,18 @@ class AudioRepository:
         statement = select(func.count()).where(Paper.result_audio_id == audio_id)
         return session.scalar(statement) or 0
 
+    def count_assembly_template_references(
+        self,
+        session: Session,
+        audio_id: int,
+    ) -> int:
+        from backend.app.db.models.assembly import AssemblyTemplateSegment
+
+        statement = select(func.count()).where(
+            AssemblyTemplateSegment.audio_id == audio_id
+        )
+        return session.scalar(statement) or 0
+
     def count_foreign_paper_item_references(
         self,
         session: Session,

@@ -3,108 +3,101 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
+  createAssembly,
+  createAssemblyTemplate,
+  deleteAssemblyTemplate,
+  listAssemblyTemplates,
+  type AssemblySegmentInput,
+  type AssemblySegmentType,
+  type AssemblyTemplate,
+} from '@/api/assemblies'
+import {
   audioMediaPath,
   getAudio,
   listAudios,
   listAudioTags,
   type Audio,
   type AudioTag,
+  type ResourceVisibility,
 } from '@/api/audios'
 import { ApiError } from '@/api/errors'
-import { cancelJob, getJob, type Job, type JobStatus } from '@/api/jobs'
-import {
-  createPaper,
-  listPaperPresets,
-  renderPaper,
-  type PaperPreset,
-  type PaperRenderAccepted,
-} from '@/api/papers'
+import { cancelJob, getJob, type Job } from '@/api/jobs'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
-import PaperSelectedAudioList from '@/components/PaperSelectedAudioList.vue'
-import type { PaperSelection } from '@/components/paperSelectionTypes'
 import { useI18n } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 
 const PAGE_SIZE = 10
+let nextKey = 1
+
+interface DraftSegment extends AssemblySegmentInput {
+  key: number
+  audio?: Audio
+}
+
 const router = useRouter()
+const auth = useAuthStore()
 const { locale, t } = useI18n()
 const title = ref('')
-const presets = ref<PaperPreset[]>([])
-const presetId = ref('')
+const visibility = ref<ResourceVisibility>('public')
+const templates = ref<AssemblyTemplate[]>([])
+const templateId = ref('')
+const templateTitle = ref('')
+const segments = ref<DraftSegment[]>([])
 const candidates = ref<Audio[]>([])
 const tags = ref<AudioTag[]>([])
-const selected = ref<PaperSelection[]>([])
+const selectedTagIds = ref<number[]>([])
 const query = ref('')
 const page = ref(1)
 const total = ref(0)
-const loadingOptions = ref(true)
-const loadingCandidates = ref(true)
-const validating = ref(false)
+const activePlaceholder = ref<number | null>(null)
+const loading = ref(true)
 const submitting = ref(false)
-const cancelling = ref(false)
+const savingTemplate = ref(false)
 const errorMessage = ref('')
-const accepted = ref<PaperRenderAccepted | null>(null)
+const accepted = ref<{ audioId: number; jobId: number } | null>(null)
 const job = ref<Job | null>(null)
 let pollTimer: number | undefined
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-const selectedPreset = computed(
-  () => presets.value.find((preset) => String(preset.id) === presetId.value) ?? null,
-)
 const tagCatalog = computed(() => {
   const catalog = new Map<number, AudioTag>()
   for (const tag of tags.value) catalog.set(tag.id, tag)
-  for (const audio of candidates.value) {
-    for (const tag of audio.tags) catalog.set(tag.id, tag)
-  }
+  for (const audio of candidates.value) for (const tag of audio.tags) catalog.set(tag.id, tag)
   return [...catalog.values()]
 })
-const selectedIds = computed(() => new Set(selected.value.map((item) => item.audio.id)))
-const invalidSelection = computed(() =>
-  selected.value.some((item) => item.state !== 'valid'),
+const editableTags = computed(() =>
+  tags.value.filter((tag) => tag.type === 'topic' || tag.type === 'category'),
 )
-const estimatedDuration = computed(() => {
-  const preset = selectedPreset.value
-  if (!preset || selected.value.some((item) => item.audio.durationSeconds === null)) {
-    return null
-  }
-  const sourceSeconds = selected.value.reduce(
-    (sum, item) => sum + (item.audio.durationSeconds ?? 0),
-    0,
-  )
-  return (
-    sourceSeconds * preset.repeatCount +
-    preset.introSilenceMilliseconds / 1000 +
-    preset.outroSilenceMilliseconds / 1000 +
-    (Math.max(0, selected.value.length - 1) *
-      preset.interItemSilenceMilliseconds) /
-      1000
-  )
-})
-
-async function loadOptions(): Promise<void> {
-  loadingOptions.value = true
-  try {
-    const [presetResponse, tagResponse] = await Promise.all([
-      listPaperPresets(),
-      listAudioTags(locale.value),
-    ])
-    presets.value = presetResponse
-    tags.value = tagResponse
-    if (!presetId.value && presetResponse[0]) {
-      presetId.value = String(presetResponse[0].id)
+const estimatedSeconds = computed(() =>
+  segments.value.reduce((totalSeconds, segment) => {
+    if (segment.type === 'silence') {
+      return totalSeconds + (segment.silenceMilliseconds ?? 0) / 1000
     }
-  } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Paper options could not be loaded')
-  } finally {
-    loadingOptions.value = false
+    if (!segment.audio?.durationSeconds) return totalSeconds
+    return (
+      totalSeconds +
+      segment.audio.durationSeconds * (segment.repeatCount ?? 1) +
+      ((segment.repeatIntervalMilliseconds ?? 0) / 1000) *
+        Math.max(0, (segment.repeatCount ?? 1) - 1)
+    )
+  }, 0),
+)
+
+function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): DraftSegment {
+  return {
+    key: nextKey++,
+    type,
+    repeatCount: 1,
+    repeatIntervalMilliseconds: 0,
+    includeText: true,
+    includeTopic: true,
+    silenceMilliseconds: 0,
+    ...values,
   }
 }
 
-async function loadCandidates(reset = false): Promise<void> {
+async function loadPage(reset = false): Promise<void> {
   if (reset) page.value = 1
-  loadingCandidates.value = true
-  errorMessage.value = ''
   try {
     const response = await listAudios({
       language: locale.value,
@@ -116,107 +109,174 @@ async function loadCandidates(reset = false): Promise<void> {
     candidates.value = response.items
     total.value = response.total
   } catch (error) {
-    candidates.value = []
-    total.value = 0
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Audio candidates could not be loaded')
-  } finally {
-    loadingCandidates.value = false
+    errorMessage.value = error instanceof ApiError ? error.message : t('Audio candidates could not be loaded')
   }
 }
 
-async function movePage(target: number): Promise<void> {
-  if (target < 1 || target > totalPages.value || target === page.value) return
-  page.value = target
-  await loadCandidates()
+async function loadOptions(): Promise<void> {
+  loading.value = true
+  try {
+    ;[templates.value, tags.value] = await Promise.all([
+      listAssemblyTemplates(),
+      listAudioTags(locale.value),
+    ])
+    const fullPaper = tags.value.find(
+      (tag) => tag.type === 'category' && tag.englishValue === 'full_paper',
+    )
+    if (fullPaper) selectedTagIds.value = [fullPaper.id]
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : t('Paper options could not be loaded')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function applyTemplate(): Promise<void> {
+  const template = templates.value.find((item) => String(item.id) === templateId.value)
+  if (!template) return
+  errorMessage.value = ''
+  const next: DraftSegment[] = []
+  for (const item of template.segments) {
+    let audio: Audio | undefined
+    if (item.audioId) {
+      try {
+        audio = await getAudio(item.audioId, locale.value)
+      } catch {
+        audio = undefined
+      }
+    }
+    next.push(draft(item.type, { ...item, audio }))
+  }
+  segments.value = next
+  resetPrefilledTags()
+  for (const segment of next) {
+    if (segment.audio && segment.includeTopic) addAudioTopics(segment.audio)
+  }
 }
 
 function addAudio(audio: Audio): void {
-  if (selectedIds.value.has(audio.id) || selected.value.length >= 100) return
-  selected.value = [...selected.value, { audio, state: 'valid' }]
+  if (activePlaceholder.value !== null) {
+    const segment = segments.value[activePlaceholder.value]
+    if (segment?.type === 'placeholder') {
+      segment.audio = audio
+      segment.audioId = audio.id
+      if (segment.includeTopic) addAudioTopics(audio)
+      activePlaceholder.value = null
+      return
+    }
+  }
+  segments.value.push(draft('audio', { audio, audioId: audio.id }))
+  addAudioTopics(audio)
 }
 
-function moveAudio(index: number, offset: -1 | 1): void {
+function addAudioTopics(audio: Audio): void {
+  const topicIds = audio.tags.filter((tag) => tag.type === 'topic').map((tag) => tag.id)
+  selectedTagIds.value = [...new Set([...selectedTagIds.value, ...topicIds])]
+}
+
+function resetPrefilledTags(): void {
+  selectedTagIds.value = selectedTagIds.value.filter((id) => {
+    const tag = tags.value.find((item) => item.id === id)
+    return tag?.type === 'category' || tag === undefined
+  })
+}
+
+function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
+  segment.includeTopic = selected
+  if (selected && segment.audio) {
+    addAudioTopics(segment.audio)
+    return
+  }
+  if (!segment.audio) return
+  const removableIds = new Set(
+    segment.audio.tags.filter((tag) => tag.type === 'topic').map((tag) => tag.id),
+  )
+  for (const other of segments.value) {
+    if (other.key === segment.key || !other.includeTopic || !other.audio) continue
+    for (const tag of other.audio.tags) removableIds.delete(tag.id)
+  }
+  selectedTagIds.value = selectedTagIds.value.filter((id) => !removableIds.has(id))
+}
+
+function addSilence(): void {
+  segments.value.push(draft('silence', { silenceMilliseconds: 3000 }))
+}
+
+function addPlaceholder(): void {
+  segments.value.push(draft('placeholder', { suggestedQuery: '' }))
+}
+
+function addSmart(): void {
+  segments.value.push(draft('smart', { includeText: false, includeTopic: false }))
+  addPlaceholder()
+}
+
+function selectPlaceholder(index: number): void {
+  activePlaceholder.value = index
+  query.value = segments.value[index]?.suggestedQuery ?? ''
+  void loadPage(true)
+}
+
+function move(index: number, offset: -1 | 1): void {
   const target = index + offset
-  if (target < 0 || target >= selected.value.length) return
-  const next = [...selected.value]
+  if (target < 0 || target >= segments.value.length) return
+  const next = [...segments.value]
   const [item] = next.splice(index, 1)
   if (!item) return
   next.splice(target, 0, item)
-  selected.value = next
+  segments.value = next
+  activePlaceholder.value = null
 }
 
-function removeAudio(index: number): void {
-  selected.value = selected.value.filter((_, position) => position !== index)
+function remove(index: number): void {
+  segments.value.splice(index, 1)
+  activePlaceholder.value = null
 }
 
-async function validateSelections(): Promise<boolean> {
-  if (selected.value.length === 0 || validating.value) return false
-  validating.value = true
-  const current = selected.value.map((item) => ({
-    ...item,
-    state: 'checking' as const,
-    message: t('Checking access and status'),
-  }))
-  selected.value = current
-  const results = await Promise.all(
-    current.map(async (item): Promise<PaperSelection> => {
-      try {
-        const audio = await getAudio(item.audio.id, locale.value)
-        if (audio.status !== 'ready') {
-          return {
-            audio,
-            state: 'changed',
-            message: t('Status changed to {status}', { status: statusLabel(audio.status) }),
-          }
-        }
-        return { audio, state: 'valid' }
-      } catch (error) {
-        const inaccessible = error instanceof ApiError && [403, 404].includes(error.status)
-        return {
-          audio: item.audio,
-          state: 'unavailable',
-          message: inaccessible
-            ? t('No longer accessible or deleted')
-            : t('Could not verify this audio'),
-        }
-      }
-    }),
-  )
-  selected.value = results
-  validating.value = false
-  return results.every((item) => item.state === 'valid')
+function segmentInput(segment: DraftSegment): AssemblySegmentInput {
+  return {
+    type: segment.type,
+    audioId: segment.audioId,
+    suggestedQuery: segment.suggestedQuery || undefined,
+    silenceMilliseconds: segment.type === 'silence' ? segment.silenceMilliseconds : 0,
+    repeatCount: segment.repeatCount,
+    repeatIntervalMilliseconds: segment.repeatIntervalMilliseconds,
+    includeText: segment.includeText,
+    includeTopic: segment.includeTopic,
+  }
+}
+
+function validate(): string | null {
+  if (!title.value.trim()) return t('Enter a paper title')
+  if (segments.value.length === 0) return t('Add at least one segment')
+  for (let index = 0; index < segments.value.length; index += 1) {
+    const item = segments.value[index]!
+    if ((item.type === 'audio' || item.type === 'placeholder') && !item.audioId) {
+      return t('Fill every placeholder before publishing')
+    }
+    if (item.type === 'smart' && segments.value[index + 1]?.type !== 'placeholder') {
+      return t('Every smart segment must be followed by a placeholder')
+    }
+  }
+  return null
 }
 
 async function submit(): Promise<void> {
-  if (submitting.value || accepted.value) return
-  errorMessage.value = ''
-  const normalizedTitle = title.value.trim()
-  const normalizedPresetId = Number(presetId.value)
-  if (!normalizedTitle) {
-    errorMessage.value = t('Enter a paper title')
-    return
-  }
-  if (!Number.isInteger(normalizedPresetId) || normalizedPresetId < 1) {
-    errorMessage.value = t('Select a paper preset')
-    return
-  }
-  if (selected.value.length === 0) {
-    errorMessage.value = t('Select at least one audio')
-    return
-  }
-  if (!(await validateSelections())) {
-    errorMessage.value = t('Remove or replace unavailable audio before rendering')
+  const validationError = validate()
+  if (validationError || submitting.value) {
+    errorMessage.value = validationError ?? ''
     return
   }
   submitting.value = true
+  errorMessage.value = ''
   try {
-    const paper = await createPaper({
-      title: normalizedTitle,
-      presetId: normalizedPresetId,
-      audioIds: selected.value.map((item) => item.audio.id),
+    accepted.value = await createAssembly({
+      title: title.value.trim(),
+      templateId: templateId.value ? Number(templateId.value) : undefined,
+      segments: segments.value.map(segmentInput),
+      tagIds: selectedTagIds.value,
+      visibility: visibility.value,
     })
-    accepted.value = await renderPaper(paper.id)
     await refreshJob()
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : t('Paper could not be submitted')
@@ -225,47 +285,64 @@ async function submit(): Promise<void> {
   }
 }
 
+async function saveTemplate(): Promise<void> {
+  if (!auth.isAdmin || savingTemplate.value || !templateTitle.value.trim()) return
+  savingTemplate.value = true
+  errorMessage.value = ''
+  try {
+    const created = await createAssemblyTemplate({
+      title: templateTitle.value.trim(),
+      segments: segments.value.map((segment) => {
+        const input = segmentInput(segment)
+        if (input.type === 'placeholder') delete input.audioId
+        return input
+      }),
+    })
+    templates.value = [created, ...templates.value]
+    templateId.value = String(created.id)
+    templateTitle.value = ''
+  } catch (error) {
+    errorMessage.value = error instanceof ApiError ? error.message : t('Template could not be saved')
+  } finally {
+    savingTemplate.value = false
+  }
+}
+
+async function removeTemplate(): Promise<void> {
+  const id = Number(templateId.value)
+  if (!auth.isAdmin || !Number.isInteger(id)) return
+  await deleteAssemblyTemplate(id)
+  templates.value = templates.value.filter((item) => item.id !== id)
+  templateId.value = ''
+}
+
+function toggleTag(tag: AudioTag): void {
+  if (tag.type === 'category' && tag.englishValue === 'full_paper') return
+  selectedTagIds.value = selectedTagIds.value.includes(tag.id)
+    ? selectedTagIds.value.filter((id) => id !== tag.id)
+    : [...selectedTagIds.value, tag.id]
+}
+
 async function refreshJob(): Promise<void> {
   if (!accepted.value) return
   try {
     job.value = await getJob(accepted.value.jobId)
-    errorMessage.value = ''
     if (job.value.status === 'succeeded') {
       stopPolling()
-      const audioId =
-        job.value.result?.type === 'audio'
-          ? job.value.result.id
-          : accepted.value.audioId
-      await router.push({ name: 'audio', params: { id: audioId } })
-      return
-    }
-    if (job.value.status === 'queued' || job.value.status === 'running') {
-      schedulePoll()
+      await router.push({ name: 'audio', params: { id: accepted.value.audioId } })
+    } else if (job.value.status === 'queued' || job.value.status === 'running') {
+      stopPolling()
+      pollTimer = window.setTimeout(() => void refreshJob(), 1000)
     }
   } catch (error) {
-    errorMessage.value =
-      error instanceof ApiError ? error.message : t('Render progress could not be loaded')
-    schedulePoll()
+    errorMessage.value = error instanceof ApiError ? error.message : t('Render progress could not be loaded')
   }
 }
 
-async function cancelRendering(): Promise<void> {
-  if (!accepted.value || cancelling.value) return
-  cancelling.value = true
-  errorMessage.value = ''
-  try {
-    job.value = await cancelJob(accepted.value.jobId)
-    stopPolling()
-  } catch (error) {
-    errorMessage.value = error instanceof ApiError ? error.message : t('Render could not be cancelled')
-  } finally {
-    cancelling.value = false
-  }
-}
-
-function schedulePoll(): void {
+async function cancel(): Promise<void> {
+  if (!accepted.value) return
+  job.value = await cancelJob(accepted.value.jobId)
   stopPolling()
-  pollTimer = window.setTimeout(() => void refreshJob(), 1000)
 }
 
 function stopPolling(): void {
@@ -273,276 +350,172 @@ function stopPolling(): void {
   pollTimer = undefined
 }
 
-function formatMilliseconds(value: number): string {
-  if (value < 1000) return `${value} ms`
-  return `${value / 1000} s`
-}
-
-function formatDuration(value: number | null): string {
-  if (value === null) return t('Pending selection')
-  const seconds = Math.max(0, Math.round(value))
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function statusLabel(status: JobStatus | Audio['status']): string {
-  return t(status.charAt(0).toUpperCase() + status.slice(1))
-}
-
-function statusClass(status: JobStatus): string {
-  if (status === 'succeeded') return 'text-success'
-  if (status === 'failed' || status === 'cancelled') return 'text-danger'
-  if (status === 'running') return 'text-warning'
-  return 'text-muted'
+function duration(seconds: number): string {
+  const rounded = Math.max(0, Math.round(seconds))
+  return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`
 }
 
 onMounted(() => {
-  void loadOptions()
-  void loadCandidates()
+  void Promise.all([loadOptions(), loadPage()])
 })
 onUnmounted(stopPolling)
 </script>
 
 <template>
-  <section aria-labelledby="paper-title" class="page-shell">
+  <section aria-labelledby="paper-title" class="page-shell pb-10">
     <div class="page-heading">
       <div class="min-w-0">
         <p class="eyebrow">{{ t('Teacher workspace') }}</p>
         <h1 id="paper-title" class="break-words text-3xl font-semibold">{{ t('Assemble paper') }}</h1>
       </div>
-      <span v-if="!accepted" class="text-sm text-muted">
-        {{ selected.length }} selected
-      </span>
+      <span class="text-sm tabular-nums text-muted">{{ t('{count} segments', { count: segments.length }) }}</span>
     </div>
 
-    <p
-      v-if="errorMessage"
-      role="alert"
-      class="mt-6 rounded-md border border-danger/30 bg-surface px-5 py-4 text-sm text-danger"
-    >
-      {{ errorMessage }}
-    </p>
+    <p v-if="errorMessage" role="alert" class="mt-5 border-y border-danger/30 py-3 text-sm text-danger">{{ errorMessage }}</p>
 
-    <div v-if="accepted" class="mt-6 rounded-lg border border-line bg-surface px-5 py-6 shadow-panel">
-      <div class="flex min-w-0 items-start justify-between gap-5">
-        <div class="min-w-0">
-          <h2 class="text-base font-semibold">{{ t('Rendering {title}', { title: title.trim() }) }}</h2>
-          <p class="mt-1 text-sm text-muted">{{ t('Output audio {id}', { id: accepted.audioId }) }}</p>
-        </div>
-        <span class="shrink-0 text-sm font-medium tabular-nums">{{ job?.progress ?? 0 }}%</span>
+    <div v-if="accepted" class="mt-7 border-y border-line py-6">
+      <div class="flex items-center justify-between gap-4">
+        <h2 class="text-base font-semibold">{{ t('Rendering {title}', { title }) }}</h2>
+        <span class="text-sm tabular-nums">{{ job?.progress ?? 0 }}%</span>
       </div>
-      <div
-        class="mt-5 h-2 overflow-hidden bg-canvas"
-        role="progressbar"
-        :aria-label="t('Paper rendering progress')"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        :aria-valuenow="job?.progress ?? 0"
-      >
+      <div class="mt-4 h-2 bg-canvas" role="progressbar" :aria-valuenow="job?.progress ?? 0" aria-valuemin="0" aria-valuemax="100">
         <div class="h-full bg-accent" :style="{ width: `${job?.progress ?? 0}%` }" />
       </div>
-      <div v-if="job" class="mt-4 flex flex-wrap items-center justify-between gap-4">
-        <span class="inline-flex items-center gap-2 text-sm font-medium" :class="statusClass(job.status)">
-          <span class="h-2 w-2 bg-current" aria-hidden="true" />
-          {{ statusLabel(job.status) }}
-        </span>
-        <button
-          v-if="job.status === 'queued' || job.status === 'running'"
-          type="button"
-          :disabled="cancelling"
-          class="h-9 border border-line px-3 text-sm font-medium text-danger hover:border-danger disabled:opacity-50"
-          @click="cancelRendering"
-        >
-          {{ cancelling ? t('Cancelling') : t('Cancel render') }}
-        </button>
-      </div>
-      <p v-if="job?.errorSummary" class="mt-3 break-words text-sm text-danger">
-        {{ job.errorSummary }}
-      </p>
+      <button v-if="job?.status === 'queued' || job?.status === 'running'" type="button" class="mt-4 text-sm text-danger" @click="cancel">{{ t('Cancel render') }}</button>
     </div>
 
     <template v-else>
-      <div class="mt-6 grid min-w-0 gap-6 rounded-t-lg border border-line bg-surface px-5 py-6 shadow-panel lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div class="min-w-0">
-          <label for="paper-name" class="mb-1 block text-sm font-medium">{{ t('Paper title') }}</label>
-          <input
-            id="paper-name"
-            v-model="title"
-            type="text"
-            maxlength="200"
-            class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
-          />
-        </div>
-        <div class="min-w-0">
-          <label for="paper-preset" class="mb-1 block text-sm font-medium">{{ t('Preset') }}</label>
-          <select
-            id="paper-preset"
-            v-model="presetId"
-            :disabled="loadingOptions"
-            class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus disabled:opacity-50"
-          >
-            <option value="" disabled>{{ t('Select preset') }}</option>
-            <option v-for="preset in presets" :key="preset.id" :value="String(preset.id)">
-              {{ preset.name }}{{ preset.isBuiltin ? t(' (built-in)') : '' }}
-            </option>
+      <div class="mt-7 grid gap-5 border-y border-line py-5 lg:grid-cols-[minmax(0,1fr)_18rem_10rem]">
+        <label class="min-w-0 text-sm font-medium">
+          {{ t('Paper title') }}
+          <input v-model="title" maxlength="200" class="mt-2 h-10 w-full border border-line px-3 font-normal focus:border-accent focus:outline-none" />
+        </label>
+        <label class="min-w-0 text-sm font-medium">
+          {{ t('Template') }}
+          <select v-model="templateId" class="mt-2 h-10 w-full border border-line bg-surface px-3 font-normal" @change="applyTemplate">
+            <option value="">{{ t('No template') }}</option>
+            <option v-for="item in templates" :key="item.id" :value="String(item.id)">{{ item.title }}</option>
           </select>
-        </div>
+        </label>
+        <label class="min-w-0 text-sm font-medium">
+          {{ t('Visibility') }}
+          <select v-model="visibility" class="mt-2 h-10 w-full border border-line bg-surface px-3 font-normal">
+            <option value="public">{{ t('Public') }}</option>
+            <option value="private">{{ t('Private') }}</option>
+          </select>
+        </label>
       </div>
 
-      <dl
-        v-if="selectedPreset"
-        class="grid border-x border-b border-line bg-surface sm:grid-cols-3 lg:grid-cols-5"
-        :aria-label="t('Preset parameters')"
-      >
-        <div class="border-b border-line px-4 py-4 sm:border-r lg:border-b-0">
-          <dt class="text-xs text-muted">{{ t('Intro') }}</dt>
-          <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.introSilenceMilliseconds) }}</dd>
-        </div>
-        <div class="border-b border-line px-4 py-4 sm:border-r lg:border-b-0">
-          <dt class="text-xs text-muted">{{ t('Between items') }}</dt>
-          <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.interItemSilenceMilliseconds) }}</dd>
-        </div>
-        <div class="border-b border-line px-4 py-4 lg:border-b-0 lg:border-r">
-          <dt class="text-xs text-muted">{{ t('Repeats') }}</dt>
-          <dd class="mt-1 text-sm font-medium">{{ selectedPreset.repeatCount }}</dd>
-        </div>
-        <div class="border-b border-line px-4 py-4 sm:border-b-0 sm:border-r">
-          <dt class="text-xs text-muted">{{ t('Outro') }}</dt>
-          <dd class="mt-1 text-sm font-medium">{{ formatMilliseconds(selectedPreset.outroSilenceMilliseconds) }}</dd>
-        </div>
-        <div class="px-4 py-4">
-          <dt class="text-xs text-muted">{{ t('Estimated length') }}</dt>
-          <dd class="mt-1 text-sm font-medium">{{ formatDuration(estimatedDuration) }}</dd>
-        </div>
-      </dl>
-
-      <div class="grid min-w-0 gap-8 py-7 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.9fr)]">
-        <section aria-labelledby="candidate-title" class="min-w-0">
-          <div class="mb-4 flex min-w-0 items-end justify-between gap-3">
+      <div class="grid min-w-0 gap-8 py-7 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.35fr)]">
+        <section aria-labelledby="audio-source-title" class="min-w-0">
+          <div class="mb-4 flex items-end justify-between gap-3">
             <div>
-              <h2 id="candidate-title" class="text-base font-semibold">{{ t('Audio candidates') }}</h2>
+              <h2 id="audio-source-title" class="text-base font-semibold">{{ t('Audio library') }}</h2>
               <p class="mt-1 text-sm text-muted">{{ t('{count} available', { count: total }) }}</p>
             </div>
+            <span v-if="activePlaceholder !== null" class="text-xs font-medium text-accent">{{ t('Filling placeholder') }}</span>
           </div>
-          <AudioSearchBox
-            v-model="query"
-            :tags="tagCatalog"
-            :busy="loadingCandidates"
-            @submit="loadCandidates(true)"
-          />
-          <p v-if="loadingCandidates" class="border-b border-line py-10 text-sm text-muted">
-            {{ t('Loading candidates') }}
-          </p>
-          <p v-else-if="candidates.length === 0" class="border-b border-line py-10 text-sm text-muted">
-            {{ t('No audio found') }}
-          </p>
-          <ul v-else class="mt-4 divide-y divide-line border-y border-line bg-surface">
-            <li
-              v-for="audio in candidates"
-              :key="audio.id"
-              class="grid min-w-0 gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_8rem] sm:items-center"
-            >
+          <AudioSearchBox v-model="query" :tags="tagCatalog" :busy="loading" @submit="loadPage(true)" />
+          <ul class="mt-4 divide-y divide-line border-y border-line">
+            <li v-for="audio in candidates" :key="audio.id" class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div class="min-w-0">
                 <p class="break-words text-sm font-semibold">{{ audio.title }}</p>
-                <p class="mt-1 break-words text-xs text-muted">
-                  {{ audio.author.username || audio.author.userId }}
-                </p>
-                <audio
-                  class="mt-3 h-9 w-full"
-                  controls
-                  preload="none"
-                  :src="audioMediaPath(audio.id)"
-                ></audio>
+                <p class="mt-1 text-xs text-muted">{{ audio.questions?.length ?? 0 }} {{ t('Questions') }} · {{ audio.durationSeconds === null ? '' : duration(audio.durationSeconds) }}</p>
+                <audio class="mt-2 h-8 w-full" controls preload="none" :src="audioMediaPath(audio.id)" />
               </div>
-              <button
-                type="button"
-                :disabled="selectedIds.has(audio.id) || selected.length >= 100"
-                class="inline-flex h-9 items-center justify-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink disabled:opacity-45"
-                @click="addAudio(audio)"
-              >
-                <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" />
-                </svg>
-                {{ selectedIds.has(audio.id) ? t('Selected') : t('Add') }}
-              </button>
+              <button type="button" class="h-9 border border-line px-3 text-sm font-medium hover:border-ink" @click="addAudio(audio)">{{ activePlaceholder === null ? t('Add') : t('Select') }}</button>
             </li>
           </ul>
-          <nav
-            v-if="!loadingCandidates && totalPages > 1"
-            class="flex items-center justify-between gap-3 border-b border-line py-4"
-            :aria-label="t('Candidate pages')"
-          >
-            <button
-              type="button"
-              :disabled="page === 1"
-              class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium disabled:opacity-45"
-              @click="movePage(page - 1)"
-            >
-              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-                <path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" />
-              </svg>
-              {{ t('Previous') }}
-            </button>
-            <span class="text-sm tabular-nums text-muted">{{ page }} / {{ totalPages }}</span>
-            <button
-              type="button"
-              :disabled="page === totalPages"
-              class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm font-medium disabled:opacity-45"
-              @click="movePage(page + 1)"
-            >
-              {{ t('Next') }}
-              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-                <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
-              </svg>
-            </button>
+          <nav v-if="totalPages > 1" class="mt-4 flex items-center justify-between text-sm">
+            <button type="button" :disabled="page === 1" class="h-9 border border-line px-3 disabled:opacity-40" @click="page -= 1; loadPage()">{{ t('Previous') }}</button>
+            <span class="tabular-nums text-muted">{{ page }} / {{ totalPages }}</span>
+            <button type="button" :disabled="page === totalPages" class="h-9 border border-line px-3 disabled:opacity-40" @click="page += 1; loadPage()">{{ t('Next') }}</button>
           </nav>
         </section>
 
-        <section aria-labelledby="selected-title" class="min-w-0">
-          <div class="mb-4 flex min-w-0 items-end justify-between gap-3">
+        <section aria-labelledby="segments-title" class="min-w-0">
+          <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 id="selected-title" class="text-base font-semibold">{{ t('Selected order') }}</h2>
-              <p class="mt-1 text-sm text-muted">{{ t('{count} items', { count: selected.length }) }}</p>
+              <h2 id="segments-title" class="text-base font-semibold">{{ t('Assembly segments') }}</h2>
+              <p class="mt-1 text-sm text-muted">{{ t('Estimated length') }} {{ duration(estimatedSeconds) }}</p>
             </div>
-            <button
-              v-if="selected.length > 0"
-              type="button"
-              :disabled="validating || submitting"
-              class="inline-flex h-9 shrink-0 items-center gap-2 border border-line px-3 text-sm font-medium hover:border-ink disabled:opacity-50"
-              @click="validateSelections"
-            >
-              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
-                <path d="M20 12a8 8 0 1 1-2.34-5.66L20 8" stroke="currentColor" stroke-width="2" />
-                <path d="M20 4v4h-4" stroke="currentColor" stroke-width="2" />
-              </svg>
-              {{ validating ? t('Checking') : t('Check') }}
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="h-9 border border-line px-3 text-sm" @click="addSilence">{{ t('Add silence') }}</button>
+              <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addPlaceholder">{{ t('Add placeholder') }}</button>
+              <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addSmart">{{ t('Add smart segment') }}</button>
+            </div>
           </div>
-          <p v-if="selected.length === 0" class="border-y border-line bg-surface px-4 py-10 text-sm text-muted">
-            {{ t('No audio selected') }}
-          </p>
-          <PaperSelectedAudioList
-            v-else
-            :items="selected"
-            :disabled="validating || submitting"
-            @move="moveAudio"
-            @remove="removeAudio"
-          />
-          <p v-if="invalidSelection" class="mt-3 text-sm text-danger">
-            {{ t('Unavailable items cannot be rendered.') }}
-          </p>
+
+          <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
+          <ol v-else class="divide-y divide-line border-y border-line">
+            <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
+              <span class="pt-1 text-sm tabular-nums text-muted">{{ index + 1 }}</span>
+              <div class="min-w-0">
+                <template v-if="segment.type === 'silence'">
+                  <p class="text-sm font-semibold">{{ t('Silence') }}</p>
+                  <label class="mt-3 block text-xs text-muted">{{ t('Duration milliseconds') }}
+                    <input v-model.number="segment.silenceMilliseconds" type="number" min="0" max="60000" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" />
+                  </label>
+                </template>
+                <template v-else-if="segment.type === 'smart'">
+                  <p class="text-sm font-semibold">{{ t('Smart question-number audio') }}</p>
+                  <p class="mt-1 text-xs text-muted">{{ t('Resolved when the paper is submitted') }}</p>
+                </template>
+                <template v-else>
+                  <div class="flex flex-wrap items-baseline gap-2">
+                    <p class="break-words text-sm font-semibold">{{ segment.audio?.title || t('Unfilled placeholder') }}</p>
+                    <span v-if="segment.type === 'placeholder'" class="text-xs text-accent">{{ t('Placeholder') }}</span>
+                  </div>
+                  <label v-if="segment.type === 'placeholder' && !segment.audio" class="mt-3 block text-xs text-muted">{{ t('Suggested search') }}
+                    <input v-model="segment.suggestedQuery" maxlength="1024" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
+                  </label>
+                  <button v-if="segment.type === 'placeholder'" type="button" class="mt-3 text-sm font-medium text-accent" @click="selectPlaceholder(index)">{{ t('Choose audio') }}</button>
+                  <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label class="text-xs text-muted">{{ t('Repeat count') }}
+                      <input v-model.number="segment.repeatCount" type="number" min="1" max="10" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
+                    </label>
+                    <label class="text-xs text-muted">{{ t('Repeat interval milliseconds') }}
+                      <input v-model.number="segment.repeatIntervalMilliseconds" type="number" min="0" max="60000" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
+                    </label>
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-5 text-sm">
+                    <label class="inline-flex items-center gap-2"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
+                    <label class="inline-flex items-center gap-2"><input :checked="segment.includeTopic" type="checkbox" @change="setSegmentTopic(segment, ($event.target as HTMLInputElement).checked)" />{{ t('Include topic') }}</label>
+                  </div>
+                </template>
+              </div>
+              <div class="flex justify-end gap-1">
+                <button type="button" :disabled="index === 0" class="flex h-8 w-7 items-center justify-center text-muted disabled:opacity-30" :title="t('Move up')" @click="move(index, -1)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" /></svg></button>
+                <button type="button" :disabled="index === segments.length - 1" class="flex h-8 w-7 items-center justify-center text-muted disabled:opacity-30" :title="t('Move down')" @click="move(index, 1)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" /></svg></button>
+                <button type="button" class="flex h-8 w-7 items-center justify-center text-danger" :title="t('Remove')" @click="remove(index)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2" /></svg></button>
+              </div>
+            </li>
+          </ol>
         </section>
       </div>
 
-      <div class="flex flex-wrap items-center justify-between gap-4 border-t border-line bg-surface px-5 py-5">
-        <p class="text-sm text-muted">{{ t('Output visibility: Private') }}</p>
-        <button
-          type="button"
-          :disabled="submitting || validating || loadingOptions"
-          class="h-10 bg-ink px-5 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
-          @click="submit"
-        >
-          {{ submitting || validating ? t('Checking and submitting') : t('Render paper') }}
-        </button>
+      <section aria-labelledby="paper-tags-title" class="border-y border-line py-5">
+        <h2 id="paper-tags-title" class="text-base font-semibold">{{ t('Final tags') }}</h2>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <label v-for="tag in editableTags" :key="tag.id" class="inline-flex items-center gap-2 border border-line px-3 py-2 text-sm" :class="selectedTagIds.includes(tag.id) ? 'border-accent bg-accent-soft' : ''">
+            <input type="checkbox" :checked="selectedTagIds.includes(tag.id)" :disabled="tag.type === 'category' && tag.englishValue === 'full_paper'" @change="toggleTag(tag)" />
+            {{ tag.displayValue.replace(/_/g, ' ') }}
+          </label>
+        </div>
+      </section>
+
+      <section v-if="auth.isAdmin" aria-labelledby="template-admin-title" class="mt-7 border-y border-line py-5">
+        <h2 id="template-admin-title" class="text-base font-semibold">{{ t('Template management') }}</h2>
+        <div class="mt-4 flex flex-wrap gap-3">
+          <input v-model="templateTitle" maxlength="200" :placeholder="t('Template title')" class="h-10 min-w-64 flex-1 border border-line px-3 text-sm" />
+          <button type="button" :disabled="savingTemplate || !templateTitle.trim() || segments.length === 0" class="h-10 bg-ink px-4 text-sm font-medium text-white disabled:opacity-40" @click="saveTemplate">{{ t('Save current segments as template') }}</button>
+          <button v-if="templateId" type="button" class="h-10 border border-line px-4 text-sm text-danger" @click="removeTemplate">{{ t('Delete selected template') }}</button>
+        </div>
+      </section>
+
+      <div class="mt-7 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5">
+        <p class="text-sm text-muted">{{ t('Questions are included once even when audio repeats') }}</p>
+        <button type="button" :disabled="submitting || loading" class="h-10 bg-ink px-5 text-sm font-medium text-white disabled:opacity-40" @click="submit">{{ submitting ? t('Submitting') : t('Assemble and publish') }}</button>
       </div>
     </template>
   </section>

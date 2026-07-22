@@ -15,6 +15,11 @@ from backend.app.db.models.audio_tag import (
     AudioTagTranslation,
     AudioTagType,
 )
+from backend.app.db.models.assembly import (
+    AssemblySegmentType,
+    AssemblyTemplate,
+    AssemblyTemplateSegment,
+)
 from backend.app.db.models.generation_batch import (
     GenerationBatch,
     GenerationBatchItem,
@@ -50,6 +55,9 @@ __all__ = [
     "AudioTagType",
     "AudioUtterance",
     "AudioVisibility",
+    "AssemblySegmentType",
+    "AssemblyTemplate",
+    "AssemblyTemplateSegment",
     "Job",
     "JobStatus",
     "Paper",

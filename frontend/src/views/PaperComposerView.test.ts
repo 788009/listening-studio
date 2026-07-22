@@ -5,84 +5,48 @@ import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 
 import type { Audio } from '@/api/audios'
 import { useAuthStore } from '@/stores/auth'
-import AudioDetailView from './AudioDetailView.vue'
 import PaperComposerView from './PaperComposerView.vue'
 
-const firstAudio: Audio = {
-  id: 1,
+const audio: Audio = {
+  id: 5,
   author: { userId: 'TeacherOne', username: 'Teacher One' },
-  title: 'First report',
-  text: 'First transcript.',
+  title: 'Listening section',
+  text: 'Listening text.',
   sourceType: 'corpus',
   status: 'ready',
-  visibility: 'private',
+  visibility: 'public',
   durationSeconds: 30,
   sampleRate: 8000,
   tags: [],
   utterances: [],
+  questions: [
+    {
+      id: 1,
+      position: 0,
+      prompt: 'Question?',
+      correctAnswers: ['A'],
+      incorrectAnswers: ['B'],
+    },
+  ],
 }
 
-const secondAudio: Audio = {
-  ...firstAudio,
-  id: 2,
-  title: 'Second interview',
-  text: 'Second transcript.',
-  durationSeconds: 45,
-  visibility: 'public',
-}
-
-const resultAudio: Audio = {
-  ...firstAudio,
-  id: 9,
-  title: 'Midterm paper',
-  text: '1. Second interview\nSecond transcript.\n\n1. First report\nFirst transcript.',
-  sourceType: 'assembly',
-  durationSeconds: 160,
-}
-
-const presets = [
-  {
-    id: 1,
-    name: 'Standard',
-    isBuiltin: true,
-    introSilenceMilliseconds: 1000,
-    interItemSilenceMilliseconds: 3000,
-    repeatCount: 1,
-    outroSilenceMilliseconds: 1000,
-  },
-  {
-    id: 2,
-    name: 'Review',
-    isBuiltin: true,
-    introSilenceMilliseconds: 1000,
-    interItemSilenceMilliseconds: 5000,
-    repeatCount: 2,
-    outroSilenceMilliseconds: 1000,
-  },
-]
-
-function jsonResponse(body: unknown, status = 200): Response {
+function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'Content-Type': 'application/json' },
   })
 }
 
-function errorResponse(status: number, message: string): Response {
-  return jsonResponse(
-    {
-      error: {
-        code: 'not_found',
-        message,
-        details: null,
-        request_id: 'request-test',
-      },
-    },
-    status,
-  )
-}
-
-function setupAuth() {
+async function mountView(role: 'user' | 'admin' = 'user') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/papers/new', name: 'paper-create', component: PaperComposerView },
+      { path: '/audio/:id', name: 'audio', component: { template: '<div />' } },
+    ],
+  })
+  await router.push('/papers/new')
+  await router.isReady()
   const pinia = createPinia()
   setActivePinia(pinia)
   useAuthStore().setCurrentUser({
@@ -90,42 +54,12 @@ function setupAuth() {
     username: 'Teacher One',
     locale: 'en',
     profileComplete: true,
-    role: 'user',
+    role,
   })
-  return pinia
-}
-
-async function mountWorkflow() {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      {
-        path: '/papers/new',
-        name: 'paper-create',
-        component: PaperComposerView,
-      },
-      {
-        path: '/audio/:id',
-        name: 'audio',
-        component: AudioDetailView,
-      },
-      { path: '/audio', name: 'library', component: { template: '<div />' } },
-      { path: '/user/:userId', component: { template: '<div />' } },
-    ],
-  })
-  await router.push('/papers/new')
-  await router.isReady()
-  const pinia = setupAuth()
   return {
     router,
     wrapper: mount(RouterView, { global: { plugins: [pinia, router] } }),
   }
-}
-
-function optionResponse(path: string): Response | null {
-  if (path === '/api/paper-presets') return jsonResponse(presets)
-  if (path.startsWith('/api/audio-tags')) return jsonResponse([])
-  return null
 }
 
 describe('paper composer view', () => {
@@ -134,159 +68,150 @@ describe('paper composer view', () => {
     vi.unstubAllGlobals()
   })
 
-  it('selects, orders, renders, and plays the final assembly audio', async () => {
+  it('adds configurable audio and silence segments and submits an assembly', async () => {
     vi.useFakeTimers()
-    let paperBody: unknown
+    let submitted: Record<string, unknown> | undefined
     let jobReads = 0
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      const path = String(input)
-      const option = optionResponse(path)
-      if (option) return Promise.resolve(option)
-      if (path.startsWith('/api/audios?')) {
-        return Promise.resolve(
-          jsonResponse({ items: [firstAudio, secondAudio], page: 1, pageSize: 10, total: 2 }),
-        )
-      }
-      if (path === '/api/audios/1?language=en') return Promise.resolve(jsonResponse(firstAudio))
-      if (path === '/api/audios/2?language=en') return Promise.resolve(jsonResponse(secondAudio))
-      if (path === '/api/audios/9?language=en') return Promise.resolve(jsonResponse(resultAudio))
-      if (path === '/api/papers' && init?.method === 'POST') {
-        paperBody = JSON.parse(String(init.body))
-        return Promise.resolve(jsonResponse({ id: 7 }, 201))
-      }
-      if (path === '/api/papers/7/render') {
-        return Promise.resolve(jsonResponse({ paperId: 7, audioId: 9, jobId: 11 }, 202))
-      }
-      if (path === '/api/jobs/11') {
-        jobReads += 1
-        return Promise.resolve(
-          jsonResponse({
-            id: 11,
-            type: 'paper_render',
-            status: jobReads > 1 ? 'succeeded' : 'running',
-            progress: jobReads > 1 ? 100 : 40,
-            inputSummary: {},
-            result: jobReads > 1 ? { type: 'audio', id: 9 } : undefined,
-            cancelRequested: false,
-            retryable: true,
-            attemptCount: 1,
-            createdAt: '',
-            updatedAt: '',
-          }),
-        )
-      }
-      throw new Error(`Unexpected request: ${path}`)
-    })
-    vi.stubGlobal('fetch', fetchMock)
-    const { router, wrapper } = await mountWorkflow()
-    await flushPromises()
-
-    const addButtons = wrapper.findAll('button').filter((button) => button.text() === 'Add')
-    await addButtons[0]?.trigger('click')
-    await addButtons[1]?.trigger('click')
-    await wrapper.get('button[aria-label="Move Second interview up"]').trigger('click')
-    await wrapper.get('#paper-name').setValue('Midterm paper')
-    await wrapper.get('#paper-preset').setValue('2')
-
-    expect(wrapper.text()).toContain('Estimated length')
-    expect(wrapper.text()).toContain('2:37')
-    await wrapper.findAll('button').find((button) => button.text() === 'Render paper')?.trigger('click')
-    await flushPromises()
-
-    expect(paperBody).toEqual({
-      title: 'Midterm paper',
-      presetId: 2,
-      audioIds: [2, 1],
-    })
-    expect(wrapper.get('[role="progressbar"]').attributes('aria-valuenow')).toBe('40')
-
-    await vi.advanceTimersByTimeAsync(1000)
-    await flushPromises()
-
-    expect(router.currentRoute.value.fullPath).toBe('/audio/9')
-    expect(wrapper.text()).toContain('Midterm paper')
-    expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/9')
-    wrapper.unmount()
-  })
-
-  it('uses server pagination instead of loading the complete audio library', async () => {
-    const candidateRequests: string[] = []
     vi.stubGlobal(
       'fetch',
-      vi.fn((input: RequestInfo | URL) => {
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
         const path = String(input)
-        const option = optionResponse(path)
-        if (option) return Promise.resolve(option)
-        if (path.startsWith('/api/audios?')) {
-          candidateRequests.push(path)
-          const secondPage = path.includes('page=2')
+        if (path === '/api/assembly-templates') return Promise.resolve(response([]))
+        if (path.startsWith('/api/audio-tags')) {
           return Promise.resolve(
-            jsonResponse({
-              items: secondPage ? [secondAudio] : [firstAudio],
-              page: secondPage ? 2 : 1,
-              pageSize: 10,
-              total: 25,
+            response([
+              {
+                id: 7,
+                type: 'category',
+                englishValue: 'full_paper',
+                displayValue: 'Full paper',
+                fullTag: 'category:full_paper',
+                translations: [],
+              },
+            ]),
+          )
+        }
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
+        }
+        if (path === '/api/assemblies' && init?.method === 'POST') {
+          submitted = JSON.parse(String(init.body)) as Record<string, unknown>
+          return Promise.resolve(response({ audioId: 12, jobId: 20 }, 202))
+        }
+        if (path === '/api/jobs/20') {
+          jobReads += 1
+          return Promise.resolve(
+            response({
+              id: 20,
+              type: 'audio_assembly',
+              status: jobReads > 1 ? 'succeeded' : 'running',
+              progress: jobReads > 1 ? 100 : 40,
+              inputSummary: {},
+              result: jobReads > 1 ? { type: 'audio', id: 12 } : undefined,
+              cancelRequested: false,
+              retryable: true,
+              attemptCount: 1,
+              createdAt: '',
+              updatedAt: '',
             }),
           )
         }
         throw new Error(`Unexpected request: ${path}`)
       }),
     )
-    const { wrapper } = await mountWorkflow()
+    const { router, wrapper } = await mountView()
     await flushPromises()
 
-    expect(candidateRequests[0]).toContain('page_size=10')
-    await wrapper.findAll('button').find((button) => button.text().includes('Next'))?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
+    await wrapper.get('input[maxlength="200"]').setValue('Final exam')
+    const numberInputs = wrapper.findAll('input[type="number"]')
+    await numberInputs[0]?.setValue('2')
+    await numberInputs[1]?.setValue('1500')
+    await wrapper.findAll('button').find((button) => button.text() === 'Assemble and publish')?.trigger('click')
     await flushPromises()
 
-    expect(candidateRequests[1]).toContain('page=2')
-    expect(wrapper.text()).toContain('Second interview')
+    expect(submitted).toMatchObject({
+      title: 'Final exam',
+      tagIds: [7],
+      visibility: 'public',
+      segments: [
+        {
+          type: 'audio',
+          audioId: 5,
+          repeatCount: 2,
+          repeatIntervalMilliseconds: 1500,
+          includeText: true,
+          includeTopic: true,
+        },
+        { type: 'silence', silenceMilliseconds: 3000 },
+      ],
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/audio/12')
     wrapper.unmount()
   })
 
-  it('keeps inaccessible and changed items visible and blocks submission', async () => {
-    let paperSubmissions = 0
+  it('applies a suggested query when filling a template placeholder', async () => {
+    const requests: string[] = []
     vi.stubGlobal(
       'fetch',
-      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn((input: RequestInfo | URL) => {
         const path = String(input)
-        const option = optionResponse(path)
-        if (option) return Promise.resolve(option)
+        requests.push(path)
+        if (path === '/api/assembly-templates') {
+          return Promise.resolve(
+            response([
+              {
+                id: 3,
+                title: 'Exam template',
+                ownerUserId: 'Admin',
+                createdAt: '',
+                updatedAt: '',
+                segments: [
+                  {
+                    id: 1,
+                    position: 0,
+                    type: 'smart',
+                    repeatCount: 1,
+                    repeatIntervalMilliseconds: 0,
+                    silenceMilliseconds: 0,
+                    includeText: false,
+                    includeTopic: false,
+                  },
+                  {
+                    id: 2,
+                    position: 1,
+                    type: 'placeholder',
+                    suggestedQuery: 'topic:news',
+                    repeatCount: 1,
+                    repeatIntervalMilliseconds: 0,
+                    silenceMilliseconds: 0,
+                    includeText: true,
+                    includeTopic: true,
+                  },
+                ],
+              },
+            ]),
+          )
+        }
+        if (path.startsWith('/api/audio-tags')) return Promise.resolve(response([]))
         if (path.startsWith('/api/audios?')) {
-          return Promise.resolve(
-            jsonResponse({ items: [firstAudio, secondAudio], page: 1, pageSize: 10, total: 2 }),
-          )
-        }
-        if (path === '/api/audios/1?language=en') {
-          return Promise.resolve(errorResponse(404, 'Audio not found'))
-        }
-        if (path === '/api/audios/2?language=en') {
-          return Promise.resolve(
-            jsonResponse({ ...secondAudio, status: 'processing' }),
-          )
-        }
-        if (path === '/api/papers' && init?.method === 'POST') {
-          paperSubmissions += 1
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
         }
         throw new Error(`Unexpected request: ${path}`)
       }),
     )
-    const { wrapper } = await mountWorkflow()
+    const { wrapper } = await mountView()
+    await flushPromises()
+    await wrapper.find('select').setValue('3')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Choose audio')?.trigger('click')
     await flushPromises()
 
-    const addButtons = wrapper.findAll('button').filter((button) => button.text() === 'Add')
-    await addButtons[0]?.trigger('click')
-    await addButtons[1]?.trigger('click')
-    await wrapper.get('#paper-name').setValue('Invalid paper')
-    await wrapper.findAll('button').find((button) => button.text() === 'Render paper')?.trigger('click')
-    await flushPromises()
-
-    expect(wrapper.text()).toContain('No longer accessible or deleted')
-    expect(wrapper.text()).toContain('Status changed to Processing')
-    expect(wrapper.text()).toContain('Remove or replace unavailable audio')
-    expect(wrapper.text()).toContain('First report')
-    expect(wrapper.text()).toContain('Second interview')
-    expect(paperSubmissions).toBe(0)
+    expect(requests.some((path) => path.includes('q=topic%3Anews'))).toBe(true)
+    expect(wrapper.text()).toContain('Smart question-number audio')
     wrapper.unmount()
   })
 })

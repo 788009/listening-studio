@@ -69,6 +69,7 @@ _WITH_QUESTIONS_TRANSLATION = TagTranslationInput(
     value="有题目",
 )
 _QUESTION_COUNT_TAG_PATTERN = re.compile(r"^[1-9][0-9]*_question$")
+_FULL_PAPER_TAG_VALUE = "full_paper"
 
 
 def normalize_audio_title(title: object) -> tuple[str, str]:
@@ -319,8 +320,13 @@ class AudioService:
             for tag in audio.tags
             if tag.type
             in {AudioTagType.AUTHOR, AudioTagType.VOICE, AudioTagType.OTHER}
+            or (
+                audio.source_type is AudioSourceType.ASSEMBLY
+                and tag.type is AudioTagType.CATEGORY
+                and tag.normalized_value == _FULL_PAPER_TAG_VALUE
+            )
         ]
-        audio.tags = preserved + list(dict.fromkeys(tags))
+        audio.tags = list(dict.fromkeys(preserved + tags))
         session.flush()
         return audio
 

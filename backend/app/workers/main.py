@@ -14,6 +14,7 @@ from backend.app.integrations.llm import (
     ValidatingTopicTagSuggester,
 )
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.assemblies import ASSEMBLY_JOB_TYPE, AssemblyService
 from backend.app.services.audio_previews import (
     AUDIO_PREVIEW_JOB_TYPE,
     AudioPreviewService,
@@ -36,6 +37,7 @@ from backend.app.services.voice_uploads import (
     VoiceUploadService,
 )
 from backend.app.workers.audio_synthesis import AudioSynthesisJobHandler
+from backend.app.workers.assemblies import AssemblyJobHandler
 from backend.app.workers.audio_preview import AudioPreviewJobHandler
 from backend.app.workers.corpus_generation import CorpusGenerationJobHandler
 from backend.app.workers.jobs import JobHandler, JobWorker
@@ -79,6 +81,7 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         AUDIO_PREVIEW_JOB_TYPE: AudioPreviewJobHandler(audio_preview_service),
         CORPUS_GENERATION_JOB_TYPE: CorpusGenerationJobHandler(corpus_service),
         PAPER_RENDER_JOB_TYPE: PaperRenderJobHandler(PaperRenderService(audio_storage)),
+        ASSEMBLY_JOB_TYPE: AssemblyJobHandler(AssemblyService(audio_storage)),
     }
 
 

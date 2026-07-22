@@ -88,7 +88,11 @@ class AudioTagService:
         english_value: object,
         translations: Iterable[TagTranslationInput] = (),
     ) -> AudioTag:
-        if tag_type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
+        if tag_type in {AudioTagType.AUTHOR, AudioTagType.OTHER} or (
+            tag_type is AudioTagType.CATEGORY
+            and normalize_english_tag_value(english_value).normalized_value
+            == "full_paper"
+        ):
             raise DomainValidationError(
                 "System tags are managed by the system",
                 details={"field": "type"},
@@ -121,7 +125,7 @@ class AudioTagService:
         translation: TagTranslationInput,
     ) -> AudioTag:
         tag = self.get_tag(session, tag_id)
-        if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
+        if self._is_system_tag(tag):
             raise ConflictError("System tags are managed by the system")
         normalized = normalize_tag_translations([translation])[0]
         existing = self.repository.get_translation(
@@ -151,7 +155,7 @@ class AudioTagService:
         tag = self.repository.get_by_id_for_update(session, tag_id)
         if tag is None:
             raise NotFoundError("Audio tag not found")
-        if tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER}:
+        if self._is_system_tag(tag):
             raise ConflictError("System tags are managed by the system")
         usage_count = self.repository.count_usage(session, tag.id)
         if usage_count:
@@ -214,3 +218,10 @@ class AudioTagService:
                 "Autocomplete limit is invalid",
                 details={"field": "limit"},
             )
+
+    @staticmethod
+    def _is_system_tag(tag: AudioTag) -> bool:
+        return tag.type in {AudioTagType.AUTHOR, AudioTagType.OTHER} or (
+            tag.type is AudioTagType.CATEGORY
+            and tag.normalized_value == "full_paper"
+        )

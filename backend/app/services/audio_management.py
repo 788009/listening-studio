@@ -19,6 +19,9 @@ from backend.app.services.authorization import (
 from backend.app.services.tag_parser import parse_search_query
 
 
+_FULL_PAPER_TAG_VALUE = "full_paper"
+
+
 @dataclass(frozen=True)
 class AudioListResult:
     items: list[Audio]
@@ -101,6 +104,12 @@ class AudioManagementService:
         audio = self.get_visible(session, principal, audio_id)
         if audio.visibility is not AudioVisibility.PUBLIC:
             raise ConflictError("Only public audio can be used as a creation source")
+        if any(
+            tag.type is AudioTagType.CATEGORY
+            and tag.normalized_value == _FULL_PAPER_TAG_VALUE
+            for tag in audio.tags
+        ):
+            raise ConflictError("Full paper audio cannot be used as a creation source")
         return AudioCreationDraft(
             source=audio,
             title=self.audio_service.next_available_title(session, audio.title),
@@ -141,6 +150,16 @@ class AudioManagementService:
                     details={
                         "voiceIds": self._referencing_voice_ids(session, audio.id)
                     },
+                )
+            elif template_reference_count := (
+                self.repository.count_assembly_template_references(
+                    session,
+                    audio.id,
+                )
+            ):
+                raise ConflictError(
+                    "Audio is used by an assembly template",
+                    details={"assemblyTemplateReferenceCount": template_reference_count},
                 )
             elif paper_reference_count := (
                 self.repository.count_foreign_paper_item_references(
@@ -190,6 +209,15 @@ class AudioManagementService:
             raise ConflictError(
                 "Audio is part of a generation batch",
                 details={"batchItemCount": batch_item_count},
+            )
+        template_reference_count = self.repository.count_assembly_template_references(
+            session,
+            audio.id,
+        )
+        if template_reference_count:
+            raise ConflictError(
+                "Audio is used by an assembly template",
+                details={"assemblyTemplateReferenceCount": template_reference_count},
             )
         paper_item_count = self.repository.count_paper_item_references(
             session,

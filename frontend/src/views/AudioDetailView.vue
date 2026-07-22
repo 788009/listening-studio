@@ -64,6 +64,11 @@ const canDelete = computed(
     isOwner.value ||
     (auth.isAdmin && audio.value?.visibility === 'public'),
 )
+const isFullPaper = computed(() =>
+  audio.value?.tags.some(
+    (tag) => tag.type === 'category' && tag.englishValue === 'full_paper',
+  ) ?? false,
+)
 const orderedUtterances = computed(() =>
   [...(audio.value?.utterances ?? [])].sort((left, right) => left.position - right.position),
 )
@@ -146,6 +151,8 @@ function selectTag(tagId: number): void {
 }
 
 function removeTag(tagId: number): void {
+  const tag = audio.value?.tags.find((item) => item.id === tagId)
+  if (tag?.type === 'category' && tag.englishValue === 'full_paper') return
   selectedTagIds.value = selectedTagIds.value.filter((id) => id !== tagId)
 }
 
@@ -253,7 +260,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
         </div>
         <div v-if="!editing" class="flex flex-wrap items-center gap-2">
           <RouterLink
-            v-if="auth.profileComplete && audio.visibility === 'public'"
+            v-if="auth.profileComplete && audio.visibility === 'public' && !isFullPaper"
             :to="{ name: 'create', query: { fromAudio: String(audio.id) } }"
             class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
           >
