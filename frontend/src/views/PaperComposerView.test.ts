@@ -126,8 +126,10 @@ describe('paper composer view', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
     await wrapper.get('input[maxlength="200"]').setValue('Final exam')
     const numberInputs = wrapper.findAll('input[type="number"]')
+    expect((numberInputs[1]?.element as HTMLInputElement).value).toBe('3')
+    expect((numberInputs[2]?.element as HTMLInputElement).value).toBe('5')
     await numberInputs[0]?.setValue('2')
-    await numberInputs[1]?.setValue('1500')
+    await numberInputs[1]?.setValue('1.5')
     await wrapper.findAll('button').find((button) => button.text() === 'Assemble and publish')?.trigger('click')
     await flushPromises()
 
@@ -144,7 +146,7 @@ describe('paper composer view', () => {
           includeText: true,
           includeTopic: true,
         },
-        { type: 'silence', silenceMilliseconds: 3000 },
+        { type: 'silence', silenceMilliseconds: 5000 },
       ],
     })
     await vi.advanceTimersByTimeAsync(1000)

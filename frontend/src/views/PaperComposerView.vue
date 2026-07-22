@@ -88,7 +88,7 @@ function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): D
     key: nextKey++,
     type,
     repeatCount: 1,
-    repeatIntervalMilliseconds: 0,
+    repeatIntervalMilliseconds: 3000,
     includeText: true,
     includeTopic: true,
     silenceMilliseconds: 0,
@@ -199,7 +199,16 @@ function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
 }
 
 function addSilence(): void {
-  segments.value.push(draft('silence', { silenceMilliseconds: 3000 }))
+  segments.value.push(draft('silence', { silenceMilliseconds: 5000 }))
+}
+
+function seconds(milliseconds: number | undefined): number {
+  return (milliseconds ?? 0) / 1000
+}
+
+function millisecondsFromInput(event: Event): number {
+  const value = (event.target as HTMLInputElement).valueAsNumber
+  return Number.isFinite(value) ? Math.round(value * 1000) : 0
 }
 
 function addPlaceholder(): void {
@@ -453,8 +462,8 @@ onUnmounted(stopPolling)
               <div class="min-w-0">
                 <template v-if="segment.type === 'silence'">
                   <p class="text-sm font-semibold">{{ t('Silence') }}</p>
-                  <label class="mt-3 block text-xs text-muted">{{ t('Duration milliseconds') }}
-                    <input v-model.number="segment.silenceMilliseconds" type="number" min="0" max="60000" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" />
+                  <label class="mt-3 block text-xs text-muted">{{ t('Duration seconds') }}
+                    <input :value="seconds(segment.silenceMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" @input="segment.silenceMilliseconds = millisecondsFromInput($event)" />
                   </label>
                 </template>
                 <template v-else-if="segment.type === 'smart'">
@@ -474,8 +483,8 @@ onUnmounted(stopPolling)
                     <label class="text-xs text-muted">{{ t('Repeat count') }}
                       <input v-model.number="segment.repeatCount" type="number" min="1" max="10" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
                     </label>
-                    <label class="text-xs text-muted">{{ t('Repeat interval milliseconds') }}
-                      <input v-model.number="segment.repeatIntervalMilliseconds" type="number" min="0" max="60000" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
+                    <label class="text-xs text-muted">{{ t('Repeat interval seconds') }}
+                      <input :value="seconds(segment.repeatIntervalMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" @input="segment.repeatIntervalMilliseconds = millisecondsFromInput($event)" />
                     </label>
                   </div>
                   <div class="mt-3 flex flex-wrap gap-5 text-sm">
