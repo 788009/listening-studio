@@ -278,6 +278,10 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             ("other", "with_questions"),
             {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
         )
+        self.assertIn(
+            ("other", "2_question"),
+            {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
+        )
         found = self.send("GET", "/api/audios?q=o:with_questions")
         localized = self.send(
             "GET",
@@ -287,6 +291,34 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
         self.assertIn(
             "有题目",
             [tag["displayValue"] for tag in localized.json()["tags"]],
+        )
+        self.assertIn(
+            "2 道题",
+            [tag["displayValue"] for tag in localized.json()["tags"]],
+        )
+
+        one_question = self.send(
+            "PATCH",
+            f"/api/audios/{body['id']}",
+            headers=self.headers("first"),
+            json={
+                "questions": [
+                    {
+                        "prompt": "Who spoke first?",
+                        "correctAnswers": ["Man"],
+                        "incorrectAnswers": ["Woman", "Narrator"],
+                    }
+                ]
+            },
+        )
+        self.assertEqual(one_question.status_code, 200, one_question.text)
+        self.assertEqual(
+            {
+                tag["englishValue"]
+                for tag in one_question.json()["tags"]
+                if tag["type"] == "other"
+            },
+            {"with_questions", "1_question"},
         )
 
         updated = self.send(

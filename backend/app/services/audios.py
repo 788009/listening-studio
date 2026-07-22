@@ -4,6 +4,7 @@ import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+import re
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -67,6 +68,7 @@ _WITH_QUESTIONS_TRANSLATION = TagTranslationInput(
     language="zh-CN",
     value="有题目",
 )
+_QUESTION_COUNT_TAG_PATTERN = re.compile(r"^[1-9][0-9]*_question$")
 
 
 def normalize_audio_title(title: object) -> tuple[str, str]:
@@ -128,7 +130,9 @@ class AudioService:
         normalized_text = self._canonical_text(text, normalized_utterances)
         associated_tags = self._resolve_tags(session, author, tags)
         if normalized_questions:
-            associated_tags.append(self._with_questions_tag(session))
+            associated_tags.extend(
+                self._questions_system_tags(session, len(normalized_questions))
+            )
 
         try:
             audio = self.repository.create(
@@ -330,7 +334,11 @@ class AudioService:
         audio.questions.clear()
         session.flush()
         self._add_questions(session, audio, normalized)
-        self._sync_questions_tag(session, audio, has_questions=bool(normalized))
+        self._sync_questions_tags(
+            session,
+            audio,
+            question_count=len(normalized),
+        )
         session.flush()
         return audio
 
@@ -373,10 +381,34 @@ class AudioService:
         return result
 
     def _with_questions_tag(self, session: Session) -> AudioTag:
+        return self._system_other_tag(
+            session,
+            value=_WITH_QUESTIONS_TAG_VALUE,
+            translation_input=_WITH_QUESTIONS_TRANSLATION,
+        )
+
+    def _question_count_tag(self, session: Session, question_count: int) -> AudioTag:
+        value = f"{question_count}_question"
+        return self._system_other_tag(
+            session,
+            value=value,
+            translation_input=TagTranslationInput(
+                language="zh-CN",
+                value=f"{question_count}_道题",
+            ),
+        )
+
+    def _system_other_tag(
+        self,
+        session: Session,
+        *,
+        value: str,
+        translation_input: TagTranslationInput,
+    ) -> AudioTag:
         tag = self.tag_repository.get_by_normalized_value(
             session,
             AudioTagType.OTHER,
-            _WITH_QUESTIONS_TAG_VALUE,
+            value,
         )
         if tag is None:
             try:
@@ -384,26 +416,24 @@ class AudioService:
                     tag = self.tag_repository.create(
                         session,
                         tag_type=AudioTagType.OTHER,
-                        value=_WITH_QUESTIONS_TAG_VALUE,
-                        normalized_value=_WITH_QUESTIONS_TAG_VALUE,
+                        value=value,
+                        normalized_value=value,
                     )
             except IntegrityError:
                 tag = self.tag_repository.get_by_normalized_value(
                     session,
                     AudioTagType.OTHER,
-                    _WITH_QUESTIONS_TAG_VALUE,
+                    value,
                 )
                 if tag is None:
                     raise
-        translation = self.tag_repository.get_translation(
+        existing_translation = self.tag_repository.get_translation(
             session,
             tag_id=tag.id,
-            language=_WITH_QUESTIONS_TRANSLATION.language,
+            language=translation_input.language,
         )
-        if translation is None:
-            normalized = normalize_tag_translations(
-                [_WITH_QUESTIONS_TRANSLATION]
-            )[0]
+        if existing_translation is None:
+            normalized = normalize_tag_translations([translation_input])[0]
             try:
                 with session.begin_nested():
                     self.tag_repository.add_translation(
@@ -425,23 +455,37 @@ class AudioService:
                     raise
         return tag
 
-    def _sync_questions_tag(
+    def _questions_system_tags(
+        self,
+        session: Session,
+        question_count: int,
+    ) -> list[AudioTag]:
+        if question_count == 0:
+            return []
+        return [
+            self._with_questions_tag(session),
+            self._question_count_tag(session, question_count),
+        ]
+
+    def _sync_questions_tags(
         self,
         session: Session,
         audio: Audio,
         *,
-        has_questions: bool,
+        question_count: int,
     ) -> None:
         audio.tags = [
             tag
             for tag in audio.tags
             if not (
                 tag.type is AudioTagType.OTHER
-                and tag.normalized_value == _WITH_QUESTIONS_TAG_VALUE
+                and (
+                    tag.normalized_value == _WITH_QUESTIONS_TAG_VALUE
+                    or _QUESTION_COUNT_TAG_PATTERN.fullmatch(tag.normalized_value)
+                )
             )
         ]
-        if has_questions:
-            audio.tags.append(self._with_questions_tag(session))
+        audio.tags.extend(self._questions_system_tags(session, question_count))
 
     @staticmethod
     def _add_questions(

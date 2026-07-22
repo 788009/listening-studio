@@ -131,7 +131,7 @@ data/jobs/<job_id>/...    # 任务输入、预览和中间文件，按任务策�
 - 音色标签类型为 `author`、`gender`；音频标签类型为 `author`、`voice`、`topic`、`category`、`other`。
 - 简写依次为 `a`、`g`、`v`、`t`、`c`、`o`。`a` 在音色和音频标签系统内分别解析。
 - `author` 由系统根据不可变 `userId` 创建和关联；`voice` 由音频实际使用的音色生成；`other` 是系统类别，客户端不能创建、修改或直接关联这些标签。
-- 音频存在题目时自动关联 `other:with_questions`，删除全部题目时自动移除。该标签提供固定中文翻译“有题目”。
+- 音频存在题目时自动关联 `other:with_questions` 和 `other:N_question`，删除全部题目时自动移除。题数标签统一使用单数，提供固定中文翻译“N 道题”。
 - 批量题型使用 `category:short`、`category:long`、`category:monologue`，固定中文翻译为“短对话”“长对话”“独白”。
 - 标签英文规范值必填。值禁止保存空格和冒号；输入空白统一转为单个下划线。英文值只允许 ASCII 字母、数字、下划线和连字符；翻译允许 Unicode 字母和数字。
 - 页面展示时将下划线替换为空格，优先使用当前语言翻译，不存在时回退英文。
