@@ -669,7 +669,7 @@ onUnmounted(() => {
       </div>
 
       <div class="grid min-w-0 gap-8 py-7 xl:grid-cols-[minmax(18rem,0.8fr)_minmax(0,1.35fr)]">
-        <section aria-labelledby="audio-source-title" class="min-w-0">
+        <section aria-labelledby="audio-source-title" class="order-2 min-w-0 xl:order-1">
           <div class="mb-4 flex items-end justify-between gap-3">
             <div>
               <h2 id="audio-source-title" class="text-base font-semibold">{{ t('Audio library') }}</h2>
@@ -695,7 +695,7 @@ onUnmounted(() => {
           </nav>
         </section>
 
-        <section aria-labelledby="segments-title" class="min-w-0">
+        <section aria-labelledby="segments-title" class="order-1 min-w-0 xl:order-2">
           <div class="mb-4 flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 id="segments-title" class="text-base font-semibold">{{ t('Assembly segments') }}</h2>
