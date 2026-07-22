@@ -31,6 +31,7 @@ import { cancelJob, getJob, type Job } from '@/api/jobs'
 import type { TagTranslation } from '@/api/voices'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import { useI18n } from '@/i18n'
@@ -64,6 +65,9 @@ const title = ref('')
 const visibility = ref<ResourceVisibility>('public')
 const templates = ref<AssemblyTemplate[]>([])
 const templateId = ref('')
+const appliedTemplateId = ref('')
+const pendingTemplateId = ref<string | null>(null)
+const templateLoading = ref(false)
 const templateTitle = ref('')
 const segments = ref<DraftSegment[]>([])
 const candidates = ref<Audio[]>([])
@@ -214,26 +218,64 @@ async function loadOptions(): Promise<void> {
   }
 }
 
-async function applyTemplate(): Promise<void> {
-  const template = templates.value.find((item) => String(item.id) === templateId.value)
-  if (!template) return
+function selectTemplate(): void {
+  if (!templateId.value) {
+    appliedTemplateId.value = ''
+    pendingTemplateId.value = null
+    return
+  }
+  if (segments.value.length > 0) {
+    pendingTemplateId.value = templateId.value
+    return
+  }
+  void applyTemplate(templateId.value)
+}
+
+function closeTemplateReplacement(): void {
+  templateId.value = appliedTemplateId.value
+  pendingTemplateId.value = null
+}
+
+function confirmTemplateReplacement(): void {
+  const selectedTemplateId = pendingTemplateId.value
+  pendingTemplateId.value = null
+  if (selectedTemplateId) void applyTemplate(selectedTemplateId)
+}
+
+async function applyTemplate(selectedTemplateId: string): Promise<void> {
+  const template = templates.value.find(
+    (item) => String(item.id) === selectedTemplateId,
+  )
+  if (!template) {
+    templateId.value = appliedTemplateId.value
+    return
+  }
+  templateLoading.value = true
   errorMessage.value = ''
   const next: DraftSegment[] = []
-  for (const item of template.segments) {
-    let audio: Audio | undefined
-    if (item.audioId) {
-      try {
-        audio = await getAudio(item.audioId, locale.value)
-      } catch {
-        audio = undefined
+  try {
+    for (const item of template.segments) {
+      let audio: Audio | undefined
+      if (item.audioId) {
+        try {
+          audio = await getAudio(item.audioId, locale.value)
+        } catch {
+          audio = undefined
+        }
       }
+      next.push(draft(item.type, { ...item, audio }))
     }
-    next.push(draft(item.type, { ...item, audio }))
-  }
-  segments.value = next
-  resetPrefilledTags()
-  for (const segment of next) {
-    if (segment.audio && segment.includeTopic) addAudioTopics(segment.audio)
+    segments.value = next
+    selectedSegmentKeys.value = []
+    activePlaceholder.value = null
+    moveOptionsSegmentKey.value = null
+    resetPrefilledTags()
+    for (const segment of next) {
+      if (segment.audio && segment.includeTopic) addAudioTopics(segment.audio)
+    }
+    appliedTemplateId.value = selectedTemplateId
+  } finally {
+    templateLoading.value = false
   }
 }
 
@@ -744,6 +786,7 @@ async function saveTemplate(): Promise<void> {
     })
     templates.value = [created, ...templates.value]
     templateId.value = String(created.id)
+    appliedTemplateId.value = templateId.value
     templateTitle.value = ''
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : t('Template could not be saved')
@@ -758,6 +801,7 @@ async function removeTemplate(): Promise<void> {
   await deleteAssemblyTemplate(id)
   templates.value = templates.value.filter((item) => item.id !== id)
   templateId.value = ''
+  appliedTemplateId.value = ''
 }
 
 function selectTag(tagId: number): void {
@@ -880,10 +924,11 @@ onUnmounted(() => {
         </label>
         <label class="min-w-0 text-sm font-medium">
           {{ t('Template') }}
-          <select v-model="templateId" class="mt-2 h-10 w-full border border-line bg-surface px-3 font-normal" @change="applyTemplate">
+          <select v-model="templateId" :disabled="templateLoading || pendingTemplateId !== null" class="mt-2 h-10 w-full border border-line bg-surface px-3 font-normal disabled:opacity-50" @change="selectTemplate">
             <option value="">{{ t('No template') }}</option>
             <option v-for="item in templates" :key="item.id" :value="String(item.id)">{{ item.title }}</option>
           </select>
+          <span v-if="templateLoading" class="mt-2 block text-xs font-normal text-muted">{{ t('Loading template') }}</span>
         </label>
         <label class="min-w-0 text-sm font-medium">
           {{ t('Visibility') }}
@@ -1176,5 +1221,15 @@ onUnmounted(() => {
       @close="closeTagDialog"
       @submit="createAndAddTag"
     />
+
+    <ConfirmDialog
+      :open="pendingTemplateId !== null"
+      :title="t('Replace existing segments?')"
+      confirm-label="Replace"
+      @close="closeTemplateReplacement"
+      @confirm="confirmTemplateReplacement"
+    >
+      <p>{{ t('Selecting this template will replace the current segments.') }}</p>
+    </ConfirmDialog>
   </section>
 </template>

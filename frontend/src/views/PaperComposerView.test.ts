@@ -374,6 +374,66 @@ describe('paper composer view', () => {
     wrapper.unmount()
   })
 
+  it('shows a loading state while a template audio is being loaded', async () => {
+    let resolveAudio: ((value: Response) => void) | undefined
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const path = String(input)
+        if (path === '/api/assembly-templates') {
+          return Promise.resolve(
+            response([
+              {
+                id: 3,
+                title: 'Audio template',
+                ownerUserId: 'Admin',
+                createdAt: '',
+                updatedAt: '',
+                segments: [
+                  {
+                    id: 1,
+                    position: 0,
+                    type: 'audio',
+                    audioId: 5,
+                    repeatCount: 1,
+                    repeatIntervalMilliseconds: 0,
+                    silenceMilliseconds: 0,
+                    includeText: true,
+                    includeTopic: true,
+                  },
+                ],
+              },
+            ]),
+          )
+        }
+        if (path.startsWith('/api/audio-tags')) return Promise.resolve(response([fullPaperTag]))
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
+        }
+        if (path.startsWith('/api/audios/5?')) {
+          return new Promise<Response>((resolve) => {
+            resolveAudio = resolve
+          })
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const { wrapper } = await mountView()
+    await flushPromises()
+
+    await wrapper.find('select').setValue('3')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Loading template')
+    expect((wrapper.find('select').element as HTMLSelectElement).disabled).toBe(true)
+    if (!resolveAudio) throw new Error('Template audio request was not started')
+    resolveAudio(response(audio))
+    await flushPromises()
+
+    expect(wrapper.text()).not.toContain('Loading template')
+    expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
   it('applies a suggested query when filling a template placeholder', async () => {
     const requests: string[] = []
     vi.stubGlobal(
@@ -447,6 +507,12 @@ describe('paper composer view', () => {
     expect((includeText?.element as HTMLInputElement).checked).toBe(true)
     expect((includeTopic?.element as HTMLInputElement).checked).toBe(true)
     await wrapper.find('select').setValue('3')
+    expect(wrapper.text()).toContain('Replace existing segments?')
+    expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(1)
+    await wrapper.findAll('button').find((button) => button.text() === 'Cancel')?.trigger('click')
+    expect((wrapper.find('select').element as HTMLSelectElement).value).toBe('')
+    await wrapper.find('select').setValue('3')
+    await wrapper.findAll('button').find((button) => button.text() === 'Replace')?.trigger('click')
     await flushPromises()
     const smartMode = wrapper
       .findAll('select')
