@@ -74,6 +74,8 @@ const query = ref('')
 const page = ref(1)
 const total = ref(0)
 const activePlaceholder = ref<number | null>(null)
+const segmentSelectionMode = ref(false)
+const selectedSegmentKeys = ref<number[]>([])
 const loading = ref(true)
 const submitting = ref(false)
 const savingTemplate = ref(false)
@@ -141,7 +143,6 @@ const segmentFingerprint = computed(() =>
 
 function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): DraftSegment {
   return {
-    key: nextKey++,
     type,
     repeatCount: 1,
     repeatIntervalMilliseconds: 1000,
@@ -149,6 +150,7 @@ function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): D
     includeTopic: true,
     silenceMilliseconds: 0,
     ...values,
+    key: nextKey++,
   }
 }
 
@@ -294,8 +296,48 @@ function move(index: number, offset: -1 | 1): void {
 }
 
 function remove(index: number): void {
-  segments.value.splice(index, 1)
+  const [removed] = segments.value.splice(index, 1)
+  if (removed) {
+    selectedSegmentKeys.value = selectedSegmentKeys.value.filter(
+      (key) => key !== removed.key,
+    )
+  }
   activePlaceholder.value = null
+}
+
+function toggleSegmentSelectionMode(): void {
+  segmentSelectionMode.value = !segmentSelectionMode.value
+  selectedSegmentKeys.value = []
+}
+
+function setSegmentSelected(segmentKey: number, selected: boolean): void {
+  if (selected) {
+    if (!selectedSegmentKeys.value.includes(segmentKey)) {
+      selectedSegmentKeys.value = [...selectedSegmentKeys.value, segmentKey]
+    }
+    return
+  }
+  selectedSegmentKeys.value = selectedSegmentKeys.value.filter(
+    (key) => key !== segmentKey,
+  )
+}
+
+function deleteSelectedSegments(): void {
+  const selected = new Set(selectedSegmentKeys.value)
+  if (selected.size === 0) return
+  segments.value = segments.value.filter((segment) => !selected.has(segment.key))
+  selectedSegmentKeys.value = []
+  activePlaceholder.value = null
+}
+
+function copySelectedSegments(): void {
+  const selected = new Set(selectedSegmentKeys.value)
+  if (selected.size === 0) return
+  const copies = segments.value
+    .filter((segment) => selected.has(segment.key))
+    .map((segment) => draft(segment.type, segment))
+  segments.value.push(...copies)
+  selectedSegmentKeys.value = []
 }
 
 function canPlaySegment(segment: DraftSegment, index: number): boolean {
@@ -702,9 +744,16 @@ onUnmounted(() => {
               <p class="mt-1 text-sm text-muted">{{ t('Estimated length') }} {{ duration(estimatedSeconds) }}</p>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="h-9 border border-line px-3 text-sm" @click="addSilence">{{ t('Add silence') }}</button>
-              <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addPlaceholder">{{ t('Add placeholder') }}</button>
-              <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addSmart">{{ t('Add smart segment') }}</button>
+              <template v-if="segmentSelectionMode">
+                <button type="button" :disabled="selectedSegmentKeys.length === 0" class="h-9 border border-line px-3 text-sm text-danger disabled:opacity-40" @click="deleteSelectedSegments">{{ t('Delete') }}</button>
+                <button type="button" :disabled="selectedSegmentKeys.length === 0" class="h-9 border border-line px-3 text-sm disabled:opacity-40" @click="copySelectedSegments">{{ t('Copy and add to end') }}</button>
+              </template>
+              <template v-else>
+                <button type="button" class="h-9 border border-line px-3 text-sm" @click="addSilence">{{ t('Add silence') }}</button>
+                <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addPlaceholder">{{ t('Add placeholder') }}</button>
+                <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addSmart">{{ t('Add smart segment') }}</button>
+              </template>
+              <button type="button" :disabled="!segmentSelectionMode && segments.length === 0" class="h-9 border border-line px-3 text-sm disabled:opacity-40" @click="toggleSegmentSelectionMode">{{ t(segmentSelectionMode ? 'Cancel' : 'Select') }}</button>
             </div>
           </div>
 
@@ -732,7 +781,17 @@ onUnmounted(() => {
           <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
           <ol v-else class="max-h-[80vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
             <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
-              <span class="pt-1 text-sm tabular-nums text-muted">{{ index + 1 }}</span>
+              <div class="flex flex-col items-center gap-2 pt-1">
+                <span class="text-sm tabular-nums text-muted">{{ index + 1 }}</span>
+                <input
+                  v-if="segmentSelectionMode"
+                  type="checkbox"
+                  class="h-4 w-4"
+                  :checked="selectedSegmentKeys.includes(segment.key)"
+                  :aria-label="t('Select segment {position}', { position: index + 1 })"
+                  @change="setSegmentSelected(segment.key, ($event.target as HTMLInputElement).checked)"
+                />
+              </div>
               <div class="min-w-0">
                 <template v-if="segment.type === 'silence'">
                   <p class="text-sm font-semibold">{{ t('Silence') }}</p>

@@ -187,6 +187,8 @@ const zhCN: Record<string, string> = {
   'Audio library': '音频库',
   'Filling placeholder': '正在填充占位段落',
   Select: '选择',
+  'Copy and add to end': '复制并添加至末尾',
+  'Select segment {position}': '选择第 {position} 个段落',
   'Assembly segments': '组卷段落',
   'Add silence': '添加静默',
   'Add placeholder': '添加占位段落',
