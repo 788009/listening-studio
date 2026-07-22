@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import {
@@ -48,6 +48,12 @@ interface DraftSegment extends AssemblySegmentInput {
   audio?: Audio
 }
 
+interface PreviewTarget {
+  segmentKey: number
+  fromHere: boolean
+  fingerprint: string
+}
+
 const router = useRouter()
 const auth = useAuthStore()
 const { locale, t } = useI18n()
@@ -76,11 +82,13 @@ const accepted = ref<{ audioId: number; jobId: number } | null>(null)
 const job = ref<Job | null>(null)
 const previewPlayer = ref<HTMLAudioElement | null>(null)
 const previewJob = ref<Job | null>(null)
-const previewJobId = ref<number | null>(null)
+const currentPreviewJobId = ref<number | null>(null)
+const pendingPreviewJobId = ref<number | null>(null)
 const previewMediaUrl = ref('')
 const previewBusy = ref(false)
 const previewPlaying = ref(false)
-const activePreview = ref<{ segmentKey: number; fromHere: boolean } | null>(null)
+const activePreview = ref<PreviewTarget | null>(null)
+const pendingPreview = ref<PreviewTarget | null>(null)
 let publishPollTimer: number | undefined
 let previewPollTimer: number | undefined
 let previewRequestVersion = 0
@@ -329,9 +337,11 @@ function validate(): string | null {
 async function playPreview(index: number, fromHere: boolean): Promise<void> {
   const segment = segments.value[index]
   if (!segment || !canPlaySegment(segment, index)) return
+  const fingerprint = segmentFingerprint.value
   const samePreview =
     activePreview.value?.segmentKey === segment.key &&
-    activePreview.value.fromHere === fromHere
+    activePreview.value.fromHere === fromHere &&
+    activePreview.value.fingerprint === fingerprint
   if (samePreview && previewMediaUrl.value) {
     const player = previewPlayer.value
     if (!player) return
@@ -351,9 +361,9 @@ async function playPreview(index: number, fromHere: boolean): Promise<void> {
 
   const requestVersion = ++previewRequestVersion
   previewBusy.value = true
-  await discardPreview(false, true)
+  await cancelPendingPreview(false, true)
   if (requestVersion !== previewRequestVersion) return
-  activePreview.value = { segmentKey: segment.key, fromHere }
+  pendingPreview.value = { segmentKey: segment.key, fromHere, fingerprint }
   errorMessage.value = ''
   try {
     const acceptedPreview = await createAssemblyPreview({
@@ -365,25 +375,34 @@ async function playPreview(index: number, fromHere: boolean): Promise<void> {
       void deleteAssemblyPreview(acceptedPreview.jobId).catch(() => undefined)
       return
     }
-    previewJobId.value = acceptedPreview.jobId
+    pendingPreviewJobId.value = acceptedPreview.jobId
     await refreshPreviewJob(requestVersion)
   } catch (error) {
     if (requestVersion === previewRequestVersion) {
       previewBusy.value = false
       errorMessage.value =
         error instanceof ApiError ? error.message : t('Playback preview could not be created')
-      activePreview.value = null
+      pendingPreview.value = null
     }
   }
 }
 
 async function refreshPreviewJob(requestVersion: number): Promise<void> {
-  const jobId = previewJobId.value
+  const jobId = pendingPreviewJobId.value
   if (jobId === null || requestVersion !== previewRequestVersion) return
   try {
     previewJob.value = await getJob(jobId)
     if (requestVersion !== previewRequestVersion) return
     if (previewJob.value.status === 'succeeded') {
+      const completedPreview = pendingPreview.value
+      const previousJobId = currentPreviewJobId.value
+      previewPlayer.value?.pause()
+      previewPlaying.value = false
+      currentPreviewJobId.value = jobId
+      pendingPreviewJobId.value = null
+      activePreview.value = completedPreview
+      pendingPreview.value = null
+      previewJob.value = null
       previewBusy.value = false
       previewMediaUrl.value = assemblyPreviewMediaPath(jobId)
       await nextTick()
@@ -392,6 +411,9 @@ async function refreshPreviewJob(requestVersion: number): Promise<void> {
         await previewPlayer.value?.play()
       } catch {
         errorMessage.value = t('Use the audio controls to start playback')
+      }
+      if (previousJobId !== null) {
+        void deleteAssemblyPreview(previousJobId).catch(() => undefined)
       }
       return
     }
@@ -403,35 +425,59 @@ async function refreshPreviewJob(requestVersion: number): Promise<void> {
       return
     }
     previewBusy.value = false
-    activePreview.value = null
+    pendingPreview.value = null
+    pendingPreviewJobId.value = null
     errorMessage.value =
       previewJob.value.errorSummary || t('Playback preview could not be created')
+    void deleteAssemblyPreview(jobId).catch(() => undefined)
   } catch (error) {
     previewBusy.value = false
-    activePreview.value = null
+    pendingPreview.value = null
+    pendingPreviewJobId.value = null
     errorMessage.value =
       error instanceof ApiError ? error.message : t('Playback status could not be loaded')
+    void deleteAssemblyPreview(jobId).catch(() => undefined)
   }
 }
 
-async function discardPreview(
+async function cancelPendingPreview(
   invalidate = true,
   preserveBusy = false,
 ): Promise<void> {
   if (invalidate) previewRequestVersion += 1
   if (previewPollTimer !== undefined) window.clearTimeout(previewPollTimer)
   previewPollTimer = undefined
+  previewJob.value = null
+  if (!preserveBusy) previewBusy.value = false
+  pendingPreview.value = null
+  const jobId = pendingPreviewJobId.value
+  pendingPreviewJobId.value = null
+  if (jobId !== null) {
+    await deleteAssemblyPreview(jobId).catch(() => undefined)
+  }
+}
+
+async function cleanupPreviews(): Promise<void> {
+  previewRequestVersion += 1
+  if (previewPollTimer !== undefined) window.clearTimeout(previewPollTimer)
+  previewPollTimer = undefined
   previewPlayer.value?.pause()
   previewPlaying.value = false
   previewMediaUrl.value = ''
   previewJob.value = null
-  if (!preserveBusy) previewBusy.value = false
+  previewBusy.value = false
   activePreview.value = null
-  const jobId = previewJobId.value
-  previewJobId.value = null
-  if (jobId !== null) {
-    await deleteAssemblyPreview(jobId).catch(() => undefined)
-  }
+  pendingPreview.value = null
+  const jobIds = [currentPreviewJobId.value, pendingPreviewJobId.value].filter(
+    (jobId): jobId is number => jobId !== null,
+  )
+  currentPreviewJobId.value = null
+  pendingPreviewJobId.value = null
+  await Promise.all(
+    [...new Set(jobIds)].map((jobId) =>
+      deleteAssemblyPreview(jobId).catch(() => undefined),
+    ),
+  )
 }
 
 async function submit(): Promise<void> {
@@ -443,7 +489,7 @@ async function submit(): Promise<void> {
   submitting.value = true
   errorMessage.value = ''
   try {
-    await discardPreview()
+    await cleanupPreviews()
     accepted.value = await createAssembly({
       title: title.value.trim(),
       templateId: templateId.value ? Number(templateId.value) : undefined,
@@ -571,10 +617,9 @@ function duration(seconds: number): string {
 onMounted(() => {
   void Promise.all([loadOptions(), loadPage()])
 })
-watch(segmentFingerprint, () => void discardPreview())
 onUnmounted(() => {
   stopPublishPolling()
-  void discardPreview()
+  void cleanupPreviews()
 })
 </script>
 
@@ -668,7 +713,7 @@ onUnmounted(() => {
               <span>{{ t('Assembly playback preview') }}</span>
               <div v-if="previewBusy" class="flex items-center gap-3">
                 <span class="text-muted">{{ t('Preparing playback') }} {{ previewJob?.progress ?? 0 }}%</span>
-                <button type="button" class="text-danger" @click="discardPreview()">{{ t('Cancel preview') }}</button>
+                <button type="button" class="text-danger" @click="cancelPendingPreview()">{{ t('Cancel preview') }}</button>
               </div>
             </div>
             <audio
@@ -729,7 +774,7 @@ onUnmounted(() => {
                     @click="playPreview(index, false)"
                   >
                     <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
-                    {{ activePreview?.segmentKey === segment.key && !activePreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && !activePreview.fromHere && previewPlaying ? t('Stop') : t('Play') }}
+                    {{ pendingPreview?.segmentKey === segment.key && !pendingPreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && !activePreview.fromHere && activePreview.fingerprint === segmentFingerprint && previewPlaying ? t('Stop') : t('Play') }}
                   </button>
                   <button
                     type="button"
@@ -738,7 +783,7 @@ onUnmounted(() => {
                     @click="playPreview(index, true)"
                   >
                     <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 5v14M9 5l10 7-10 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
-                    {{ activePreview?.segmentKey === segment.key && activePreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && activePreview.fromHere && previewPlaying ? t('Stop') : t('Play from here') }}
+                    {{ pendingPreview?.segmentKey === segment.key && pendingPreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && activePreview.fromHere && activePreview.fingerprint === segmentFingerprint && previewPlaying ? t('Stop') : t('Play from here') }}
                   </button>
                 </div>
               </div>

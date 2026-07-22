@@ -83,15 +83,20 @@ async function mountView(role: 'user' | 'admin' = 'user') {
 describe('paper composer view', () => {
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
-  it('previews one segment or the current suffix with a shared player', async () => {
+  it('keeps the current playback until a new preview is ready', async () => {
+    vi.useFakeTimers()
     const previewBodies: Record<string, unknown>[] = []
     let nextPreviewId = 30
+    let secondJobReads = 0
     vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => undefined)
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
-    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined)
+    const pause = vi
+      .spyOn(HTMLMediaElement.prototype, 'pause')
+      .mockImplementation(() => undefined)
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -110,14 +115,16 @@ describe('paper composer view', () => {
         }
         if (path.match(/^\/api\/jobs\/3[12]$/)) {
           const id = Number(path.slice(path.lastIndexOf('/') + 1))
+          if (id === 32) secondJobReads += 1
+          const succeeded = id === 31 || secondJobReads > 1
           return Promise.resolve(
             response({
               id,
               type: 'assembly_preview',
-              status: 'succeeded',
-              progress: 100,
+              status: succeeded ? 'succeeded' : 'running',
+              progress: succeeded ? 100 : 50,
               inputSummary: {},
-              result: { type: 'assembly_preview', id },
+              result: succeeded ? { type: 'assembly_preview', id } : undefined,
               cancelRequested: false,
               retryable: false,
               attemptCount: 1,
@@ -140,6 +147,12 @@ describe('paper composer view', () => {
     await flushPromises()
     expect(previewBodies[0]).toMatchObject({ startIndex: 0, endIndex: 0 })
     expect(wrapper.find('audio[src="/media/assembly-preview/31"]').exists()).toBe(true)
+    expect(pause).not.toHaveBeenCalled()
+
+    await wrapper.findAll('input[type="number"]')[0]?.setValue('2')
+    await flushPromises()
+    expect(wrapper.find('audio[src="/media/assembly-preview/31"]').exists()).toBe(true)
+    expect(pause).not.toHaveBeenCalled()
 
     await wrapper
       .findAll('button')
@@ -148,7 +161,13 @@ describe('paper composer view', () => {
     await flushPromises()
     expect(previewBodies[1]).toMatchObject({ startIndex: 0 })
     expect(previewBodies[1]).not.toHaveProperty('endIndex')
+    expect(wrapper.find('audio[src="/media/assembly-preview/31"]').exists()).toBe(true)
+    expect(pause).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(500)
+    await flushPromises()
     expect(wrapper.find('audio[src="/media/assembly-preview/32"]').exists()).toBe(true)
+    expect(pause).toHaveBeenCalledTimes(1)
     wrapper.unmount()
     await flushPromises()
   })
