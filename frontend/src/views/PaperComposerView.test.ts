@@ -238,7 +238,7 @@ describe('paper composer view', () => {
     await wrapper.get('button[aria-label="Remove News"]').trigger('click')
     await wrapper.get('input[maxlength="200"]').setValue('Final exam')
     const numberInputs = wrapper.findAll('input[type="number"]')
-    expect((numberInputs[1]?.element as HTMLInputElement).value).toBe('3')
+    expect((numberInputs[1]?.element as HTMLInputElement).value).toBe('1')
     expect((numberInputs[2]?.element as HTMLInputElement).value).toBe('5')
     await numberInputs[0]?.setValue('2')
     await numberInputs[1]?.setValue('1.5')

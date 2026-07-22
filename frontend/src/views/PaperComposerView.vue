@@ -144,7 +144,7 @@ function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): D
     key: nextKey++,
     type,
     repeatCount: 1,
-    repeatIntervalMilliseconds: 3000,
+    repeatIntervalMilliseconds: 1000,
     includeText: true,
     includeTopic: true,
     silenceMilliseconds: 0,
