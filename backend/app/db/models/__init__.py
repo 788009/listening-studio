@@ -17,6 +17,7 @@ from backend.app.db.models.audio_tag import (
 )
 from backend.app.db.models.assembly import (
     AssemblySegmentType,
+    AssemblySmartMode,
     AssemblyTemplate,
     AssemblyTemplateSegment,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "AudioUtterance",
     "AudioVisibility",
     "AssemblySegmentType",
+    "AssemblySmartMode",
     "AssemblyTemplate",
     "AssemblyTemplateSegment",
     "Job",

@@ -335,15 +335,30 @@ describe('paper composer view', () => {
         throw new Error(`Unexpected request: ${path}`)
       }),
     )
-    const { wrapper } = await mountView()
+    const { wrapper } = await mountView('admin')
     await flushPromises()
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Add smart segment')
+      ?.trigger('click')
+    expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(1)
     await wrapper.find('select').setValue('3')
     await flushPromises()
+    const smartMode = wrapper
+      .findAll('select')
+      .find((item) => item.find('option[value="question_count_silence"]').exists())
+    await smartMode?.setValue('question_count_silence')
+    expect(wrapper.text()).toContain('Question-count smart silence')
+    expect(
+      (wrapper.find('input[type="number"][max="60"]').element as HTMLInputElement).value,
+    ).toBe('5')
+    expect(wrapper.text()).toContain('Associate previous placeholder')
+    expect(wrapper.text()).toContain('Associate next placeholder')
     await wrapper.findAll('button').find((button) => button.text() === 'Choose audio')?.trigger('click')
     await flushPromises()
 
     expect(requests.some((path) => path.includes('q=topic%3Anews'))).toBe(true)
-    expect(wrapper.text()).toContain('Smart question-number audio')
+    expect(wrapper.text()).toContain('Question-count smart silence')
     wrapper.unmount()
   })
 })

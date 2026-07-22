@@ -2,12 +2,16 @@ import { apiRequest } from './client'
 import type { ResourceVisibility } from './audios'
 
 export type AssemblySegmentType = 'audio' | 'silence' | 'placeholder' | 'smart'
+export type AssemblySmartMode = 'question_number' | 'question_count_silence'
 
 export interface AssemblySegmentInput {
   type: AssemblySegmentType
   audioId?: number
   suggestedQuery?: string
   silenceMilliseconds?: number
+  smartMode?: AssemblySmartMode
+  smartSilencePrevious?: boolean
+  smartSilenceNext?: boolean
   repeatCount?: number
   repeatIntervalMilliseconds?: number
   includeText?: boolean

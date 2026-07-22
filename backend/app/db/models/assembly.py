@@ -22,6 +22,11 @@ class AssemblySegmentType(str, Enum):
     SMART = "smart"
 
 
+class AssemblySmartMode(str, Enum):
+    QUESTION_NUMBER = "question_number"
+    QUESTION_COUNT_SILENCE = "question_count_silence"
+
+
 class AssemblyTemplate(Base):
     __tablename__ = "assembly_templates"
     __table_args__ = (
@@ -100,6 +105,25 @@ class AssemblyTemplateSegment(Base):
     suggested_query: Mapped[str | None] = mapped_column(String(1024))
     silence_milliseconds: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
+    )
+    smart_mode: Mapped[AssemblySmartMode] = mapped_column(
+        SqlEnum(
+            AssemblySmartMode,
+            name="ck_assembly_template_segments_smart_mode",
+            native_enum=False,
+            create_constraint=True,
+            length=32,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
+        default=AssemblySmartMode.QUESTION_NUMBER,
+        server_default=AssemblySmartMode.QUESTION_NUMBER.value,
+        nullable=False,
+    )
+    smart_silence_previous: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
+    )
+    smart_silence_next: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="0", nullable=False
     )
     repeat_count: Mapped[int] = mapped_column(
         Integer, default=1, server_default="1", nullable=False

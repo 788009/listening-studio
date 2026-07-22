@@ -12,6 +12,7 @@ import {
   assemblyPreviewMediaPath,
   type AssemblySegmentInput,
   type AssemblySegmentType,
+  type AssemblySmartMode,
   type AssemblyTemplate,
 } from '@/api/assemblies'
 import {
@@ -109,9 +110,19 @@ const fullPaperTagId = computed(
     )?.id ?? null,
 )
 const estimatedSeconds = computed(() =>
-  segments.value.reduce((totalSeconds, segment) => {
+  segments.value.reduce((totalSeconds, segment, index) => {
     if (segment.type === 'silence') {
       return totalSeconds + (segment.silenceMilliseconds ?? 0) / 1000
+    }
+    if (isQuestionCountSilence(segment)) {
+      let questionCount = 0
+      if (segment.smartSilencePrevious) {
+        questionCount += segments.value[index - 1]?.audio?.questions?.length ?? 0
+      }
+      if (segment.smartSilenceNext) {
+        questionCount += segments.value[index + 1]?.audio?.questions?.length ?? 0
+      }
+      return totalSeconds + ((segment.silenceMilliseconds ?? 0) / 1000) * questionCount
     }
     if (!segment.audio?.durationSeconds) return totalSeconds
     return (
@@ -149,6 +160,9 @@ function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): D
     includeText: true,
     includeTopic: true,
     silenceMilliseconds: 0,
+    smartMode: 'question_number',
+    smartSilencePrevious: false,
+    smartSilenceNext: false,
     ...values,
     key: nextKey++,
   }
@@ -275,7 +289,13 @@ function addPlaceholder(): void {
 
 function addSmart(): void {
   segments.value.push(draft('smart', { includeText: false, includeTopic: false }))
-  addPlaceholder()
+}
+
+function setSmartMode(segment: DraftSegment, mode: AssemblySmartMode): void {
+  segment.smartMode = mode
+  segment.smartSilencePrevious = false
+  segment.smartSilenceNext = false
+  segment.silenceMilliseconds = mode === 'question_count_silence' ? 5000 : 0
 }
 
 function selectPlaceholder(index: number): void {
@@ -341,11 +361,25 @@ function copySelectedSegments(): void {
 }
 
 function canPlaySegment(segment: DraftSegment, index: number): boolean {
-  if (segment.type === 'silence') return false
+  if (segment.type === 'silence' || isQuestionCountSilence(segment)) return false
   if (segment.type === 'audio') return Boolean(segment.audioId)
   if (segment.type === 'placeholder') return Boolean(segment.audioId)
-  const next = segments.value[index + 1]
-  return next?.type === 'placeholder' && Boolean(next.audioId)
+  const placeholderIndex = questionNumberPlaceholderIndex(index)
+  return placeholderIndex !== null && Boolean(segments.value[placeholderIndex]?.audioId)
+}
+
+function isQuestionCountSilence(segment: DraftSegment): boolean {
+  return segment.type === 'smart' && segment.smartMode === 'question_count_silence'
+}
+
+function questionNumberPlaceholderIndex(index: number): number | null {
+  for (let position = index + 1; position < segments.value.length; position += 1) {
+    const item = segments.value[position]!
+    if (item.type === 'placeholder') return position
+    if (item.type === 'silence' || isQuestionCountSilence(item)) continue
+    return null
+  }
+  return null
 }
 
 function segmentInput(segment: DraftSegment): AssemblySegmentInput {
@@ -353,7 +387,13 @@ function segmentInput(segment: DraftSegment): AssemblySegmentInput {
     type: segment.type,
     audioId: segment.audioId,
     suggestedQuery: segment.suggestedQuery || undefined,
-    silenceMilliseconds: segment.type === 'silence' ? segment.silenceMilliseconds : 0,
+    silenceMilliseconds:
+      segment.type === 'silence' || isQuestionCountSilence(segment)
+        ? segment.silenceMilliseconds
+        : 0,
+    smartMode: segment.smartMode,
+    smartSilencePrevious: segment.smartSilencePrevious,
+    smartSilenceNext: segment.smartSilenceNext,
     repeatCount: segment.repeatCount,
     repeatIntervalMilliseconds: segment.repeatIntervalMilliseconds,
     includeText: segment.includeText,
@@ -369,8 +409,27 @@ function validate(): string | null {
     if ((item.type === 'audio' || item.type === 'placeholder') && !item.audioId) {
       return t('Fill every placeholder before publishing')
     }
-    if (item.type === 'smart' && segments.value[index + 1]?.type !== 'placeholder') {
-      return t('Every smart segment must be followed by a placeholder')
+    if (item.type === 'smart' && item.smartMode === 'question_number') {
+      if (questionNumberPlaceholderIndex(index) === null) {
+        return t('Question-number audio requires a following placeholder with only silence between')
+      }
+    }
+    if (isQuestionCountSilence(item)) {
+      if (!item.smartSilencePrevious && !item.smartSilenceNext) {
+        return t('Select at least one placeholder for question-count silence')
+      }
+      if (
+        item.smartSilencePrevious &&
+        segments.value[index - 1]?.type !== 'placeholder'
+      ) {
+        return t('The previous segment must be a placeholder')
+      }
+      if (
+        item.smartSilenceNext &&
+        segments.value[index + 1]?.type !== 'placeholder'
+      ) {
+        return t('The next segment must be a placeholder')
+      }
     }
   }
   return null
@@ -800,8 +859,23 @@ onUnmounted(() => {
                   </label>
                 </template>
                 <template v-else-if="segment.type === 'smart'">
-                  <p class="text-sm font-semibold">{{ t('Smart question-number audio') }}</p>
-                  <p class="mt-1 text-xs text-muted">{{ t('Resolved when the paper is submitted') }}</p>
+                  <p class="text-sm font-semibold">{{ t(isQuestionCountSilence(segment) ? 'Question-count smart silence' : 'Smart question-number audio') }}</p>
+                  <label class="mt-3 block text-xs text-muted">{{ t('Smart segment mode') }}
+                    <select :value="segment.smartMode" class="mt-1 h-9 w-full border border-line bg-surface px-2 text-sm text-ink" @change="setSmartMode(segment, ($event.target as HTMLSelectElement).value as AssemblySmartMode)">
+                      <option value="question_number">{{ t('Question-number audio') }}</option>
+                      <option value="question_count_silence">{{ t('Question-count silence') }}</option>
+                    </select>
+                  </label>
+                  <template v-if="isQuestionCountSilence(segment)">
+                    <div class="mt-3 flex flex-wrap gap-5 text-sm">
+                      <label class="inline-flex items-center gap-2"><input v-model="segment.smartSilencePrevious" type="checkbox" />{{ t('Associate previous placeholder') }}</label>
+                      <label class="inline-flex items-center gap-2"><input v-model="segment.smartSilenceNext" type="checkbox" />{{ t('Associate next placeholder') }}</label>
+                    </div>
+                    <label class="mt-3 block text-xs text-muted">{{ t('Seconds per question') }}
+                      <input :value="seconds(segment.silenceMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" @input="segment.silenceMilliseconds = millisecondsFromInput($event)" />
+                    </label>
+                  </template>
+                  <p v-else class="mt-2 text-xs text-muted">{{ t('Resolved when the paper is submitted') }}</p>
                 </template>
                 <template v-else>
                   <div class="flex flex-wrap items-baseline gap-2">
@@ -825,7 +899,7 @@ onUnmounted(() => {
                     <label class="inline-flex items-center gap-2"><input :checked="segment.includeTopic" type="checkbox" @change="setSegmentTopic(segment, ($event.target as HTMLInputElement).checked)" />{{ t('Include topic') }}</label>
                   </div>
                 </template>
-                <div v-if="segment.type !== 'silence'" class="mt-3 flex flex-wrap gap-2">
+                <div v-if="segment.type !== 'silence' && !isQuestionCountSilence(segment)" class="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     :disabled="previewBusy || !canPlaySegment(segment, index)"

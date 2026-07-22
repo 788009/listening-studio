@@ -6,7 +6,7 @@ from pydantic import Field, model_validator
 
 from backend.app.api.schemas import ResourceId, Title
 from backend.app.api.tag_schemas import TagApiModel
-from backend.app.db.models.assembly import AssemblySegmentType
+from backend.app.db.models.assembly import AssemblySegmentType, AssemblySmartMode
 from backend.app.db.models.audio import AudioVisibility
 
 
@@ -15,6 +15,9 @@ class AssemblySegmentRequest(TagApiModel):
     audio_id: ResourceId | None = None
     suggested_query: str | None = Field(default=None, max_length=1024)
     silence_milliseconds: int = Field(default=0, ge=0, le=60_000)
+    smart_mode: AssemblySmartMode = AssemblySmartMode.QUESTION_NUMBER
+    smart_silence_previous: bool = False
+    smart_silence_next: bool = False
     repeat_count: int = Field(default=1, ge=1, le=10)
     repeat_interval_milliseconds: int = Field(default=0, ge=0, le=60_000)
     include_text: bool = True
@@ -27,8 +30,24 @@ class AssemblySegmentRequest(TagApiModel):
                 raise ValueError("Audio segments require audioId")
         elif self.audio_id is not None:
             raise ValueError("This segment type does not accept audioId")
-        if self.type is not AssemblySegmentType.SILENCE and self.silence_milliseconds:
+        is_smart_silence = (
+            self.type is AssemblySegmentType.SMART
+            and self.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE
+        )
+        if (
+            self.type is not AssemblySegmentType.SILENCE
+            and not is_smart_silence
+            and self.silence_milliseconds
+        ):
             raise ValueError("Only silence segments accept silenceMilliseconds")
+        if is_smart_silence and not (
+            self.smart_silence_previous or self.smart_silence_next
+        ):
+            raise ValueError("Question-count silence requires an associated segment")
+        if self.smart_mode is AssemblySmartMode.QUESTION_NUMBER and (
+            self.smart_silence_previous or self.smart_silence_next
+        ):
+            raise ValueError("Question-number audio does not accept silence associations")
         return self
 
 

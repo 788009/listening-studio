@@ -30,7 +30,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260721_0018")
+            self.assertEqual(revision, "20260722_0020")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -84,6 +84,59 @@ class DatabaseIntegrationTest(unittest.TestCase):
 
         self.assertEqual(roles, [("ExistingUser", "user"), ("NewUser", "user")])
         self.assertNotIn("role", columns)
+
+    def test_smart_mode_migration_defaults_existing_segments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "assembly-smart-modes.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260722_0019")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'owner', 'active', 'Owner', 'owner')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO assembly_templates "
+                        "(owner_id, title, normalized_title) "
+                        "VALUES (1, 'Template', 'template')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO assembly_template_segments "
+                        "(template_id, type, position) VALUES (1, 'smart', 0)"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.connect() as connection:
+                values = connection.execute(
+                    text(
+                        "SELECT smart_mode, smart_silence_previous, "
+                        "smart_silence_next FROM assembly_template_segments"
+                    )
+                ).one()
+            command.downgrade(config, "20260722_0019")
+            with engine.connect() as connection:
+                columns = {
+                    column["name"]
+                    for column in inspect(connection).get_columns(
+                        "assembly_template_segments"
+                    )
+                }
+            engine.dispose()
+
+        self.assertEqual(values, ("question_number", False, False))
+        self.assertNotIn("smart_mode", columns)
+        self.assertNotIn("smart_silence_previous", columns)
+        self.assertNotIn("smart_silence_next", columns)
 
     def test_sqlite_connections_enable_foreign_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
@@ -407,7 +460,9 @@ class DatabaseIntegrationTest(unittest.TestCase):
 
             command.downgrade(config, "20260719_0013")
             with engine.connect() as connection:
-                restored = connection.scalar(text("SELECT type FROM audio_tags"))
+                restored = connection.scalar(
+                    text("SELECT type FROM audio_tags WHERE value = 'Anzu'")
+                )
             engine.dispose()
 
         self.assertEqual(restored, "speaker")

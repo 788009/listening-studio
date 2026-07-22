@@ -16,6 +16,7 @@ from backend.app.core.exceptions import (
 )
 from backend.app.db.models.assembly import (
     AssemblySegmentType,
+    AssemblySmartMode,
     AssemblyTemplate,
     AssemblyTemplateSegment,
 )
@@ -61,6 +62,9 @@ class AssemblySegmentInput:
     audio_id: int | None = None
     suggested_query: str | None = None
     silence_milliseconds: int = 0
+    smart_mode: AssemblySmartMode = AssemblySmartMode.QUESTION_NUMBER
+    smart_silence_previous: bool = False
+    smart_silence_next: bool = False
     repeat_count: int = 1
     repeat_interval_milliseconds: int = 0
     include_text: bool = True
@@ -391,23 +395,41 @@ class AssemblyService:
                 result.append(_ResolvedSegment(item, None))
                 continue
             if item.type is AssemblySegmentType.SMART:
-                if (
-                    index + 1 >= len(segments)
-                    or segments[index + 1].type is not AssemblySegmentType.PLACEHOLDER
-                ):
-                    raise DomainValidationError(
-                        "A smart segment must be followed by a placeholder",
-                        details={"field": "segments", "position": index},
+                if item.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE:
+                    associated_positions = []
+                    if item.smart_silence_previous:
+                        associated_positions.append(index - 1)
+                    if item.smart_silence_next:
+                        associated_positions.append(index + 1)
+                    associated_question_count = sum(
+                        len(
+                            self._visible_audio(
+                                session,
+                                owner,
+                                segments[position].audio_id,
+                                position,
+                            ).questions
+                        )
+                        for position in associated_positions
                     )
-                next_item = segments[index + 1]
+                    result.append(
+                        _ResolvedSegment(
+                            item,
+                            None,
+                            item.silence_milliseconds * associated_question_count,
+                        )
+                    )
+                    continue
+                next_position = self._question_placeholder_position(segments, index)
+                next_item = segments[next_position]
                 next_audio = self._visible_audio(
-                    session, owner, next_item.audio_id, index + 1
+                    session, owner, next_item.audio_id, next_position
                 )
                 count = len(next_audio.questions)
                 if count == 0:
                     raise DomainValidationError(
                         "The placeholder after a smart segment requires questions",
-                        details={"field": "segments", "position": index + 1},
+                        details={"field": "segments", "position": next_position},
                     )
                 start = question_count + 1
                 end = question_count + count
@@ -450,12 +472,28 @@ class AssemblyService:
             if segments[position].type is AssemblySegmentType.SMART
         ]
         if smart_positions:
-            resolution_end = max(end_index, max(smart_positions) + 1)
-            if resolution_end >= len(segments):
-                raise DomainValidationError(
-                    "A smart segment must be followed by a placeholder",
-                    details={"field": "segments", "position": max(smart_positions)},
-                )
+            resolution_end = end_index
+            while True:
+                expanded_end = resolution_end
+                for position in range(resolution_end + 1):
+                    item = segments[position]
+                    if item.type is not AssemblySegmentType.SMART:
+                        continue
+                    if item.smart_mode is AssemblySmartMode.QUESTION_NUMBER:
+                        expanded_end = max(
+                            expanded_end,
+                            self._question_placeholder_position(segments, position),
+                        )
+                    elif item.smart_silence_next:
+                        if position + 1 >= len(segments):
+                            raise DomainValidationError(
+                                "Question-count silence requires the next segment to be a placeholder",
+                                details={"field": "segments", "position": position},
+                            )
+                        expanded_end = max(expanded_end, position + 1)
+                if expanded_end == resolution_end:
+                    break
+                resolution_end = expanded_end
             relevant = segments[: resolution_end + 1]
             self._validate_segments(relevant, allow_placeholders=True)
             return self._resolve_segments(session, owner, relevant)[
@@ -477,6 +515,25 @@ class AssemblyService:
             )
             result.append(_ResolvedSegment(item, audio))
         return result
+
+    @staticmethod
+    def _question_placeholder_position(
+        segments: list[AssemblySegmentInput], position: int
+    ) -> int:
+        for next_position in range(position + 1, len(segments)):
+            item = segments[next_position]
+            if item.type is AssemblySegmentType.PLACEHOLDER:
+                return next_position
+            if item.type is AssemblySegmentType.SILENCE or (
+                item.type is AssemblySegmentType.SMART
+                and item.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE
+            ):
+                continue
+            break
+        raise DomainValidationError(
+            "A question-number smart segment requires a following placeholder with only silence between",
+            details={"field": "segments", "position": position},
+        )
 
     def _visible_audio(
         self, session: Session, owner: User, audio_id: int | None, position: int
@@ -658,6 +715,9 @@ class AssemblyService:
                     audio_id=item.audio_id,
                     suggested_query=item.suggested_query,
                     silence_milliseconds=item.silence_milliseconds,
+                    smart_mode=item.smart_mode,
+                    smart_silence_previous=item.smart_silence_previous,
+                    smart_silence_next=item.smart_silence_next,
                     repeat_count=item.repeat_count,
                     repeat_interval_milliseconds=item.repeat_interval_milliseconds,
                     include_text=item.include_text,
@@ -692,14 +752,49 @@ class AssemblyService:
                     "Template-only assembly segment is invalid",
                     details={"field": "segments", "position": position},
                 )
-            if item.type is AssemblySegmentType.SMART and (
-                position + 1 >= len(segments)
-                or segments[position + 1].type is not AssemblySegmentType.PLACEHOLDER
-            ):
-                raise DomainValidationError(
-                    "A smart segment must be followed by a placeholder",
-                    details={"field": "segments", "position": position},
-                )
+            if item.type is AssemblySegmentType.SMART:
+                if not isinstance(item.smart_mode, AssemblySmartMode):
+                    raise DomainValidationError(
+                        "Assembly smart mode is invalid",
+                        details={"field": "segments", "position": position},
+                    )
+                if item.smart_mode is AssemblySmartMode.QUESTION_NUMBER:
+                    AssemblyService._question_placeholder_position(segments, position)
+                else:
+                    if not (
+                        item.smart_silence_previous or item.smart_silence_next
+                    ):
+                        raise DomainValidationError(
+                            "Question-count silence requires an associated segment",
+                            details={"field": "segments", "position": position},
+                        )
+                    if item.smart_silence_previous and (
+                        position == 0
+                        or segments[position - 1].type
+                        is not AssemblySegmentType.PLACEHOLDER
+                    ):
+                        raise DomainValidationError(
+                            "Question-count silence requires the previous segment to be a placeholder",
+                            details={"field": "segments", "position": position},
+                        )
+                    if item.smart_silence_next and (
+                        position + 1 >= len(segments)
+                        or segments[position + 1].type
+                        is not AssemblySegmentType.PLACEHOLDER
+                    ):
+                        raise DomainValidationError(
+                            "Question-count silence requires the next segment to be a placeholder",
+                            details={"field": "segments", "position": position},
+                        )
+                    if (
+                        not isinstance(item.silence_milliseconds, int)
+                        or not 0 <= item.silence_milliseconds <= 60_000
+                    ):
+                        raise DomainValidationError(
+                            "Question-count silence duration is invalid",
+                            details={"field": "segments", "position": position},
+                        )
+                    continue
             if item.type is AssemblySegmentType.SILENCE:
                 if (
                     not isinstance(item.silence_milliseconds, int)
@@ -740,6 +835,7 @@ class AssemblyService:
 class _ResolvedSegment:
     input: AssemblySegmentInput
     audio: Audio | None
+    resolved_silence_milliseconds: int | None = None
 
     @property
     def include_text(self) -> bool:
@@ -753,7 +849,11 @@ class _ResolvedSegment:
         if self.audio is None:
             return {
                 "type": "silence",
-                "silenceMilliseconds": self.input.silence_milliseconds,
+                "silenceMilliseconds": (
+                    self.resolved_silence_milliseconds
+                    if self.resolved_silence_milliseconds is not None
+                    else self.input.silence_milliseconds
+                ),
             }
         return {
             "type": "audio",

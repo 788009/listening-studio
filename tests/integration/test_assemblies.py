@@ -155,8 +155,14 @@ class AssemblyIntegrationTest(unittest.TestCase):
                         "includeText": False,
                     },
                     {"type": "smart", "includeText": False},
-                    {"type": "placeholder", "audioId": placeholder},
                     {"type": "silence", "silenceMilliseconds": 25},
+                    {
+                        "type": "smart",
+                        "smartMode": "question_count_silence",
+                        "smartSilenceNext": True,
+                        "silenceMilliseconds": 25,
+                    },
+                    {"type": "placeholder", "audioId": placeholder},
                 ],
                 "tagIds": [],
                 "visibility": "private",
@@ -192,7 +198,7 @@ class AssemblyIntegrationTest(unittest.TestCase):
             {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
         )
         with wave.open(str(self.storage.path(audio_id)), "rb") as output:
-            self.assertAlmostEqual(output.getnframes() / 8000, 0.475, delta=0.02)
+            self.assertAlmostEqual(output.getnframes() / 8000, 0.525, delta=0.02)
         self.assertTrue(self.storage.path(prefix).is_file())
         self.assertFalse(self.storage.job_directory(job_id).exists())
 
@@ -220,7 +226,14 @@ class AssemblyIntegrationTest(unittest.TestCase):
             "title": "Structured exam",
             "segments": [
                 {"type": "smart"},
+                {"type": "silence", "silenceMilliseconds": 25},
                 {"type": "placeholder", "suggestedQuery": "topic:news"},
+                {
+                    "type": "smart",
+                    "smartMode": "question_count_silence",
+                    "smartSilencePrevious": True,
+                    "silenceMilliseconds": 5000,
+                },
             ],
         }
         forbidden = self.send(
@@ -238,9 +251,75 @@ class AssemblyIntegrationTest(unittest.TestCase):
         self.assertEqual(forbidden.status_code, 403)
         self.assertEqual(created.status_code, 201, created.text)
         self.assertEqual(
-            created.json()["segments"][1]["suggestedQuery"],
+            created.json()["segments"][2]["suggestedQuery"],
             "topic:news",
         )
+        self.assertEqual(
+            created.json()["segments"][0]["smartMode"],
+            "question_number",
+        )
+        self.assertEqual(
+            created.json()["segments"][3]["smartMode"],
+            "question_count_silence",
+        )
+        self.assertTrue(created.json()["segments"][3]["smartSilencePrevious"])
+        self.assertEqual(created.json()["segments"][3]["silenceMilliseconds"], 5000)
+
+    def test_question_count_silence_sums_associated_placeholder_questions(self) -> None:
+        previous = self.ready_audio("Previous questions", 2, "Previous")
+        following = self.ready_audio("Following question", 1, "Following")
+        invalid = self.send(
+            "POST",
+            "/api/assemblies",
+            headers=self.headers("user"),
+            json={
+                "title": "Invalid smart silence",
+                "segments": [
+                    {
+                        "type": "smart",
+                        "smartMode": "question_count_silence",
+                        "smartSilencePrevious": True,
+                        "silenceMilliseconds": 25,
+                    },
+                    {"type": "placeholder", "audioId": following},
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+
+        response = self.send(
+            "POST",
+            "/api/assemblies",
+            headers=self.headers("user"),
+            json={
+                "title": "Bidirectional smart silence",
+                "segments": [
+                    {"type": "placeholder", "audioId": previous},
+                    {
+                        "type": "smart",
+                        "smartMode": "question_count_silence",
+                        "smartSilencePrevious": True,
+                        "smartSilenceNext": True,
+                        "silenceMilliseconds": 25,
+                    },
+                    {"type": "placeholder", "audioId": following},
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+        self.assertEqual(response.status_code, 202, response.text)
+        audio_id = response.json()["audioId"]
+        worker = JobWorker(
+            self.app.state.session_factory,
+            {ASSEMBLY_JOB_TYPE: AssemblyJobHandler(AssemblyService(self.storage))},
+            poll_interval_seconds=0.01,
+        )
+        self.assertTrue(worker.run_once())
+        with wave.open(str(self.storage.path(audio_id)), "rb") as output:
+            self.assertAlmostEqual(output.getnframes() / 8000, 0.275, delta=0.02)
 
     def test_preview_renders_selected_suffix_and_protects_temporary_media(self) -> None:
         previous = self.ready_audio("Three questions", 3, "Previous")
