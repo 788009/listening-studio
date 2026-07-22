@@ -40,6 +40,7 @@ const PAGE_SIZE = 10
 let nextKey = 1
 type CreationTagType = 'topic' | 'category'
 type SmartSilenceAssociation = '' | 'previous' | 'next'
+type MoveDirection = 'up' | 'down'
 const tagGroups: { label: string; type: CreationTagType }[] = [
   { label: 'Topics', type: 'topic' },
   { label: 'Categories', type: 'category' },
@@ -79,6 +80,10 @@ const activePlaceholder = ref<number | null>(null)
 const segmentSelectionMode = ref(false)
 const selectedSegmentKeys = ref<number[]>([])
 const segmentList = ref<HTMLOListElement | null>(null)
+const moveOptionsSegmentKey = ref<number | null>(null)
+const moveOptionsDirection = ref<MoveDirection>('up')
+const moveOptionsDistance = ref(1)
+const moveOptionsAfterPosition = ref(0)
 const loading = ref(true)
 const submitting = ref(false)
 const savingTemplate = ref(false)
@@ -341,13 +346,63 @@ function selectPlaceholder(index: number): void {
 
 function move(index: number, offset: -1 | 1): void {
   const target = index + offset
-  if (target < 0 || target >= segments.value.length) return
+  moveToIndex(index, target)
+}
+
+function moveToIndex(index: number, target: number): boolean {
+  if (
+    index < 0 ||
+    index >= segments.value.length ||
+    target < 0 ||
+    target >= segments.value.length ||
+    index === target
+  ) {
+    return false
+  }
   const next = [...segments.value]
   const [item] = next.splice(index, 1)
-  if (!item) return
+  if (!item) return false
   next.splice(target, 0, item)
   segments.value = next
   activePlaceholder.value = null
+  return true
+}
+
+function toggleMoveOptions(index: number): void {
+  const segment = segments.value[index]
+  if (!segment) return
+  if (moveOptionsSegmentKey.value === segment.key) {
+    moveOptionsSegmentKey.value = null
+    return
+  }
+  moveOptionsSegmentKey.value = segment.key
+  moveOptionsDirection.value = 'up'
+  moveOptionsDistance.value = 1
+  moveOptionsAfterPosition.value = 0
+}
+
+function moveByOptions(index: number): void {
+  const distance = Math.trunc(moveOptionsDistance.value)
+  if (!Number.isFinite(distance) || distance < 1) return
+  const offset = moveOptionsDirection.value === 'up' ? -distance : distance
+  if (moveToIndex(index, index + offset)) {
+    moveOptionsSegmentKey.value = null
+  }
+}
+
+function moveAfterPosition(index: number): void {
+  const afterPosition = Math.trunc(moveOptionsAfterPosition.value)
+  if (
+    !Number.isFinite(afterPosition) ||
+    afterPosition < 0 ||
+    afterPosition > segments.value.length
+  ) {
+    return
+  }
+  const target = afterPosition > index ? afterPosition - 1 : afterPosition
+  if (moveToIndex(index, target)) {
+    moveOptionsSegmentKey.value = null
+  }
 }
 
 function remove(index: number): void {
@@ -356,6 +411,9 @@ function remove(index: number): void {
     selectedSegmentKeys.value = selectedSegmentKeys.value.filter(
       (key) => key !== removed.key,
     )
+    if (moveOptionsSegmentKey.value === removed.key) {
+      moveOptionsSegmentKey.value = null
+    }
   }
   activePlaceholder.value = null
 }
@@ -363,6 +421,7 @@ function remove(index: number): void {
 function toggleSegmentSelectionMode(): void {
   segmentSelectionMode.value = !segmentSelectionMode.value
   selectedSegmentKeys.value = []
+  moveOptionsSegmentKey.value = null
 }
 
 function setSegmentSelected(segmentKey: number, selected: boolean): void {
@@ -383,6 +442,7 @@ function deleteSelectedSegments(): void {
   segments.value = segments.value.filter((segment) => !selected.has(segment.key))
   selectedSegmentKeys.value = []
   activePlaceholder.value = null
+  moveOptionsSegmentKey.value = null
 }
 
 function copySelectedSegments(): void {
@@ -893,7 +953,7 @@ onUnmounted(() => {
 
           <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
           <ol v-else ref="segmentList" class="max-h-[80vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
-            <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
+            <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_auto]">
               <div class="flex flex-col items-center gap-2 pt-1">
                 <span class="text-sm tabular-nums text-muted">{{ index + 1 }}</span>
                 <input
@@ -990,10 +1050,56 @@ onUnmounted(() => {
                   </button>
                 </div>
               </div>
-              <div class="flex justify-end gap-1">
+              <div class="relative flex justify-end gap-1">
+                <button
+                  type="button"
+                  class="h-8 border border-line px-2 text-xs text-muted hover:border-ink hover:text-ink"
+                  :aria-expanded="moveOptionsSegmentKey === segment.key"
+                  @click="toggleMoveOptions(index)"
+                >
+                  {{ t('Move options') }}
+                </button>
                 <button type="button" :disabled="index === 0" class="flex h-8 w-7 items-center justify-center text-muted disabled:opacity-30" :title="t('Move up')" @click="move(index, -1)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 15 6-6 6 6" stroke="currentColor" stroke-width="2" /></svg></button>
                 <button type="button" :disabled="index === segments.length - 1" class="flex h-8 w-7 items-center justify-center text-muted disabled:opacity-30" :title="t('Move down')" @click="move(index, 1)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m6 9 6 6 6-6" stroke="currentColor" stroke-width="2" /></svg></button>
                 <button type="button" class="flex h-8 w-7 items-center justify-center text-danger" :title="t('Remove')" @click="remove(index)"><svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12h14" stroke="currentColor" stroke-width="2" /></svg></button>
+                <div
+                  v-if="moveOptionsSegmentKey === segment.key"
+                  role="dialog"
+                  :aria-label="t('Move options')"
+                  class="absolute right-0 top-9 z-10 w-72 border border-line bg-surface p-3 shadow-lg"
+                >
+                  <div class="flex flex-wrap items-center gap-2 text-sm">
+                    <span>{{ t('Move direction') }}</span>
+                    <select v-model="moveOptionsDirection" class="h-8 border border-line bg-surface px-2 text-sm text-ink">
+                      <option value="up">{{ t('Up') }}</option>
+                      <option value="down">{{ t('Down') }}</option>
+                    </select>
+                    <span>{{ t('Move count') }}</span>
+                    <input v-model.number="moveOptionsDistance" :aria-label="t('Segment count')" type="number" min="1" step="1" class="h-8 w-16 border border-line px-2 text-sm text-ink" />
+                    <span>{{ t('Segments') }}</span>
+                    <button
+                      type="button"
+                      :aria-label="t('Move by offset')"
+                      class="h-8 border border-line px-2 text-sm"
+                      @click="moveByOptions(index)"
+                    >
+                      {{ t('Move') }}
+                    </button>
+                  </div>
+                  <div class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                    <span>{{ t('Move after') }}</span>
+                    <input v-model.number="moveOptionsAfterPosition" :aria-label="t('Destination segment position')" type="number" min="0" :max="segments.length" step="1" class="h-8 w-16 border border-line px-2 text-sm text-ink" />
+                    <span>{{ t('Segment suffix') }}</span>
+                    <button
+                      type="button"
+                      :aria-label="t('Move after position')"
+                      class="h-8 border border-line px-2 text-sm"
+                      @click="moveAfterPosition(index)"
+                    >
+                      {{ t('Move') }}
+                    </button>
+                  </div>
+                </div>
               </div>
             </li>
           </ol>

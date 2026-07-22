@@ -322,6 +322,53 @@ describe('paper composer view', () => {
     wrapper.unmount()
   })
 
+  it('moves a segment using move options', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const path = String(input)
+        if (path === '/api/assembly-templates') return Promise.resolve(response([]))
+        if (path.startsWith('/api/audio-tags')) {
+          return Promise.resolve(response([fullPaperTag, topicTag]))
+        }
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const { wrapper } = await mountView()
+    await flushPromises()
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Add comment')
+      ?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Add silence')
+      ?.trigger('click')
+
+    let rows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
+    await rows[2]?.findAll('button').find((button) => button.text() === 'Move options')?.trigger('click')
+    const firstDialog = rows[2]?.get('[role="dialog"]')
+    await firstDialog?.get('input[aria-label="Segment count"]').setValue('2')
+    await firstDialog?.get('button[aria-label="Move by offset"]').trigger('click')
+
+    rows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
+    expect(rows[0]?.text()).toContain('Silence')
+    await rows[2]?.findAll('button').find((button) => button.text() === 'Move options')?.trigger('click')
+    const secondDialog = rows[2]?.get('[role="dialog"]')
+    await secondDialog?.get('input[aria-label="Destination segment position"]').setValue('0')
+    await secondDialog?.get('button[aria-label="Move after position"]').trigger('click')
+
+    rows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
+    expect(rows[0]?.text()).toContain('Comment')
+    expect(rows[0]?.find('[role="dialog"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('applies a suggested query when filling a template placeholder', async () => {
     const requests: string[] = []
     vi.stubGlobal(
