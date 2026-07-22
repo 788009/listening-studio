@@ -381,6 +381,16 @@ function toggleMoveOptions(index: number): void {
   moveOptionsAfterPosition.value = 0
 }
 
+function dismissMoveOptions(event: PointerEvent): void {
+  if (moveOptionsSegmentKey.value === null) return
+  if (
+    !(event.target instanceof Element) ||
+    !event.target.closest('[data-move-options]')
+  ) {
+    moveOptionsSegmentKey.value = null
+  }
+}
+
 function moveByOptions(index: number): void {
   const distance = Math.trunc(moveOptionsDistance.value)
   if (!Number.isFinite(distance) || distance < 1) return
@@ -829,9 +839,11 @@ function duration(seconds: number): string {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', dismissMoveOptions)
   void Promise.all([loadOptions(), loadPage()])
 })
 onUnmounted(() => {
+  document.removeEventListener('pointerdown', dismissMoveOptions)
   stopPublishPolling()
   void cleanupPreviews()
 })
@@ -1050,7 +1062,7 @@ onUnmounted(() => {
                   </button>
                 </div>
               </div>
-              <div class="relative flex justify-end gap-1">
+              <div data-move-options class="relative flex justify-end gap-1">
                 <button
                   type="button"
                   class="h-8 border border-line px-2 text-xs text-muted hover:border-ink hover:text-ink"

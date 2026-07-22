@@ -366,6 +366,11 @@ describe('paper composer view', () => {
     rows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
     expect(rows[0]?.text()).toContain('Comment')
     expect(rows[0]?.find('[role="dialog"]').exists()).toBe(false)
+    await rows[0]?.findAll('button').find((button) => button.text() === 'Move options')?.trigger('click')
+    expect(rows[0]?.find('[role="dialog"]').exists()).toBe(true)
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await flushPromises()
+    expect(rows[0]?.find('[role="dialog"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
