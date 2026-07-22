@@ -18,6 +18,7 @@ import {
   listAudios,
   listAudioTags,
   type Audio,
+  type AudioQuestion,
   type AudioTag,
   type ResourceVisibility,
 } from '@/api/audios'
@@ -25,6 +26,7 @@ import { ApiError } from '@/api/errors'
 import { cancelJob, getJob, type Job } from '@/api/jobs'
 import type { TagTranslation } from '@/api/voices'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
+import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import { useI18n } from '@/i18n'
@@ -98,6 +100,21 @@ const estimatedSeconds = computed(() =>
     )
   }, 0),
 )
+const previewText = computed(() =>
+  segments.value
+    .filter((segment) => segment.audio && segment.includeText)
+    .map((segment) => segment.audio!.text)
+    .join('\n\n'),
+)
+const previewQuestions = computed<AudioQuestion[]>(() => {
+  let previewId = -1
+  return segments.value.flatMap((segment) =>
+    (segment.audio?.questions ?? []).map((question) => ({
+      ...question,
+      id: previewId--,
+    })),
+  )
+})
 
 function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): DraftSegment {
   return {
@@ -557,6 +574,22 @@ onUnmounted(stopPolling)
           </ol>
         </section>
       </div>
+
+      <section aria-labelledby="assembly-preview-title" class="border-t border-line py-6">
+        <h2 id="assembly-preview-title" class="text-base font-semibold">{{ t('Preview') }}</h2>
+        <div class="mt-5 grid min-w-0 gap-8 lg:grid-cols-2">
+          <div class="min-w-0">
+            <h3 class="text-sm font-semibold">{{ t('Text') }}</h3>
+            <p v-if="previewText" class="mt-4 whitespace-pre-wrap break-words text-sm leading-7">{{ previewText }}</p>
+            <p v-else class="mt-4 text-sm text-muted">{{ t('No text included') }}</p>
+          </div>
+          <div class="min-w-0">
+            <h3 class="text-sm font-semibold">{{ t('Questions') }}</h3>
+            <AudioQuestionsDisplay v-if="previewQuestions.length" class="mt-4" :questions="previewQuestions" />
+            <p v-else class="mt-4 text-sm text-muted">{{ t('No questions') }}</p>
+          </div>
+        </div>
+      </section>
 
       <section aria-labelledby="paper-tags-title" class="border-y border-line py-5">
         <h2 id="paper-tags-title" class="text-base font-semibold">{{ t('Tags') }}</h2>

@@ -131,6 +131,10 @@ describe('paper composer view', () => {
 
     await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
     await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
+    const preview = wrapper.get('[aria-labelledby="assembly-preview-title"]')
+    expect(preview.text()).toContain('Listening text.')
+    expect(preview.text()).toContain('Question?')
+    expect(preview.text().match(/Question\?/g)).toHaveLength(1)
     expect(wrapper.text()).toContain('Tags')
     expect(wrapper.text()).not.toContain('Final tags')
     expect(wrapper.find('button[aria-label="Remove News"]').exists()).toBe(true)

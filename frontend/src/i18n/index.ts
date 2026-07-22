@@ -85,6 +85,8 @@ const zhCN: Record<string, string> = {
   Questions: '题目',
   'Add question': '添加题目',
   'No questions': '暂无题目',
+  Preview: '预览',
+  'No text included': '暂无纳入的文本',
   'Question prompt': '题面',
   'Correct answers': '正确答案',
   'Incorrect answers': '错误答案',
