@@ -173,6 +173,16 @@ class AssemblyIntegrationTest(unittest.TestCase):
                         "includeText": False,
                     },
                     {
+                        "type": "comment",
+                        "commentText": "Section directions",
+                        "includeText": True,
+                    },
+                    {
+                        "type": "comment",
+                        "commentText": "Internal note",
+                        "includeText": False,
+                    },
+                    {
                         "type": "smart",
                         "includeText": True,
                         "includeTopic": True,
@@ -212,7 +222,10 @@ class AssemblyIntegrationTest(unittest.TestCase):
         body = detail.json()
         self.assertEqual(body["status"], "ready")
         self.assertEqual(body["sourceType"], "assembly")
-        self.assertEqual(body["text"], "Question numbers\n\nIncluded text")
+        self.assertEqual(
+            body["text"],
+            "Section directions\n\nQuestion numbers\n\nIncluded text",
+        )
         self.assertEqual(len(body["questions"]), 11)
         self.assertIn(
             ("category", "full_paper"),
@@ -262,6 +275,11 @@ class AssemblyIntegrationTest(unittest.TestCase):
                     "smartSilencePrevious": True,
                     "silenceMilliseconds": 5000,
                 },
+                {
+                    "type": "comment",
+                    "commentText": "Read the directions",
+                    "includeText": False,
+                },
             ],
         }
         forbidden = self.send(
@@ -292,6 +310,23 @@ class AssemblyIntegrationTest(unittest.TestCase):
         )
         self.assertTrue(created.json()["segments"][3]["smartSilencePrevious"])
         self.assertEqual(created.json()["segments"][3]["silenceMilliseconds"], 5000)
+        self.assertEqual(created.json()["segments"][4]["type"], "comment")
+        self.assertEqual(
+            created.json()["segments"][4]["commentText"],
+            "Read the directions",
+        )
+        self.assertFalse(created.json()["segments"][4]["includeText"])
+
+        invalid_comment = self.send(
+            "POST",
+            "/api/assembly-templates",
+            headers=self.headers("admin"),
+            json={
+                "title": "Invalid empty comment",
+                "segments": [{"type": "comment", "commentText": "  "}],
+            },
+        )
+        self.assertEqual(invalid_comment.status_code, 422, invalid_comment.text)
 
     def test_assembly_endpoints_have_no_fixed_segment_limit(self) -> None:
         silence_segments = [

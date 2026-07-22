@@ -226,6 +226,26 @@ describe('paper composer view', () => {
     await flushPromises()
 
     await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Add comment')
+      ?.trigger('click')
+    const commentSegment = wrapper
+      .findAll('[aria-labelledby="segments-title"] ol > li')
+      .find((item) => item.find('textarea').exists())
+    await commentSegment?.get('textarea').setValue('Section directions')
+    const commentIncludeText = commentSegment
+      ?.findAll('label')
+      .find((label) => label.text() === 'Include text')
+      ?.get('input')
+    expect(wrapper.get('[aria-labelledby="assembly-preview-title"]').text()).toContain(
+      'Section directions',
+    )
+    await commentIncludeText?.setValue(false)
+    expect(wrapper.get('[aria-labelledby="assembly-preview-title"]').text()).not.toContain(
+      'Section directions',
+    )
+    await commentIncludeText?.setValue(true)
     const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
     Object.defineProperty(segmentList.element, 'scrollHeight', {
       configurable: true,
@@ -239,7 +259,7 @@ describe('paper composer view', () => {
     expect(wrapper.findAll('button').some((button) => button.text() === 'Add silence')).toBe(false)
     expect(wrapper.findAll('button').some((button) => button.text() === 'Cancel')).toBe(true)
     let segmentCheckboxes = wrapper.findAll('input[aria-label^="Select segment"]')
-    expect(segmentCheckboxes).toHaveLength(2)
+    expect(segmentCheckboxes).toHaveLength(3)
     await segmentCheckboxes[0]?.setValue(true)
     segmentList.element.scrollTop = 0
     await wrapper
@@ -249,15 +269,16 @@ describe('paper composer view', () => {
     await flushPromises()
     expect(segmentList.element.scrollTop).toBe(720)
     segmentCheckboxes = wrapper.findAll('input[aria-label^="Select segment"]')
-    expect(segmentCheckboxes).toHaveLength(3)
-    await segmentCheckboxes[2]?.setValue(true)
+    expect(segmentCheckboxes).toHaveLength(4)
+    await segmentCheckboxes[3]?.setValue(true)
     await wrapper.findAll('button').find((button) => button.text() === 'Delete')?.trigger('click')
-    expect(wrapper.findAll('input[aria-label^="Select segment"]')).toHaveLength(2)
+    expect(wrapper.findAll('input[aria-label^="Select segment"]')).toHaveLength(3)
     await wrapper.findAll('button').find((button) => button.text() === 'Cancel')?.trigger('click')
     expect(wrapper.find('input[aria-label^="Select segment"]').exists()).toBe(false)
     expect(wrapper.findAll('button').some((button) => button.text() === 'Add silence')).toBe(true)
     const preview = wrapper.get('[aria-labelledby="assembly-preview-title"]')
     expect(preview.text()).toContain('Listening text.')
+    expect(preview.text()).toContain('Section directions')
     expect(preview.text()).toContain('Question?')
     expect(preview.text().match(/Question\?/g)).toHaveLength(1)
     expect(wrapper.text()).toContain('Tags')
@@ -286,6 +307,11 @@ describe('paper composer view', () => {
           repeatIntervalMilliseconds: 1500,
           includeText: true,
           includeTopic: true,
+        },
+        {
+          type: 'comment',
+          commentText: 'Section directions',
+          includeText: true,
         },
         { type: 'silence', silenceMilliseconds: 5000 },
       ],

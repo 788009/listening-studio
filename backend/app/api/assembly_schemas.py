@@ -14,6 +14,7 @@ class AssemblySegmentRequest(TagApiModel):
     type: AssemblySegmentType
     audio_id: ResourceId | None = None
     suggested_query: str | None = Field(default=None, max_length=1024)
+    comment_text: str | None = None
     silence_milliseconds: int = Field(default=0, ge=0, le=60_000)
     smart_mode: AssemblySmartMode = AssemblySmartMode.QUESTION_NUMBER
     smart_silence_previous: bool = False
@@ -25,11 +26,18 @@ class AssemblySegmentRequest(TagApiModel):
 
     @model_validator(mode="after")
     def validate_kind(self) -> AssemblySegmentRequest:
+        is_comment = self.type is AssemblySegmentType.COMMENT
         if self.type in {AssemblySegmentType.AUDIO, AssemblySegmentType.PLACEHOLDER}:
             if self.type is AssemblySegmentType.AUDIO and self.audio_id is None:
                 raise ValueError("Audio segments require audioId")
         elif self.audio_id is not None:
             raise ValueError("This segment type does not accept audioId")
+        if is_comment:
+            if self.comment_text is None or not self.comment_text.strip():
+                raise ValueError("Comment segments require commentText")
+            self.comment_text = self.comment_text.strip()
+        elif self.comment_text is not None:
+            raise ValueError("Only comment segments accept commentText")
         is_smart_silence = (
             self.type is AssemblySegmentType.SMART
             and self.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE

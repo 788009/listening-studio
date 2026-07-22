@@ -60,6 +60,7 @@ class AssemblySegmentInput:
     type: AssemblySegmentType
     audio_id: int | None = None
     suggested_query: str | None = None
+    comment_text: str | None = None
     silence_milliseconds: int = 0
     smart_mode: AssemblySmartMode = AssemblySmartMode.QUESTION_NUMBER
     smart_silence_previous: bool = False
@@ -153,7 +154,13 @@ class AssemblyService:
             session.flush()
             self.job_storage.write_assembly_preview_input(
                 job.id,
-                {"segments": [item.summary() for item in selected]},
+                {
+                    "segments": [
+                        item.summary()
+                        for item in selected
+                        if item.input.type is not AssemblySegmentType.COMMENT
+                    ]
+                },
             )
             session.commit()
             return AssemblyPreviewSubmission(job)
@@ -290,7 +297,9 @@ class AssemblyService:
         tags = self._assembly_tags(session, explicit_tags, resolved)
         questions = self._questions(audio_segments)
         text = "\n\n".join(
-            item.audio.text for item in audio_segments if item.include_text
+            item.text
+            for item in resolved
+            if item.include_text and item.text is not None
         )
         audio: Audio | None = None
         job: Job | None = None
@@ -307,7 +316,11 @@ class AssemblyService:
             if not text:
                 audio.text = ""
             self._copy_utterances(session, audio, audio_segments)
-            summary_segments = [item.summary() for item in resolved]
+            summary_segments = [
+                item.summary()
+                for item in resolved
+                if item.input.type is not AssemblySegmentType.COMMENT
+            ]
             job = self.jobs.create_job(
                 session,
                 owner=owner,
@@ -402,6 +415,9 @@ class AssemblyService:
         result: list[_ResolvedSegment] = []
         question_count = 0
         for index, item in enumerate(segments):
+            if item.type is AssemblySegmentType.COMMENT:
+                result.append(_ResolvedSegment(item, None))
+                continue
             if item.type is AssemblySegmentType.SILENCE:
                 result.append(_ResolvedSegment(item, None))
                 continue
@@ -510,7 +526,10 @@ class AssemblyService:
         self._validate_segments(relevant, allow_placeholders=True)
         result: list[_ResolvedSegment] = []
         for offset, item in enumerate(relevant):
-            if item.type is AssemblySegmentType.SILENCE:
+            if item.type in {
+                AssemblySegmentType.SILENCE,
+                AssemblySegmentType.COMMENT,
+            }:
                 result.append(_ResolvedSegment(item, None))
                 continue
             audio = self._visible_audio(
@@ -725,6 +744,7 @@ class AssemblyService:
                     type=item.type,
                     audio_id=item.audio_id,
                     suggested_query=item.suggested_query,
+                    comment_text=item.comment_text,
                     silence_milliseconds=item.silence_milliseconds,
                     smart_mode=item.smart_mode,
                     smart_silence_previous=item.smart_silence_previous,
@@ -752,6 +772,21 @@ class AssemblyService:
             ):
                 raise DomainValidationError(
                     "Assembly segment is invalid",
+                    details={"field": "segments", "position": position},
+                )
+            if item.type is AssemblySegmentType.COMMENT:
+                if (
+                    not isinstance(item.comment_text, str)
+                    or not item.comment_text.strip()
+                ):
+                    raise DomainValidationError(
+                        "Comment segments require text",
+                        details={"field": "segments", "position": position},
+                    )
+                continue
+            if item.comment_text is not None:
+                raise DomainValidationError(
+                    "Only comment segments accept comment text",
                     details={"field": "segments", "position": position},
                 )
             if (
@@ -853,6 +888,13 @@ class _ResolvedSegment:
     @property
     def include_topic(self) -> bool:
         return self.input.include_topic
+
+    @property
+    def text(self) -> str | None:
+        if self.input.type is AssemblySegmentType.COMMENT:
+            assert self.input.comment_text is not None
+            return self.input.comment_text.strip()
+        return self.audio.text if self.audio is not None else None
 
     def summary(self) -> dict[str, object]:
         if self.audio is None:

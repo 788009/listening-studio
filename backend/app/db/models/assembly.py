@@ -5,7 +5,15 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SqlEnum
-from sqlalchemy import ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.db.base import Base
@@ -20,6 +28,7 @@ class AssemblySegmentType(str, Enum):
     SILENCE = "silence"
     PLACEHOLDER = "placeholder"
     SMART = "smart"
+    COMMENT = "comment"
 
 
 class AssemblySmartMode(str, Enum):
@@ -103,6 +112,7 @@ class AssemblyTemplateSegment(Base):
         ForeignKey("audios.id", ondelete="RESTRICT")
     )
     suggested_query: Mapped[str | None] = mapped_column(String(1024))
+    comment_text: Mapped[str | None] = mapped_column(Text)
     silence_milliseconds: Mapped[int] = mapped_column(
         Integer, default=0, server_default="0", nullable=False
     )

@@ -30,7 +30,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260722_0020")
+            self.assertEqual(revision, "20260723_0021")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -137,6 +137,72 @@ class DatabaseIntegrationTest(unittest.TestCase):
         self.assertNotIn("smart_mode", columns)
         self.assertNotIn("smart_silence_previous", columns)
         self.assertNotIn("smart_silence_next", columns)
+
+    def test_comment_segment_migration_updates_existing_type_constraint(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "assembly-comments.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260722_0020")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'owner', 'active', 'Owner', 'owner')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO assembly_templates "
+                        "(owner_id, title, normalized_title) "
+                        "VALUES (1, 'Template', 'template')"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO assembly_template_segments "
+                        "(template_id, type, comment_text, position) "
+                        "VALUES (1, 'comment', 'Directions', 0)"
+                    )
+                )
+                stored = connection.execute(
+                    text(
+                        "SELECT type, comment_text "
+                        "FROM assembly_template_segments"
+                    )
+                ).one()
+
+            command.downgrade(config, "20260722_0020")
+            with engine.connect() as connection:
+                columns = {
+                    column["name"]
+                    for column in inspect(connection).get_columns(
+                        "assembly_template_segments"
+                    )
+                }
+                remaining = connection.scalar(
+                    text("SELECT COUNT(*) FROM assembly_template_segments")
+                )
+            with self.assertRaises(IntegrityError):
+                with engine.begin() as connection:
+                    connection.execute(
+                        text(
+                            "INSERT INTO assembly_template_segments "
+                            "(template_id, type, position) "
+                            "VALUES (1, 'comment', 0)"
+                        )
+                    )
+            engine.dispose()
+
+        self.assertEqual(stored, ("comment", "Directions"))
+        self.assertNotIn("comment_text", columns)
+        self.assertEqual(remaining, 0)
 
     def test_sqlite_connections_enable_foreign_keys(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:

@@ -136,8 +136,13 @@ const estimatedSeconds = computed(() =>
 )
 const previewText = computed(() =>
   segments.value
-    .filter((segment) => segment.audio && segment.includeText)
-    .map((segment) => segment.audio!.text)
+    .filter((segment) => segment.includeText)
+    .map((segment) =>
+      segment.type === 'comment'
+        ? segment.commentText?.trim() ?? ''
+        : segment.audio?.text ?? '',
+    )
+    .filter(Boolean)
     .join('\n\n'),
 )
 const previewQuestions = computed<AudioQuestion[]>(() => {
@@ -284,6 +289,12 @@ function addSilence(): void {
   appendSegments(draft('silence', { silenceMilliseconds: 5000 }))
 }
 
+function addComment(): void {
+  appendSegments(
+    draft('comment', { commentText: '', includeText: true, includeTopic: false }),
+  )
+}
+
 function seconds(milliseconds: number | undefined): number {
   return (milliseconds ?? 0) / 1000
 }
@@ -385,7 +396,13 @@ function copySelectedSegments(): void {
 }
 
 function canPlaySegment(segment: DraftSegment, index: number): boolean {
-  if (segment.type === 'silence' || isQuestionCountSilence(segment)) return false
+  if (
+    segment.type === 'silence' ||
+    segment.type === 'comment' ||
+    isQuestionCountSilence(segment)
+  ) {
+    return false
+  }
   if (segment.type === 'audio') return Boolean(segment.audioId)
   if (segment.type === 'placeholder') return Boolean(segment.audioId)
   const placeholderIndex = questionNumberPlaceholderIndex(index)
@@ -411,6 +428,8 @@ function segmentInput(segment: DraftSegment): AssemblySegmentInput {
     type: segment.type,
     audioId: segment.audioId,
     suggestedQuery: segment.suggestedQuery || undefined,
+    commentText:
+      segment.type === 'comment' ? segment.commentText?.trim() : undefined,
     silenceMilliseconds:
       segment.type === 'silence' || isQuestionCountSilence(segment)
         ? segment.silenceMilliseconds
@@ -430,6 +449,9 @@ function validate(): string | null {
   if (segments.value.length === 0) return t('Add at least one segment')
   for (let index = 0; index < segments.value.length; index += 1) {
     const item = segments.value[index]!
+    if (item.type === 'comment' && !item.commentText?.trim()) {
+      return t('Enter text for every comment segment')
+    }
     if ((item.type === 'audio' || item.type === 'placeholder') && !item.audioId) {
       return t('Fill every placeholder before publishing')
     }
@@ -632,6 +654,13 @@ async function submit(): Promise<void> {
 
 async function saveTemplate(): Promise<void> {
   if (!auth.isAdmin || savingTemplate.value || !templateTitle.value.trim()) return
+  const hasEmptyComment = segments.value.some(
+    (segment) => segment.type === 'comment' && !segment.commentText?.trim(),
+  )
+  if (hasEmptyComment) {
+    errorMessage.value = t('Enter text for every comment segment')
+    return
+  }
   savingTemplate.value = true
   errorMessage.value = ''
   try {
@@ -832,6 +861,7 @@ onUnmounted(() => {
                 <button type="button" :disabled="selectedSegmentKeys.length === 0" class="h-9 border border-line px-3 text-sm disabled:opacity-40" @click="copySelectedSegments">{{ t('Copy and add to end') }}</button>
               </template>
               <template v-else>
+                <button type="button" class="h-9 border border-line px-3 text-sm" @click="addComment">{{ t('Add comment') }}</button>
                 <button type="button" class="h-9 border border-line px-3 text-sm" @click="addSilence">{{ t('Add silence') }}</button>
                 <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addPlaceholder">{{ t('Add placeholder') }}</button>
                 <button v-if="auth.isAdmin" type="button" class="h-9 border border-line px-3 text-sm" @click="addSmart">{{ t('Add smart segment') }}</button>
@@ -881,6 +911,13 @@ onUnmounted(() => {
                   <label class="mt-3 block text-xs text-muted">{{ t('Duration seconds') }}
                     <input :value="seconds(segment.silenceMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" @input="segment.silenceMilliseconds = millisecondsFromInput($event)" />
                   </label>
+                </template>
+                <template v-else-if="segment.type === 'comment'">
+                  <p class="text-sm font-semibold">{{ t('Comment') }}</p>
+                  <label class="mt-3 block text-xs text-muted">{{ t('Comment text') }}
+                    <textarea v-model="segment.commentText" rows="4" class="mt-1 w-full resize-y border border-line px-3 py-2 text-sm leading-6 text-ink" />
+                  </label>
+                  <label class="mt-3 inline-flex items-center gap-2 text-sm"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
                 </template>
                 <template v-else-if="segment.type === 'smart'">
                   <p class="text-sm font-semibold">{{ t(isQuestionCountSilence(segment) ? 'Question-count smart silence' : 'Smart question-number audio') }}</p>
@@ -932,7 +969,7 @@ onUnmounted(() => {
                     <label class="inline-flex items-center gap-2"><input :checked="segment.includeTopic" type="checkbox" @change="setSegmentTopic(segment, ($event.target as HTMLInputElement).checked)" />{{ t('Include topic') }}</label>
                   </div>
                 </template>
-                <div v-if="segment.type !== 'silence' && !isQuestionCountSilence(segment)" class="mt-3 flex flex-wrap gap-2">
+                <div v-if="segment.type !== 'silence' && segment.type !== 'comment' && !isQuestionCountSilence(segment)" class="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
                     :disabled="previewBusy || !canPlaySegment(segment, index)"
