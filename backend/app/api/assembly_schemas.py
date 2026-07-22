@@ -40,10 +40,10 @@ class AssemblySegmentRequest(TagApiModel):
             and self.silence_milliseconds
         ):
             raise ValueError("Only silence segments accept silenceMilliseconds")
-        if is_smart_silence and not (
-            self.smart_silence_previous or self.smart_silence_next
+        if is_smart_silence and (
+            self.smart_silence_previous == self.smart_silence_next
         ):
-            raise ValueError("Question-count silence requires an associated segment")
+            raise ValueError("Question-count silence requires exactly one associated segment")
         if self.smart_mode is AssemblySmartMode.QUESTION_NUMBER and (
             self.smart_silence_previous or self.smart_silence_next
         ):

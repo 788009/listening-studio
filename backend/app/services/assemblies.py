@@ -396,21 +396,16 @@ class AssemblyService:
                 continue
             if item.type is AssemblySegmentType.SMART:
                 if item.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE:
-                    associated_positions = []
-                    if item.smart_silence_previous:
-                        associated_positions.append(index - 1)
-                    if item.smart_silence_next:
-                        associated_positions.append(index + 1)
-                    associated_question_count = sum(
-                        len(
-                            self._visible_audio(
-                                session,
-                                owner,
-                                segments[position].audio_id,
-                                position,
-                            ).questions
-                        )
-                        for position in associated_positions
+                    associated_position = (
+                        index - 1 if item.smart_silence_previous else index + 1
+                    )
+                    associated_question_count = len(
+                        self._visible_audio(
+                            session,
+                            owner,
+                            segments[associated_position].audio_id,
+                            associated_position,
+                        ).questions
                     )
                     result.append(
                         _ResolvedSegment(
@@ -761,11 +756,9 @@ class AssemblyService:
                 if item.smart_mode is AssemblySmartMode.QUESTION_NUMBER:
                     AssemblyService._question_placeholder_position(segments, position)
                 else:
-                    if not (
-                        item.smart_silence_previous or item.smart_silence_next
-                    ):
+                    if item.smart_silence_previous == item.smart_silence_next:
                         raise DomainValidationError(
-                            "Question-count silence requires an associated segment",
+                            "Question-count silence requires exactly one associated segment",
                             details={"field": "segments", "position": position},
                         )
                     if item.smart_silence_previous and (

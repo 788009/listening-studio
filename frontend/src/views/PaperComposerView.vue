@@ -39,6 +39,7 @@ import { useAuthStore } from '@/stores/auth'
 const PAGE_SIZE = 10
 let nextKey = 1
 type CreationTagType = 'topic' | 'category'
+type SmartSilenceAssociation = '' | 'previous' | 'next'
 const tagGroups: { label: string; type: CreationTagType }[] = [
   { label: 'Topics', type: 'topic' },
   { label: 'Categories', type: 'category' },
@@ -115,13 +116,12 @@ const estimatedSeconds = computed(() =>
       return totalSeconds + (segment.silenceMilliseconds ?? 0) / 1000
     }
     if (isQuestionCountSilence(segment)) {
-      let questionCount = 0
-      if (segment.smartSilencePrevious) {
-        questionCount += segments.value[index - 1]?.audio?.questions?.length ?? 0
-      }
-      if (segment.smartSilenceNext) {
-        questionCount += segments.value[index + 1]?.audio?.questions?.length ?? 0
-      }
+      const associatedIndex = segment.smartSilencePrevious
+        ? index - 1
+        : segment.smartSilenceNext
+          ? index + 1
+          : -1
+      const questionCount = segments.value[associatedIndex]?.audio?.questions?.length ?? 0
       return totalSeconds + ((segment.silenceMilliseconds ?? 0) / 1000) * questionCount
     }
     if (!segment.audio?.durationSeconds) return totalSeconds
@@ -298,6 +298,20 @@ function setSmartMode(segment: DraftSegment, mode: AssemblySmartMode): void {
   segment.silenceMilliseconds = mode === 'question_count_silence' ? 5000 : 0
 }
 
+function smartSilenceAssociation(segment: DraftSegment): SmartSilenceAssociation {
+  if (segment.smartSilencePrevious && !segment.smartSilenceNext) return 'previous'
+  if (segment.smartSilenceNext && !segment.smartSilencePrevious) return 'next'
+  return ''
+}
+
+function setSmartSilenceAssociation(
+  segment: DraftSegment,
+  association: SmartSilenceAssociation,
+): void {
+  segment.smartSilencePrevious = association === 'previous'
+  segment.smartSilenceNext = association === 'next'
+}
+
 function selectPlaceholder(index: number): void {
   activePlaceholder.value = index
   query.value = segments.value[index]?.suggestedQuery ?? ''
@@ -415,8 +429,8 @@ function validate(): string | null {
       }
     }
     if (isQuestionCountSilence(item)) {
-      if (!item.smartSilencePrevious && !item.smartSilenceNext) {
-        return t('Select at least one placeholder for question-count silence')
+      if (item.smartSilencePrevious === item.smartSilenceNext) {
+        return t('Select exactly one placeholder for question-count silence')
       }
       if (
         item.smartSilencePrevious &&
@@ -867,10 +881,13 @@ onUnmounted(() => {
                     </select>
                   </label>
                   <template v-if="isQuestionCountSilence(segment)">
-                    <div class="mt-3 flex flex-wrap gap-5 text-sm">
-                      <label class="inline-flex items-center gap-2"><input v-model="segment.smartSilencePrevious" type="checkbox" />{{ t('Associate previous placeholder') }}</label>
-                      <label class="inline-flex items-center gap-2"><input v-model="segment.smartSilenceNext" type="checkbox" />{{ t('Associate next placeholder') }}</label>
-                    </div>
+                    <label class="mt-3 block text-xs text-muted">{{ t('Associated placeholder') }}
+                      <select :value="smartSilenceAssociation(segment)" class="mt-1 h-9 w-full border border-line bg-surface px-2 text-sm text-ink" @change="setSmartSilenceAssociation(segment, ($event.target as HTMLSelectElement).value as SmartSilenceAssociation)">
+                        <option value="">{{ t('Select a placeholder') }}</option>
+                        <option value="previous">{{ t('Previous placeholder') }}</option>
+                        <option value="next">{{ t('Next placeholder') }}</option>
+                      </select>
+                    </label>
                     <label class="mt-3 block text-xs text-muted">{{ t('Seconds per question') }}
                       <input :value="seconds(segment.silenceMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" @input="segment.silenceMilliseconds = millisecondsFromInput($event)" />
                     </label>

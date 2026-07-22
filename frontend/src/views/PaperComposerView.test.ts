@@ -352,8 +352,16 @@ describe('paper composer view', () => {
     expect(
       (wrapper.find('input[type="number"][max="60"]').element as HTMLInputElement).value,
     ).toBe('5')
-    expect(wrapper.text()).toContain('Associate previous placeholder')
-    expect(wrapper.text()).toContain('Associate next placeholder')
+    const association = wrapper
+      .findAll('select')
+      .find((item) => item.find('option[value="previous"]').exists())
+    expect(association?.findAll('option').map((option) => option.text())).toEqual([
+      'Select a placeholder',
+      'Previous placeholder',
+      'Next placeholder',
+    ])
+    await association?.setValue('previous')
+    expect((association?.element as HTMLSelectElement).value).toBe('previous')
     await wrapper.findAll('button').find((button) => button.text() === 'Choose audio')?.trigger('click')
     await flushPromises()
 

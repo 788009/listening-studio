@@ -265,7 +265,7 @@ class AssemblyIntegrationTest(unittest.TestCase):
         self.assertTrue(created.json()["segments"][3]["smartSilencePrevious"])
         self.assertEqual(created.json()["segments"][3]["silenceMilliseconds"], 5000)
 
-    def test_question_count_silence_sums_associated_placeholder_questions(self) -> None:
+    def test_question_count_silence_requires_exactly_one_placeholder(self) -> None:
         previous = self.ready_audio("Previous questions", 2, "Previous")
         following = self.ready_audio("Following question", 1, "Following")
         invalid = self.send(
@@ -294,7 +294,7 @@ class AssemblyIntegrationTest(unittest.TestCase):
             "/api/assemblies",
             headers=self.headers("user"),
             json={
-                "title": "Bidirectional smart silence",
+                "title": "Invalid bidirectional smart silence",
                 "segments": [
                     {"type": "placeholder", "audioId": previous},
                     {
@@ -310,16 +310,7 @@ class AssemblyIntegrationTest(unittest.TestCase):
                 "visibility": "private",
             },
         )
-        self.assertEqual(response.status_code, 202, response.text)
-        audio_id = response.json()["audioId"]
-        worker = JobWorker(
-            self.app.state.session_factory,
-            {ASSEMBLY_JOB_TYPE: AssemblyJobHandler(AssemblyService(self.storage))},
-            poll_interval_seconds=0.01,
-        )
-        self.assertTrue(worker.run_once())
-        with wave.open(str(self.storage.path(audio_id)), "rb") as output:
-            self.assertAlmostEqual(output.getnframes() / 8000, 0.275, delta=0.02)
+        self.assertEqual(response.status_code, 422, response.text)
 
     def test_preview_renders_selected_suffix_and_protects_temporary_media(self) -> None:
         previous = self.ready_audio("Three questions", 3, "Previous")
