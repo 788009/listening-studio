@@ -13,13 +13,20 @@ from alembic.config import Config
 from fastapi import FastAPI
 
 from backend.app.core.config import Settings
-from backend.app.db.models.audio import AudioSourceType, AudioStatus, AudioVisibility
+from backend.app.db.models.audio import (
+    Audio,
+    AudioSourceType,
+    AudioStatus,
+    AudioVisibility,
+)
+from backend.app.db.models.audio_tag import AudioTagType
 from backend.app.db.models.user import UserRole
 from backend.app.factory import create_app
 from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT_HEADER
 from backend.app.repositories.users import UserRepository
 from backend.app.services.assemblies import ASSEMBLY_JOB_TYPE, AssemblyService
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audio_tags import AudioTagService
 from backend.app.services.audios import AudioQuestionInput, AudioService
 from backend.app.services.job_storage import ASSEMBLY_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.workers.assemblies import (
@@ -139,6 +146,17 @@ class AssemblyIntegrationTest(unittest.TestCase):
         previous = self.ready_audio("Nine questions", 9, "Excluded text")
         placeholder = self.ready_audio("Two questions", 2, "Included text")
         prefix = self.ready_audio("pre_10-11", 0, "Question numbers")
+        with self.app.state.session_factory() as session:
+            prefix_audio = session.get(Audio, prefix)
+            assert prefix_audio is not None
+            prefix_audio.tags.append(
+                AudioTagService().create_user_tag(
+                    session,
+                    tag_type=AudioTagType.TOPIC,
+                    english_value="question_instructions",
+                )
+            )
+            session.commit()
 
         response = self.send(
             "POST",
@@ -154,7 +172,11 @@ class AssemblyIntegrationTest(unittest.TestCase):
                         "repeatIntervalMilliseconds": 50,
                         "includeText": False,
                     },
-                    {"type": "smart", "includeText": False},
+                    {
+                        "type": "smart",
+                        "includeText": True,
+                        "includeTopic": True,
+                    },
                     {"type": "silence", "silenceMilliseconds": 25},
                     {
                         "type": "smart",
@@ -187,10 +209,14 @@ class AssemblyIntegrationTest(unittest.TestCase):
         body = detail.json()
         self.assertEqual(body["status"], "ready")
         self.assertEqual(body["sourceType"], "assembly")
-        self.assertEqual(body["text"], "Included text")
+        self.assertEqual(body["text"], "Question numbers\n\nIncluded text")
         self.assertEqual(len(body["questions"]), 11)
         self.assertIn(
             ("category", "full_paper"),
+            {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
+        )
+        self.assertIn(
+            ("topic", "question_instructions"),
             {(tag["type"], tag["englishValue"]) for tag in body["tags"]},
         )
         self.assertIn(

@@ -599,7 +599,12 @@ class AssemblyService:
             if item.audio is None:
                 continue
             for tag in item.audio.tags:
-                if tag.type is AudioTagType.VOICE:
+                inherit_smart_topic = (
+                    item.input.type is AssemblySegmentType.SMART
+                    and item.include_topic
+                    and tag.type is AudioTagType.TOPIC
+                )
+                if tag.type is AudioTagType.VOICE or inherit_smart_topic:
                     if tag.id not in seen:
                         result.append(tag)
                         seen.add(tag.id)

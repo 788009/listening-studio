@@ -892,7 +892,13 @@ onUnmounted(() => {
                       <input :value="seconds(segment.silenceMilliseconds)" type="number" min="0" max="60" step="0.1" class="mt-1 h-9 w-36 border border-line px-2 text-sm text-ink" @input="segment.silenceMilliseconds = millisecondsFromInput($event)" />
                     </label>
                   </template>
-                  <p v-else class="mt-2 text-xs text-muted">{{ t('Resolved when the paper is submitted') }}</p>
+                  <template v-else>
+                    <p class="mt-2 text-xs text-muted">{{ t('Resolved when the paper is submitted') }}</p>
+                    <div class="mt-3 flex flex-wrap gap-5 text-sm">
+                      <label class="inline-flex items-center gap-2"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
+                      <label class="inline-flex items-center gap-2"><input :checked="segment.includeTopic" type="checkbox" @change="setSegmentTopic(segment, ($event.target as HTMLInputElement).checked)" />{{ t('Include topic') }}</label>
+                    </div>
+                  </template>
                 </template>
                 <template v-else>
                   <div class="flex flex-wrap items-baseline gap-2">

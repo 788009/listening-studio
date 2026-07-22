@@ -342,6 +342,21 @@ describe('paper composer view', () => {
       .find((button) => button.text() === 'Add smart segment')
       ?.trigger('click')
     expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(1)
+    const smartSegment = wrapper.get('[aria-labelledby="segments-title"] ol > li')
+    const includeText = smartSegment
+      .findAll('label')
+      .find((label) => label.text() === 'Include text')
+      ?.get('input')
+    const includeTopic = smartSegment
+      .findAll('label')
+      .find((label) => label.text() === 'Include topic')
+      ?.get('input')
+    expect((includeText?.element as HTMLInputElement).checked).toBe(false)
+    expect((includeTopic?.element as HTMLInputElement).checked).toBe(false)
+    await includeText?.setValue(true)
+    await includeTopic?.setValue(true)
+    expect((includeText?.element as HTMLInputElement).checked).toBe(true)
+    expect((includeTopic?.element as HTMLInputElement).checked).toBe(true)
     await wrapper.find('select').setValue('3')
     await flushPromises()
     const smartMode = wrapper
