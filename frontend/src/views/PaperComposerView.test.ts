@@ -142,6 +142,9 @@ describe('paper composer view', () => {
     const { wrapper } = await mountView()
     await flushPromises()
     await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
+    expect(segmentList.classes()).toContain('max-h-[60vh]')
+    expect(segmentList.classes()).toContain('overflow-y-auto')
 
     await wrapper.findAll('button').find((button) => button.text() === 'Play')?.trigger('click')
     await flushPromises()

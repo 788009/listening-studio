@@ -730,7 +730,7 @@ onUnmounted(() => {
           </div>
 
           <p v-if="segments.length === 0" class="border-y border-line py-10 text-sm text-muted">{{ t('No segments yet') }}</p>
-          <ol v-else class="divide-y divide-line border-y border-line">
+          <ol v-else class="max-h-[60vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
             <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_5.5rem]">
               <span class="pt-1 text-sm tabular-nums text-muted">{{ index + 1 }}</span>
               <div class="min-w-0">
