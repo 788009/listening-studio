@@ -187,12 +187,22 @@ class AssemblyIntegrationTest(unittest.TestCase):
                         "includeText": True,
                         "includeTopic": True,
                     },
+                    {
+                        "type": "comment",
+                        "commentText": "Question directions",
+                        "includeText": False,
+                    },
                     {"type": "silence", "silenceMilliseconds": 25},
                     {
                         "type": "smart",
                         "smartMode": "question_count_silence",
                         "smartSilenceNext": True,
                         "silenceMilliseconds": 25,
+                    },
+                    {
+                        "type": "comment",
+                        "commentText": "Timing directions",
+                        "includeText": False,
                     },
                     {"type": "placeholder", "audioId": placeholder},
                 ],
@@ -438,6 +448,11 @@ class AssemblyIntegrationTest(unittest.TestCase):
                     {"type": "audio", "audioId": previous},
                     {"type": "silence", "silenceMilliseconds": 25},
                     {"type": "smart", "includeText": False},
+                    {
+                        "type": "comment",
+                        "commentText": "Question directions",
+                        "includeText": False,
+                    },
                     {
                         "type": "placeholder",
                         "audioId": placeholder,

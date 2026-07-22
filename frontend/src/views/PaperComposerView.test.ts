@@ -464,6 +464,17 @@ describe('paper composer view', () => {
                   {
                     id: 2,
                     position: 1,
+                    type: 'comment',
+                    commentText: 'Question directions',
+                    repeatCount: 1,
+                    repeatIntervalMilliseconds: 0,
+                    silenceMilliseconds: 0,
+                    includeText: false,
+                    includeTopic: false,
+                  },
+                  {
+                    id: 3,
+                    position: 2,
                     type: 'placeholder',
                     suggestedQuery: 'topic:news',
                     repeatCount: 1,
@@ -514,6 +525,7 @@ describe('paper composer view', () => {
     await wrapper.find('select').setValue('3')
     await wrapper.findAll('button').find((button) => button.text() === 'Replace')?.trigger('click')
     await flushPromises()
+    expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(3)
     const smartMode = wrapper
       .findAll('select')
       .find((item) => item.find('option[value="question_count_silence"]').exists())

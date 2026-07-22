@@ -423,8 +423,10 @@ class AssemblyService:
                 continue
             if item.type is AssemblySegmentType.SMART:
                 if item.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE:
-                    associated_position = (
-                        index - 1 if item.smart_silence_previous else index + 1
+                    associated_position = self._question_count_placeholder_position(
+                        segments,
+                        index,
+                        previous=item.smart_silence_previous,
                     )
                     associated_question_count = len(
                         self._visible_audio(
@@ -507,12 +509,14 @@ class AssemblyService:
                             self._question_placeholder_position(segments, position),
                         )
                     elif item.smart_silence_next:
-                        if position + 1 >= len(segments):
-                            raise DomainValidationError(
-                                "Question-count silence requires the next segment to be a placeholder",
-                                details={"field": "segments", "position": position},
-                            )
-                        expanded_end = max(expanded_end, position + 1)
+                        expanded_end = max(
+                            expanded_end,
+                            self._question_count_placeholder_position(
+                                segments,
+                                position,
+                                previous=False,
+                            ),
+                        )
                 if expanded_end == resolution_end:
                     break
                 resolution_end = expanded_end
@@ -549,15 +553,39 @@ class AssemblyService:
             item = segments[next_position]
             if item.type is AssemblySegmentType.PLACEHOLDER:
                 return next_position
-            if item.type is AssemblySegmentType.SILENCE or (
+            if item.type in {
+                AssemblySegmentType.SILENCE,
+                AssemblySegmentType.COMMENT,
+            } or (
                 item.type is AssemblySegmentType.SMART
                 and item.smart_mode is AssemblySmartMode.QUESTION_COUNT_SILENCE
             ):
                 continue
             break
         raise DomainValidationError(
-            "A question-number smart segment requires a following placeholder with only silence between",
+            "A question-number smart segment requires a following placeholder with only silence or comments between",
             details={"field": "segments", "position": position},
+        )
+
+    @staticmethod
+    def _question_count_placeholder_position(
+        segments: list[AssemblySegmentInput], position: int, *, previous: bool
+    ) -> int:
+        direction = -1 if previous else 1
+        smart_position = position
+        candidate_position = position + direction
+        while 0 <= candidate_position < len(segments):
+            item = segments[candidate_position]
+            if item.type is AssemblySegmentType.COMMENT:
+                candidate_position += direction
+                continue
+            if item.type is AssemblySegmentType.PLACEHOLDER:
+                return candidate_position
+            break
+        relation = "previous" if previous else "next"
+        raise DomainValidationError(
+            f"Question-count silence requires the {relation} segment to be a placeholder with only comments between",
+            details={"field": "segments", "position": smart_position},
         )
 
     def _visible_audio(
@@ -812,24 +840,11 @@ class AssemblyService:
                             "Question-count silence requires exactly one associated segment",
                             details={"field": "segments", "position": position},
                         )
-                    if item.smart_silence_previous and (
-                        position == 0
-                        or segments[position - 1].type
-                        is not AssemblySegmentType.PLACEHOLDER
-                    ):
-                        raise DomainValidationError(
-                            "Question-count silence requires the previous segment to be a placeholder",
-                            details={"field": "segments", "position": position},
-                        )
-                    if item.smart_silence_next and (
-                        position + 1 >= len(segments)
-                        or segments[position + 1].type
-                        is not AssemblySegmentType.PLACEHOLDER
-                    ):
-                        raise DomainValidationError(
-                            "Question-count silence requires the next segment to be a placeholder",
-                            details={"field": "segments", "position": position},
-                        )
+                    AssemblyService._question_count_placeholder_position(
+                        segments,
+                        position,
+                        previous=item.smart_silence_previous,
+                    )
                     if (
                         not isinstance(item.silence_milliseconds, int)
                         or not 0 <= item.silence_milliseconds <= 60_000

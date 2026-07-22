@@ -126,12 +126,14 @@ const estimatedSeconds = computed(() =>
       return totalSeconds + (segment.silenceMilliseconds ?? 0) / 1000
     }
     if (isQuestionCountSilence(segment)) {
-      const associatedIndex = segment.smartSilencePrevious
-        ? index - 1
-        : segment.smartSilenceNext
-          ? index + 1
-          : -1
-      const questionCount = segments.value[associatedIndex]?.audio?.questions?.length ?? 0
+      const associatedIndex = questionCountPlaceholderIndex(
+        index,
+        Boolean(segment.smartSilencePrevious),
+      )
+      const questionCount =
+        associatedIndex === null
+          ? 0
+          : segments.value[associatedIndex]?.audio?.questions?.length ?? 0
       return totalSeconds + ((segment.silenceMilliseconds ?? 0) / 1000) * questionCount
     }
     if (!segment.audio?.durationSeconds) return totalSeconds
@@ -529,8 +531,26 @@ function questionNumberPlaceholderIndex(index: number): number | null {
   for (let position = index + 1; position < segments.value.length; position += 1) {
     const item = segments.value[position]!
     if (item.type === 'placeholder') return position
-    if (item.type === 'silence' || isQuestionCountSilence(item)) continue
+    if (
+      item.type === 'silence' ||
+      item.type === 'comment' ||
+      isQuestionCountSilence(item)
+    ) continue
     return null
+  }
+  return null
+}
+
+function questionCountPlaceholderIndex(index: number, previous: boolean): number | null {
+  const direction = previous ? -1 : 1
+  for (
+    let position = index + direction;
+    position >= 0 && position < segments.value.length;
+    position += direction
+  ) {
+    const item = segments.value[position]!
+    if (item.type === 'comment') continue
+    return item.type === 'placeholder' ? position : null
   }
   return null
 }
@@ -569,7 +589,7 @@ function validate(): string | null {
     }
     if (item.type === 'smart' && item.smartMode === 'question_number') {
       if (questionNumberPlaceholderIndex(index) === null) {
-        return t('Question-number audio requires a following placeholder with only silence between')
+        return t('Question-number audio requires a following placeholder with only silence or comments between')
       }
     }
     if (isQuestionCountSilence(item)) {
@@ -578,15 +598,15 @@ function validate(): string | null {
       }
       if (
         item.smartSilencePrevious &&
-        segments.value[index - 1]?.type !== 'placeholder'
+        questionCountPlaceholderIndex(index, true) === null
       ) {
-        return t('The previous segment must be a placeholder')
+        return t('The previous non-comment segment must be a placeholder')
       }
       if (
         item.smartSilenceNext &&
-        segments.value[index + 1]?.type !== 'placeholder'
+        questionCountPlaceholderIndex(index, false) === null
       ) {
-        return t('The next segment must be a placeholder')
+        return t('The next non-comment segment must be a placeholder')
       }
     }
   }
