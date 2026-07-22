@@ -193,7 +193,6 @@ const zhCN: Record<string, string> = {
   'Repeat interval seconds': '重复间隔（秒）',
   'Include text': '纳入最终文本',
   'Include topic': '纳入 topic 标签',
-  'Final tags': '最终标签',
   'Template management': '模板管理',
   'Template title': '模板标题',
   'Save current segments as template': '将当前段落保存为模板',

@@ -3,9 +3,27 @@ import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 
-import type { Audio } from '@/api/audios'
+import type { Audio, AudioTag } from '@/api/audios'
 import { useAuthStore } from '@/stores/auth'
 import PaperComposerView from './PaperComposerView.vue'
+
+const topicTag: AudioTag = {
+  id: 8,
+  type: 'topic',
+  englishValue: 'news',
+  displayValue: 'News',
+  fullTag: 'topic:news',
+  translations: [],
+}
+
+const fullPaperTag: AudioTag = {
+  id: 7,
+  type: 'category',
+  englishValue: 'full_paper',
+  displayValue: 'Full paper',
+  fullTag: 'category:full_paper',
+  translations: [],
+}
 
 const audio: Audio = {
   id: 5,
@@ -17,7 +35,7 @@ const audio: Audio = {
   visibility: 'public',
   durationSeconds: 30,
   sampleRate: 8000,
-  tags: [],
+  tags: [topicTag],
   utterances: [],
   questions: [
     {
@@ -78,18 +96,7 @@ describe('paper composer view', () => {
         const path = String(input)
         if (path === '/api/assembly-templates') return Promise.resolve(response([]))
         if (path.startsWith('/api/audio-tags')) {
-          return Promise.resolve(
-            response([
-              {
-                id: 7,
-                type: 'category',
-                englishValue: 'full_paper',
-                displayValue: 'Full paper',
-                fullTag: 'category:full_paper',
-                translations: [],
-              },
-            ]),
-          )
+          return Promise.resolve(response([fullPaperTag, topicTag]))
         }
         if (path.startsWith('/api/audios?')) {
           return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
@@ -124,6 +131,11 @@ describe('paper composer view', () => {
 
     await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
     await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
+    expect(wrapper.text()).toContain('Tags')
+    expect(wrapper.text()).not.toContain('Final tags')
+    expect(wrapper.find('button[aria-label="Remove News"]').exists()).toBe(true)
+    expect(wrapper.find('button[aria-label="Remove Full paper"]').exists()).toBe(false)
+    await wrapper.get('button[aria-label="Remove News"]').trigger('click')
     await wrapper.get('input[maxlength="200"]').setValue('Final exam')
     const numberInputs = wrapper.findAll('input[type="number"]')
     expect((numberInputs[1]?.element as HTMLInputElement).value).toBe('3')

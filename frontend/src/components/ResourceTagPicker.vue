@@ -20,6 +20,7 @@ const props = defineProps<{
   type: EditableTagType
   tags: SelectableTag[]
   selectedIds: number[]
+  lockedIds?: number[]
 }>()
 const emit = defineEmits<{
   select: [tagId: number]
@@ -169,7 +170,7 @@ watch(query, () => {
         <TagChip
           :label="tag.displayValue.replace(/_/g, ' ')"
           selected
-          removable
+          :removable="!lockedIds?.includes(tag.id)"
           @activate="emit('remove', tag.id)"
         />
       </li>

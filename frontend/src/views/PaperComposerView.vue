@@ -13,6 +13,7 @@ import {
 } from '@/api/assemblies'
 import {
   audioMediaPath,
+  createAudioTag,
   getAudio,
   listAudios,
   listAudioTags,
@@ -22,12 +23,20 @@ import {
 } from '@/api/audios'
 import { ApiError } from '@/api/errors'
 import { cancelJob, getJob, type Job } from '@/api/jobs'
+import type { TagTranslation } from '@/api/voices'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
+import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
+import TagCreationDialog from '@/components/TagCreationDialog.vue'
 import { useI18n } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 
 const PAGE_SIZE = 10
 let nextKey = 1
+type CreationTagType = 'topic' | 'category'
+const tagGroups: { label: string; type: CreationTagType }[] = [
+  { label: 'Topics', type: 'topic' },
+  { label: 'Categories', type: 'category' },
+]
 
 interface DraftSegment extends AssemblySegmentInput {
   key: number
@@ -46,6 +55,10 @@ const segments = ref<DraftSegment[]>([])
 const candidates = ref<Audio[]>([])
 const tags = ref<AudioTag[]>([])
 const selectedTagIds = ref<number[]>([])
+const creatingTagType = ref<CreationTagType | null>(null)
+const tagDialogType = ref<CreationTagType | null>(null)
+const tagDialogInitialEnglishValue = ref('')
+const tagDialogError = ref('')
 const query = ref('')
 const page = ref(1)
 const total = ref(0)
@@ -65,8 +78,11 @@ const tagCatalog = computed(() => {
   for (const audio of candidates.value) for (const tag of audio.tags) catalog.set(tag.id, tag)
   return [...catalog.values()]
 })
-const editableTags = computed(() =>
-  tags.value.filter((tag) => tag.type === 'topic' || tag.type === 'category'),
+const fullPaperTagId = computed(
+  () =>
+    tags.value.find(
+      (tag) => tag.type === 'category' && tag.englishValue === 'full_paper',
+    )?.id ?? null,
 )
 const estimatedSeconds = computed(() =>
   segments.value.reduce((totalSeconds, segment) => {
@@ -325,11 +341,50 @@ async function removeTemplate(): Promise<void> {
   templateId.value = ''
 }
 
-function toggleTag(tag: AudioTag): void {
-  if (tag.type === 'category' && tag.englishValue === 'full_paper') return
-  selectedTagIds.value = selectedTagIds.value.includes(tag.id)
-    ? selectedTagIds.value.filter((id) => id !== tag.id)
-    : [...selectedTagIds.value, tag.id]
+function selectTag(tagId: number): void {
+  if (!selectedTagIds.value.includes(tagId)) {
+    selectedTagIds.value = [...selectedTagIds.value, tagId]
+  }
+}
+
+function removeTag(tagId: number): void {
+  if (tagId === fullPaperTagId.value) return
+  selectedTagIds.value = selectedTagIds.value.filter((id) => id !== tagId)
+}
+
+function openTagDialog(type: CreationTagType, query: string): void {
+  tagDialogType.value = type
+  tagDialogInitialEnglishValue.value = query
+  tagDialogError.value = ''
+}
+
+function closeTagDialog(): void {
+  if (creatingTagType.value !== null) return
+  tagDialogType.value = null
+  tagDialogInitialEnglishValue.value = ''
+  tagDialogError.value = ''
+}
+
+async function createAndAddTag(input: {
+  englishValue: string
+  translations: TagTranslation[]
+}): Promise<void> {
+  if (tagDialogType.value === null || creatingTagType.value !== null) return
+  const type = tagDialogType.value
+  creatingTagType.value = type
+  tagDialogError.value = ''
+  try {
+    const tag = await createAudioTag({ type, ...input })
+    tags.value = [...tags.value, tag]
+    selectTag(tag.id)
+    tagDialogType.value = null
+    tagDialogInitialEnglishValue.value = ''
+  } catch (error) {
+    tagDialogError.value =
+      error instanceof ApiError ? error.message : t('Tag could not be created')
+  } finally {
+    creatingTagType.value = null
+  }
 }
 
 async function refreshJob(): Promise<void> {
@@ -504,12 +559,20 @@ onUnmounted(stopPolling)
       </div>
 
       <section aria-labelledby="paper-tags-title" class="border-y border-line py-5">
-        <h2 id="paper-tags-title" class="text-base font-semibold">{{ t('Final tags') }}</h2>
-        <div class="mt-4 flex flex-wrap gap-2">
-          <label v-for="tag in editableTags" :key="tag.id" class="inline-flex items-center gap-2 border border-line px-3 py-2 text-sm" :class="selectedTagIds.includes(tag.id) ? 'border-accent bg-accent-soft' : ''">
-            <input type="checkbox" :checked="selectedTagIds.includes(tag.id)" :disabled="tag.type === 'category' && tag.englishValue === 'full_paper'" @change="toggleTag(tag)" />
-            {{ tag.displayValue.replace(/_/g, ' ') }}
-          </label>
+        <h2 id="paper-tags-title" class="text-base font-semibold">{{ t('Tags') }}</h2>
+        <div class="mt-5 grid min-w-0 gap-5 sm:grid-cols-2">
+          <ResourceTagPicker
+            v-for="group in tagGroups"
+            :key="group.type"
+            :label="group.label"
+            :type="group.type"
+            :tags="tags"
+            :selected-ids="selectedTagIds"
+            :locked-ids="group.type === 'category' && fullPaperTagId ? [fullPaperTagId] : []"
+            @select="selectTag"
+            @remove="removeTag"
+            @create="openTagDialog(group.type, $event)"
+          />
         </div>
       </section>
 
@@ -527,5 +590,15 @@ onUnmounted(stopPolling)
         <button type="button" :disabled="submitting || loading" class="h-10 bg-ink px-5 text-sm font-medium text-white disabled:opacity-40" @click="submit">{{ submitting ? t('Submitting') : t('Assemble and publish') }}</button>
       </div>
     </template>
+
+    <TagCreationDialog
+      :open="tagDialogType !== null"
+      :type="tagDialogType"
+      :initial-english-value="tagDialogInitialEnglishValue"
+      :busy="creatingTagType !== null"
+      :error-message="tagDialogError"
+      @close="closeTagDialog"
+      @submit="createAndAddTag"
+    />
   </section>
 </template>
