@@ -678,7 +678,7 @@ onUnmounted(() => {
             <span v-if="activePlaceholder !== null" class="text-xs font-medium text-accent">{{ t('Filling placeholder') }}</span>
           </div>
           <AudioSearchBox v-model="query" :tags="tagCatalog" :busy="loading" @submit="loadPage(true)" />
-          <ul class="mt-4 divide-y divide-line border-y border-line">
+          <ul class="mt-4 max-h-[60vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
             <li v-for="audio in candidates" :key="audio.id" class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div class="min-w-0">
                 <p class="break-words text-sm font-semibold">{{ audio.title }}</p>
