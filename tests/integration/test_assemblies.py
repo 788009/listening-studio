@@ -291,6 +291,23 @@ class AssemblyIntegrationTest(unittest.TestCase):
         self.assertTrue(created.json()["segments"][3]["smartSilencePrevious"])
         self.assertEqual(created.json()["segments"][3]["silenceMilliseconds"], 5000)
 
+    def test_template_can_contain_more_than_forty_segments(self) -> None:
+        response = self.send(
+            "POST",
+            "/api/assembly-templates",
+            headers=self.headers("admin"),
+            json={
+                "title": "Complete exam template",
+                "segments": [
+                    {"type": "silence", "silenceMilliseconds": 1000}
+                    for _ in range(41)
+                ],
+            },
+        )
+
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(len(response.json()["segments"]), 41)
+
     def test_question_count_silence_requires_exactly_one_placeholder(self) -> None:
         previous = self.ready_audio("Previous questions", 2, "Previous")
         following = self.ready_audio("Following question", 1, "Following")

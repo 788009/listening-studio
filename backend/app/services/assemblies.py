@@ -15,6 +15,7 @@ from backend.app.core.exceptions import (
     NotFoundError,
 )
 from backend.app.db.models.assembly import (
+    MAX_ASSEMBLY_SEGMENTS,
     AssemblySegmentType,
     AssemblySmartMode,
     AssemblyTemplate,
@@ -52,7 +53,6 @@ from backend.app.services.tag_values import (
 
 
 ASSEMBLY_JOB_TYPE = "audio_assembly"
-MAX_SEGMENTS = 40
 FULL_PAPER_VALUE = "full_paper"
 
 
@@ -101,10 +101,13 @@ class AssemblyService:
         start_index: int,
         end_index: int | None,
     ) -> AssemblyPreviewSubmission:
-        if not segments or len(segments) > MAX_SEGMENTS:
+        if not segments or len(segments) > MAX_ASSEMBLY_SEGMENTS:
             raise DomainValidationError(
                 "Assembly segment count is outside the allowed range",
-                details={"field": "segments", "maxItems": MAX_SEGMENTS},
+                details={
+                    "field": "segments",
+                    "maxItems": MAX_ASSEMBLY_SEGMENTS,
+                },
             )
         if (
             isinstance(start_index, bool)
@@ -730,10 +733,13 @@ class AssemblyService:
     def _validate_segments(
         segments: list[AssemblySegmentInput], *, allow_placeholders: bool
     ) -> None:
-        if not segments or len(segments) > MAX_SEGMENTS:
+        if not segments or len(segments) > MAX_ASSEMBLY_SEGMENTS:
             raise DomainValidationError(
                 "Assembly segment count is outside the allowed range",
-                details={"field": "segments", "maxItems": MAX_SEGMENTS},
+                details={
+                    "field": "segments",
+                    "maxItems": MAX_ASSEMBLY_SEGMENTS,
+                },
             )
         for position, item in enumerate(segments):
             if not isinstance(item, AssemblySegmentInput) or not isinstance(
