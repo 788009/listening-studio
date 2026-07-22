@@ -15,9 +15,6 @@ if TYPE_CHECKING:
     from backend.app.db.models.user import User
 
 
-MAX_ASSEMBLY_SEGMENTS = 200
-
-
 class AssemblySegmentType(str, Enum):
     AUDIO = "audio"
     SILENCE = "silence"

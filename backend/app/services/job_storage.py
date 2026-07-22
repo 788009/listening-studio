@@ -15,6 +15,7 @@ class JobStorage:
     REFERENCE_FILENAME = "reference.wav"
     AUDIO_PREVIEW_INPUT_FILENAME = "audio-preview-input.json"
     AUDIO_PREVIEW_FILENAME = "preview.wav"
+    ASSEMBLY_INPUT_FILENAME = "assembly-input.json"
     ASSEMBLY_PREVIEW_INPUT_FILENAME = "assembly-preview-input.json"
     ASSEMBLY_PREVIEW_FILENAME = "assembly-preview.wav"
 
@@ -41,6 +42,9 @@ class JobStorage:
 
     def assembly_preview_input_path(self, job_id: int) -> Path:
         return self.directory(job_id) / self.ASSEMBLY_PREVIEW_INPUT_FILENAME
+
+    def assembly_input_path(self, job_id: int) -> Path:
+        return self.directory(job_id) / self.ASSEMBLY_INPUT_FILENAME
 
     def assembly_preview_path(self, job_id: int) -> Path:
         return self.directory(job_id) / self.ASSEMBLY_PREVIEW_FILENAME
@@ -70,10 +74,23 @@ class JobStorage:
     ) -> Path:
         return self._write_json(self.assembly_preview_input_path(job_id), payload)
 
+    def write_assembly_input(
+        self,
+        job_id: int,
+        payload: dict[str, object],
+    ) -> Path:
+        return self._write_json(self.assembly_input_path(job_id), payload)
+
     def read_assembly_preview_input(self, job_id: int) -> dict[str, object]:
         return self._read_json(
             self.assembly_preview_input_path(job_id),
             "Assembly preview input must be an object",
+        )
+
+    def read_assembly_input(self, job_id: int) -> dict[str, object]:
+        return self._read_json(
+            self.assembly_input_path(job_id),
+            "Assembly input must be an object",
         )
 
     def finalize_audio_preview(self, job_id: int) -> Path:

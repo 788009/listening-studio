@@ -15,7 +15,6 @@ from backend.app.core.exceptions import (
     NotFoundError,
 )
 from backend.app.db.models.assembly import (
-    MAX_ASSEMBLY_SEGMENTS,
     AssemblySegmentType,
     AssemblySmartMode,
     AssemblyTemplate,
@@ -101,13 +100,10 @@ class AssemblyService:
         start_index: int,
         end_index: int | None,
     ) -> AssemblyPreviewSubmission:
-        if not segments or len(segments) > MAX_ASSEMBLY_SEGMENTS:
+        if not segments:
             raise DomainValidationError(
-                "Assembly segment count is outside the allowed range",
-                details={
-                    "field": "segments",
-                    "maxItems": MAX_ASSEMBLY_SEGMENTS,
-                },
+                "Assembly requires at least one segment",
+                details={"field": "segments"},
             )
         if (
             isinstance(start_index, bool)
@@ -297,6 +293,7 @@ class AssemblyService:
             item.audio.text for item in audio_segments if item.include_text
         )
         audio: Audio | None = None
+        job: Job | None = None
         try:
             audio = self.audio_service.create_audio(
                 session,
@@ -318,9 +315,13 @@ class AssemblyService:
                 input_summary={
                     "audioId": audio.id,
                     "targetVisibility": visibility.value,
-                    "segments": summary_segments,
                 },
                 retryable=True,
+            )
+            session.flush()
+            self.job_storage.write_assembly_input(
+                job.id,
+                {"segments": summary_segments},
             )
             session.commit()
             return AssemblySubmission(audio, job.id)
@@ -328,6 +329,8 @@ class AssemblyService:
             session.rollback()
             if audio is not None:
                 self.storage.delete_audio(audio.id)
+            if job is not None and job.id is not None:
+                self.job_storage.cleanup(job.id)
             raise
 
     def process(
@@ -338,7 +341,6 @@ class AssemblyService:
         job_id: int,
         owner_id: int,
         visibility: AudioVisibility,
-        segments: list[dict[str, object]],
         checkpoint: Callable[[int], None],
     ) -> Audio:
         audio = self.audio_repository.get_by_id(session, audio_id)
@@ -354,6 +356,12 @@ class AssemblyService:
             elif audio.status is not AudioStatus.PROCESSING:
                 raise JobFailedError("Assembly output audio is not renderable")
             session.commit()
+            payload = self.job_storage.read_assembly_input(job_id)
+            segments = payload.get("segments")
+            if not isinstance(segments, list) or not all(
+                isinstance(item, dict) for item in segments
+            ):
+                raise JobFailedError("Assembly task segments are invalid")
             plans = self._render_segments(session, owner_id, segments)
             checkpoint(25)
             AssemblyAudioRenderer().render(
@@ -733,13 +741,10 @@ class AssemblyService:
     def _validate_segments(
         segments: list[AssemblySegmentInput], *, allow_placeholders: bool
     ) -> None:
-        if not segments or len(segments) > MAX_ASSEMBLY_SEGMENTS:
+        if not segments:
             raise DomainValidationError(
-                "Assembly segment count is outside the allowed range",
-                details={
-                    "field": "segments",
-                    "maxItems": MAX_ASSEMBLY_SEGMENTS,
-                },
+                "Assembly requires at least one segment",
+                details={"field": "segments"},
             )
         for position, item in enumerate(segments):
             if not isinstance(item, AssemblySegmentInput) or not isinstance(

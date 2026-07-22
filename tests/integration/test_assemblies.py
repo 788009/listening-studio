@@ -193,6 +193,9 @@ class AssemblyIntegrationTest(unittest.TestCase):
         self.assertEqual(response.status_code, 202, response.text)
         audio_id = response.json()["audioId"]
         job_id = response.json()["jobId"]
+        self.assertTrue(
+            JobStorage(self.settings.data_dir).assembly_input_path(job_id).is_file()
+        )
         worker = JobWorker(
             self.app.state.session_factory,
             {ASSEMBLY_JOB_TYPE: AssemblyJobHandler(AssemblyService(self.storage))},
@@ -235,7 +238,6 @@ class AssemblyIntegrationTest(unittest.TestCase):
                 job_id=job_id,
                 owner_id=1,
                 visibility=AudioVisibility.PRIVATE,
-                segments=[],
                 checkpoint=lambda progress: None,
             )
             self.assertEqual(retried.id, audio_id)
@@ -291,22 +293,55 @@ class AssemblyIntegrationTest(unittest.TestCase):
         self.assertTrue(created.json()["segments"][3]["smartSilencePrevious"])
         self.assertEqual(created.json()["segments"][3]["silenceMilliseconds"], 5000)
 
-    def test_template_can_contain_more_than_forty_segments(self) -> None:
-        response = self.send(
+    def test_assembly_endpoints_have_no_fixed_segment_limit(self) -> None:
+        silence_segments = [
+            {"type": "silence", "silenceMilliseconds": 1000}
+            for _ in range(200)
+        ]
+        template = self.send(
             "POST",
             "/api/assembly-templates",
             headers=self.headers("admin"),
             json={
                 "title": "Complete exam template",
-                "segments": [
-                    {"type": "silence", "silenceMilliseconds": 1000}
-                    for _ in range(41)
-                ],
+                "segments": [*silence_segments, {"type": "placeholder"}],
             },
         )
 
-        self.assertEqual(response.status_code, 201, response.text)
-        self.assertEqual(len(response.json()["segments"]), 41)
+        self.assertEqual(template.status_code, 201, template.text)
+        self.assertEqual(len(template.json()["segments"]), 201)
+
+        audio_id = self.ready_audio("Unlimited assembly", 0, "Audio")
+        assembly = self.send(
+            "POST",
+            "/api/assemblies",
+            headers=self.headers("user"),
+            json={
+                "title": "Long complete exam",
+                "segments": [
+                    *silence_segments,
+                    {"type": "audio", "audioId": audio_id},
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+        self.assertEqual(assembly.status_code, 202, assembly.text)
+
+        preview = self.send(
+            "POST",
+            "/api/assembly-previews",
+            headers=self.headers("user"),
+            json={
+                "segments": [
+                    *silence_segments,
+                    {"type": "audio", "audioId": audio_id},
+                ],
+                "startIndex": 200,
+                "endIndex": 200,
+            },
+        )
+        self.assertEqual(preview.status_code, 202, preview.text)
 
     def test_question_count_silence_requires_exactly_one_placeholder(self) -> None:
         previous = self.ready_audio("Previous questions", 2, "Previous")

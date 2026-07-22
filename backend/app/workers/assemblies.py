@@ -17,17 +17,12 @@ class AssemblyJobHandler:
 
     def __call__(self, context: JobContext, job: JobPayload) -> JobResult:
         audio_id = job.input_summary.get("audioId")
-        raw_segments = job.input_summary.get("segments")
         try:
             visibility = AudioVisibility(job.input_summary.get("targetVisibility"))
         except (TypeError, ValueError):
             raise JobExecutionError("Assembly task visibility is invalid") from None
         if isinstance(audio_id, bool) or not isinstance(audio_id, int) or audio_id < 1:
             raise JobExecutionError("Assembly task data is invalid")
-        if not isinstance(raw_segments, list) or not all(
-            isinstance(item, dict) for item in raw_segments
-        ):
-            raise JobExecutionError("Assembly task segments are invalid")
         context.update_progress(5)
         try:
             with context.session_factory() as session:
@@ -37,7 +32,6 @@ class AssemblyJobHandler:
                     job_id=job.id,
                     owner_id=job.owner_id,
                     visibility=visibility,
-                    segments=raw_segments,
                     checkpoint=context.update_progress,
                 )
         except JobFailedError as exc:

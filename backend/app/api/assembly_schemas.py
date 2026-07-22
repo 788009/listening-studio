@@ -6,11 +6,7 @@ from pydantic import Field, model_validator
 
 from backend.app.api.schemas import ResourceId, Title
 from backend.app.api.tag_schemas import TagApiModel
-from backend.app.db.models.assembly import (
-    MAX_ASSEMBLY_SEGMENTS,
-    AssemblySegmentType,
-    AssemblySmartMode,
-)
+from backend.app.db.models.assembly import AssemblySegmentType, AssemblySmartMode
 from backend.app.db.models.audio import AudioVisibility
 
 
@@ -57,10 +53,7 @@ class AssemblySegmentRequest(TagApiModel):
 
 class AssemblyTemplateWriteRequest(TagApiModel):
     title: Title
-    segments: list[AssemblySegmentRequest] = Field(
-        min_length=1,
-        max_length=MAX_ASSEMBLY_SEGMENTS,
-    )
+    segments: list[AssemblySegmentRequest] = Field(min_length=1)
 
 
 class AssemblyTemplateSegmentResponse(AssemblySegmentRequest):
@@ -80,10 +73,7 @@ class AssemblyTemplateResponse(TagApiModel):
 class AssemblyCreateRequest(TagApiModel):
     title: Title
     template_id: ResourceId | None = None
-    segments: list[AssemblySegmentRequest] = Field(
-        min_length=1,
-        max_length=MAX_ASSEMBLY_SEGMENTS,
-    )
+    segments: list[AssemblySegmentRequest] = Field(min_length=1)
     tag_ids: list[ResourceId] = Field(default_factory=list)
     visibility: AudioVisibility = AudioVisibility.PRIVATE
 
@@ -94,12 +84,9 @@ class AssemblyAccepted(TagApiModel):
 
 
 class AssemblyPreviewRequest(TagApiModel):
-    segments: list[AssemblySegmentRequest] = Field(
-        min_length=1,
-        max_length=MAX_ASSEMBLY_SEGMENTS,
-    )
-    start_index: int = Field(ge=0, lt=MAX_ASSEMBLY_SEGMENTS)
-    end_index: int | None = Field(default=None, ge=0, lt=MAX_ASSEMBLY_SEGMENTS)
+    segments: list[AssemblySegmentRequest] = Field(min_length=1)
+    start_index: int = Field(ge=0)
+    end_index: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_range(self) -> AssemblyPreviewRequest:
