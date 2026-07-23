@@ -289,6 +289,7 @@ function addAudio(audio: Audio): void {
   if (activePlaceholder.value !== null) {
     const segment = segments.value[activePlaceholder.value]
     if (segment?.type === 'placeholder') {
+      if (segment.includeTopic && segment.audio) removeSegmentAudioTopics(segment)
       segment.audio = audio
       segment.audioId = audio.id
       if (segment.includeTopic) addAudioTopics(audio)
@@ -321,12 +322,7 @@ function resetPrefilledTags(): void {
   })
 }
 
-function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
-  segment.includeTopic = selected
-  if (selected && segment.audio) {
-    addAudioTopics(segment.audio)
-    return
-  }
+function removeSegmentAudioTopics(segment: DraftSegment): void {
   if (!segment.audio) return
   const removableIds = new Set(
     segment.audio.tags.filter((tag) => tag.type === 'topic').map((tag) => tag.id),
@@ -336,6 +332,23 @@ function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
     for (const tag of other.audio.tags) removableIds.delete(tag.id)
   }
   selectedTagIds.value = selectedTagIds.value.filter((id) => !removableIds.has(id))
+}
+
+function setSegmentTopic(segment: DraftSegment, selected: boolean): void {
+  segment.includeTopic = selected
+  if (selected && segment.audio) {
+    addAudioTopics(segment.audio)
+    return
+  }
+  removeSegmentAudioTopics(segment)
+}
+
+function clearPlaceholderAudio(segment: DraftSegment, index: number): void {
+  if (segment.type !== 'placeholder') return
+  if (segment.includeTopic) removeSegmentAudioTopics(segment)
+  segment.audio = undefined
+  segment.audioId = undefined
+  if (activePlaceholder.value === index) activePlaceholder.value = null
 }
 
 function addSilence(): void {
@@ -1164,7 +1177,10 @@ onUnmounted(() => {
                   <label v-if="segment.type === 'placeholder' && !segment.audio" class="mt-3 block text-xs text-muted">{{ t('Suggested search') }}
                     <input v-model="segment.suggestedQuery" maxlength="1024" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />
                   </label>
-                  <button v-if="segment.type === 'placeholder'" type="button" class="mt-3 text-sm font-medium text-accent" @click="selectPlaceholder(index)">{{ t('Choose audio') }}</button>
+                  <div v-if="segment.type === 'placeholder'" class="mt-3 flex flex-wrap items-center gap-4">
+                    <button type="button" class="text-sm font-medium text-accent" @click="selectPlaceholder(index)">{{ t('Choose audio') }}</button>
+                    <button v-if="segment.audioId" type="button" class="text-sm text-danger" @click="clearPlaceholderAudio(segment, index)">{{ t('Clear selected audio') }}</button>
+                  </div>
                   <div class="mt-3 grid gap-3 sm:grid-cols-2">
                     <label class="text-xs text-muted">{{ t('Repeat count') }}
                       <input v-model.number="segment.repeatCount" type="number" min="1" max="10" class="mt-1 h-9 w-full border border-line px-2 text-sm text-ink" />

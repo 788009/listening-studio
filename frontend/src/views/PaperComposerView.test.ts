@@ -522,7 +522,7 @@ describe('paper composer view', () => {
             ]),
           )
         }
-        if (path.startsWith('/api/audio-tags')) return Promise.resolve(response([]))
+        if (path.startsWith('/api/audio-tags')) return Promise.resolve(response([topicTag]))
         if (path.startsWith('/api/audios?')) {
           return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
         }
@@ -590,6 +590,24 @@ describe('paper composer view', () => {
 
     expect(requests.some((path) => path.includes('q=topic%3Anews'))).toBe(true)
     expect(wrapper.text()).toContain('Question-count smart silence')
+    await wrapper.findAll('button').find((button) => button.text() === 'Select')?.trigger('click')
+    const placeholder = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')[2]
+    expect(placeholder?.text()).toContain(audio.title)
+    expect(
+      placeholder?.findAll('button').some((button) => button.text() === 'Clear selected audio'),
+    ).toBe(true)
+    expect(wrapper.get('[aria-labelledby="paper-tags-title"]').text()).toContain('News')
+
+    await placeholder
+      ?.findAll('button')
+      .find((button) => button.text() === 'Clear selected audio')
+      ?.trigger('click')
+    expect(placeholder?.text()).toContain('Unfilled placeholder')
+    expect(placeholder?.find('input[maxlength="1024"]').exists()).toBe(true)
+    expect(
+      placeholder?.findAll('button').some((button) => button.text() === 'Clear selected audio'),
+    ).toBe(false)
+    expect(wrapper.get('[aria-labelledby="paper-tags-title"]').text()).not.toContain('News')
     wrapper.unmount()
   })
 })

@@ -226,6 +226,7 @@ const zhCN: Record<string, string> = {
   Placeholder: '占位段落',
   'Suggested search': '建议搜索词',
   'Choose audio': '选择音频',
+  'Clear selected audio': '取消选择音频',
   'Repeat count': '重复次数',
   'Repeat interval seconds': '重复间隔（秒）',
   'Include text': '纳入最终文本',
