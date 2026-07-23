@@ -385,6 +385,8 @@ describe('audio views', () => {
     expect(wrapper.findAll('h2').map((item) => item.text())).toContain('Text')
     expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
     expect(wrapper.get('audio').attributes('src')).toBe('/media/audio/5')
+    expect(wrapper.get('a[download]').attributes('href')).toBe('/media/audio/5')
+    expect(wrapper.get('a[download]').attributes('download')).toBe('Climate briefing.wav')
     expect(wrapper.text()).not.toContain('Edit')
     expect(wrapper.text()).not.toContain('Create from this audio')
   })

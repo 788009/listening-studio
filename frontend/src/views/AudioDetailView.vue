@@ -79,6 +79,11 @@ const tagGroups = computed(() => [
   { label: 'Categories', type: 'category' as const },
 ])
 
+function audioDownloadName(current: Audio): string {
+  const title = current.title.replace(/[\\/:*?"<>|]/g, '_') || 'audio'
+  return `${title}.wav`
+}
+
 function resetForm(current: Audio): void {
   title.value = current.title
   visibility.value = current.visibility
@@ -373,7 +378,20 @@ watch(() => route.params.id, loadAudio, { immediate: true })
 
       <div class="mt-6 grid overflow-hidden rounded-lg border border-line bg-surface shadow-panel md:grid-cols-[minmax(0,1fr)_18rem]">
         <div class="min-w-0 border-b border-line px-4 py-6 md:border-b-0 md:border-r md:px-5">
-          <h2 class="text-sm font-semibold">{{ t('Playback') }}</h2>
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold">{{ t('Playback') }}</h2>
+            <a
+              v-if="audio.status === 'ready'"
+              :href="audioMediaPath(audio.id)"
+              :download="audioDownloadName(audio)"
+              class="inline-flex h-8 shrink-0 items-center gap-1.5 border border-line px-2.5 text-sm font-medium hover:border-ink"
+            >
+              <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+                <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14" stroke="currentColor" stroke-width="2" />
+              </svg>
+              {{ t('Download') }}
+            </a>
+          </div>
           <audio
             v-if="audio.status === 'ready'"
             class="mt-4 h-10 w-full max-w-xl"
