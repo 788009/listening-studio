@@ -180,7 +180,7 @@ class AudioUtterance(Base):
         ),
         nullable=True,
     )
-    speaker_display_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    speaker_display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     audio: Mapped["Audio"] = relationship(back_populates="utterances")

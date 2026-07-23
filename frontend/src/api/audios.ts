@@ -34,7 +34,7 @@ export interface AudioUtterance {
   voiceId?: number | null
   voiceTitle?: string | null
   voiceTag?: string | null
-  speakerDisplayName: string
+  speakerDisplayName?: string | null
   text: string
   position: number
 }

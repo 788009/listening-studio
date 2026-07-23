@@ -236,6 +236,17 @@ class AssemblyIntegrationTest(unittest.TestCase):
             body["text"],
             "Section directions\n\nQuestion numbers\n\nIncluded text",
         )
+        self.assertEqual(
+            [
+                (item.get("speakerDisplayName"), item["text"])
+                for item in body["utterances"]
+            ],
+            [
+                (None, "Section directions"),
+                (None, "Question numbers"),
+                (None, "Included text"),
+            ],
+        )
         self.assertEqual(len(body["questions"]), 11)
         self.assertIn(
             ("category", "full_paper"),

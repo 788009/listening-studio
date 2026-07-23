@@ -325,7 +325,7 @@ class AssemblyService:
             )
             if not text:
                 audio.text = ""
-            self._copy_utterances(session, audio, audio_segments)
+            self._copy_transcript_lines(session, audio, resolved)
             summary_segments = [
                 item.summary()
                 for item in resolved
@@ -736,13 +736,40 @@ class AssemblyService:
         return result
 
     @staticmethod
-    def _copy_utterances(
+    def _copy_transcript_lines(
         session: Session, target: Audio, segments: list[_ResolvedSegment]
     ) -> None:
         position = 0
         for item in segments:
-            assert item.audio is not None
             if not item.include_text:
+                continue
+            if item.input.type is AssemblySegmentType.COMMENT:
+                comment_text = item.text
+                assert comment_text is not None
+                session.add(
+                    AudioUtterance(
+                        audio=target,
+                        voice_id=None,
+                        speaker_display_name=None,
+                        text=comment_text,
+                        position=position,
+                    )
+                )
+                position += 1
+                continue
+            if item.audio is None:
+                continue
+            if not item.audio.utterances:
+                session.add(
+                    AudioUtterance(
+                        audio=target,
+                        voice_id=None,
+                        speaker_display_name=None,
+                        text=item.audio.text,
+                        position=position,
+                    )
+                )
+                position += 1
                 continue
             for utterance in item.audio.utterances:
                 session.add(

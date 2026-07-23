@@ -446,6 +446,43 @@ describe('audio views', () => {
     expect(wrapper.findAll('h2').map((item) => item.text())).not.toContain('Speakers')
   })
 
+  it('renders speakerless transcript lines at full width', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          ...audio,
+          utterances: [
+            audio.utterances[0],
+            {
+              voiceId: null,
+              voiceTitle: null,
+              voiceTag: null,
+              speakerDisplayName: null,
+              text: 'Section directions',
+              position: 1,
+            },
+            { ...audio.utterances[1], position: 2 },
+          ],
+        }),
+      ),
+    )
+    const pinia = setupAuth()
+    const router = testRouter()
+    await router.push('/audio/5')
+    const wrapper = mount(AudioDetailView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    const textHeading = wrapper.findAll('h2').find((item) => item.text() === 'Text')
+    const transcript = textHeading?.element.parentElement?.querySelector('ol')
+    const lines = transcript?.querySelectorAll('li')
+    expect(lines).toHaveLength(3)
+    expect(lines?.[1]?.textContent).toBe('Section directions')
+    expect(lines?.[1]?.querySelector('span')).toBeNull()
+  })
+
   it('edits topic and category tags without exposing voice tags', async () => {
     const voiceTag = {
       id: 30,

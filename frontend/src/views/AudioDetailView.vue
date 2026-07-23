@@ -411,9 +411,9 @@ watch(() => route.params.id, loadAudio, { immediate: true })
           <li
             v-for="utterance in orderedUtterances"
             :key="utterance.position"
-            class="grid min-w-0 gap-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"
+            :class="!utterance.speakerDisplayName ? 'min-w-0' : 'grid min-w-0 gap-1 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4'"
           >
-            <span class="break-words text-sm font-medium">{{ utterance.speakerDisplayName }}</span>
+            <span v-if="utterance.speakerDisplayName" class="break-words text-sm font-medium">{{ utterance.speakerDisplayName }}</span>
             <p class="min-w-0 break-words text-sm leading-6">{{ utterance.text }}</p>
           </li>
         </ol>

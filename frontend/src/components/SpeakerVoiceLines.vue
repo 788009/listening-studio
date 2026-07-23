@@ -11,6 +11,7 @@ const { t } = useI18n()
 const pairs = computed(() => {
   const seen = new Set<string>()
   return props.utterances.filter((utterance) => {
+    if (!utterance.speakerDisplayName) return false
     const key = `${utterance.speakerDisplayName}\u0000${utterance.voiceId ?? 'none'}`
     if (seen.has(key)) return false
     seen.add(key)

@@ -30,7 +30,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260723_0021")
+            self.assertEqual(revision, "20260723_0022")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -202,6 +202,65 @@ class DatabaseIntegrationTest(unittest.TestCase):
 
         self.assertEqual(stored, ("comment", "Directions"))
         self.assertNotIn("comment_text", columns)
+        self.assertEqual(remaining, 0)
+
+    def test_audio_utterance_migration_allows_speakerless_transcript_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "audio-utterance-comments.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260723_0021")
+            engine = create_db_engine(database_url)
+            with engine.connect() as connection:
+                before = next(
+                    column
+                    for column in inspect(connection).get_columns("audio_utterances")
+                    if column["name"] == "speaker_display_name"
+                )
+
+            command.upgrade(config, "head")
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'owner', 'active', 'Owner', 'owner')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audios "
+                        "(author_id, title, normalized_title, text, source_type) "
+                        "VALUES (1, 'Assembly', 'assembly', 'Directions', 'assembly')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO audio_utterances "
+                        "(audio_id, speaker_display_name, text, position) "
+                        "VALUES (1, NULL, 'Directions', 0)"
+                    )
+                )
+                stored = connection.scalar(
+                    text("SELECT speaker_display_name FROM audio_utterances")
+                )
+
+            command.downgrade(config, "20260723_0021")
+            with engine.connect() as connection:
+                after = next(
+                    column
+                    for column in inspect(connection).get_columns("audio_utterances")
+                    if column["name"] == "speaker_display_name"
+                )
+                remaining = connection.scalar(
+                    text("SELECT COUNT(*) FROM audio_utterances")
+                )
+            engine.dispose()
+
+        self.assertFalse(before["nullable"])
+        self.assertIsNone(stored)
+        self.assertFalse(after["nullable"])
         self.assertEqual(remaining, 0)
 
     def test_sqlite_connections_enable_foreign_keys(self) -> None:
