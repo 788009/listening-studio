@@ -1126,7 +1126,7 @@ onUnmounted(() => {
             </p>
             <button v-if="activePlaceholder !== null" type="button" class="font-medium text-accent" @click="cancelPlaceholderSelection">{{ t('Cancel placeholder selection') }}</button>
           </div>
-          <ul class="max-h-[68vh] divide-y divide-line overflow-y-auto overscroll-contain border-b border-line">
+          <ul class="max-h-[62vh] divide-y divide-line overflow-y-auto overscroll-contain border-b border-line">
             <li v-for="audio in candidates" :key="audio.id" class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div class="min-w-0">
                 <p class="break-words text-sm font-semibold">{{ audio.title }}</p>

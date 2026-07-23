@@ -146,7 +146,7 @@ describe('paper composer view', () => {
     expect(searchSection.classes()).toEqual(expect.arrayContaining(['order-2', 'xl:order-1']))
     expect(segmentsSection.classes()).toEqual(expect.arrayContaining(['order-1', 'xl:order-2']))
     const searchResults = wrapper.get('[aria-labelledby="audio-source-title"] ul')
-    expect(searchResults.classes()).toContain('max-h-[68vh]')
+    expect(searchResults.classes()).toContain('max-h-[62vh]')
     expect(searchResults.classes()).toContain('overflow-y-auto')
     await wrapper.findAll('button').find((button) => button.text() === 'Add to end')?.trigger('click')
     const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
