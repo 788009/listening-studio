@@ -18,6 +18,7 @@ import {
 import type { TagTranslation } from '@/api/voices'
 import { ApiError } from '@/api/errors'
 import AudioTagLines from '@/components/AudioTagLines.vue'
+import ExamQuestionsDisplay from '@/components/ExamQuestionsDisplay.vue'
 import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
 import AudioQuestionsEditor from '@/components/AudioQuestionsEditor.vue'
 import SpeakerVoiceLines from '@/components/SpeakerVoiceLines.vue'
@@ -50,6 +51,7 @@ const creatingTagType = ref<EditableAudioTagType | null>(null)
 const tagDialogType = ref<EditableAudioTagType | null>(null)
 const tagDialogInitialEnglishValue = ref('')
 const tagDialogError = ref('')
+const questionPresentation = ref<'preview' | 'paper'>('preview')
 
 type EditableAudioTagType = Extract<AudioTagType, 'topic' | 'category'>
 
@@ -401,8 +403,38 @@ watch(() => route.params.id, loadAudio, { immediate: true })
         v-if="(audio.questions?.length ?? 0) > 0"
         class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]"
       >
-        <h2 class="text-sm font-semibold">{{ t('Questions') }}</h2>
-        <AudioQuestionsDisplay :questions="audio.questions ?? []" />
+        <div class="flex min-w-0 items-center justify-between gap-3 md:block">
+          <h2 class="text-sm font-semibold">{{ t('Questions') }}</h2>
+          <div class="inline-flex shrink-0 border border-line md:mt-3" role="group" :aria-label="t('Questions')">
+            <button
+              type="button"
+              class="h-8 px-3 text-sm font-medium"
+              :class="questionPresentation === 'preview' ? 'bg-ink text-white' : 'hover:bg-surface-alt'"
+              :aria-pressed="questionPresentation === 'preview'"
+              @click="questionPresentation = 'preview'"
+            >
+              {{ t('Preview') }}
+            </button>
+            <button
+              type="button"
+              class="h-8 border-l border-line px-3 text-sm font-medium"
+              :class="questionPresentation === 'paper' ? 'bg-ink text-white' : 'hover:bg-surface-alt'"
+              :aria-pressed="questionPresentation === 'paper'"
+              @click="questionPresentation = 'paper'"
+            >
+              {{ t('Paper') }}
+            </button>
+          </div>
+        </div>
+        <AudioQuestionsDisplay
+          v-if="questionPresentation === 'preview'"
+          :questions="audio.questions ?? []"
+        />
+        <ExamQuestionsDisplay
+          v-else
+          :title="audio.title"
+          :questions="audio.questions ?? []"
+        />
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">

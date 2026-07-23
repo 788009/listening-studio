@@ -354,6 +354,12 @@ describe('audio views', () => {
     expect(wrapper.text()).toContain('有题目')
     expect(wrapper.text()).toContain('Who spoke first?')
     expect(wrapper.text()).toContain('Correct answers')
+    const paperButton = wrapper.findAll('button').find((button) => button.text() === 'Paper')
+    expect(paperButton).toBeDefined()
+    await paperButton?.trigger('click')
+    expect(wrapper.findAll('pre')).toHaveLength(2)
+    expect(wrapper.findAll('pre')[0]?.text()).toContain('1. Who spoke first?')
+    expect(wrapper.findAll('pre')[1]?.text()).toMatch(/^[AB]$/)
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
       expect.arrayContaining(['Author', 'Speakers', 'Topic']),
     )
