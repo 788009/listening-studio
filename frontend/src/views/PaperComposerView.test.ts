@@ -113,10 +113,10 @@ describe('paper composer view', () => {
           nextPreviewId += 1
           return Promise.resolve(response({ jobId: nextPreviewId }, 202))
         }
-        if (path.match(/^\/api\/jobs\/3[12]$/)) {
+        if (path.match(/^\/api\/jobs\/3[123]$/)) {
           const id = Number(path.slice(path.lastIndexOf('/') + 1))
           if (id === 32) secondJobReads += 1
-          const succeeded = id === 31 || secondJobReads > 1
+          const succeeded = id === 31 || id === 33 || secondJobReads > 1
           return Promise.resolve(
             response({
               id,
@@ -133,7 +133,7 @@ describe('paper composer view', () => {
             }),
           )
         }
-        if (path.match(/^\/api\/assembly-previews\/3[12]$/) && init?.method === 'DELETE') {
+        if (path.match(/^\/api\/assembly-previews\/3[123]$/) && init?.method === 'DELETE') {
           return Promise.resolve(new Response(null, { status: 204 }))
         }
         throw new Error(`Unexpected request: ${path}`)
@@ -152,6 +152,8 @@ describe('paper composer view', () => {
     const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
     expect(segmentList.classes()).toContain('max-h-[85vh]')
     expect(segmentList.classes()).toContain('overflow-y-auto')
+    const previewEndInput = wrapper.get('input[aria-label="Preview end segment"]')
+    expect((previewEndInput.element as HTMLInputElement).value).toBe('')
 
     await wrapper.findAll('button').find((button) => button.text() === 'Play')?.trigger('click')
     await flushPromises()
@@ -180,6 +182,14 @@ describe('paper composer view', () => {
     await flushPromises()
     expect(wrapper.find('audio[src="/media/assembly-preview/32"]').exists()).toBe(true)
     expect(pause).toHaveBeenCalledTimes(1)
+    await previewEndInput.setValue('1')
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Play from here')
+      ?.trigger('click')
+    await flushPromises()
+    expect(previewBodies[2]).toMatchObject({ startIndex: 0, endIndex: 0 })
+    expect(wrapper.find('audio[src="/media/assembly-preview/33"]').exists()).toBe(true)
     wrapper.unmount()
     await flushPromises()
   })
@@ -306,11 +316,16 @@ describe('paper composer view', () => {
     expect(wrapper.find('button[aria-label="Remove Full paper"]').exists()).toBe(false)
     await wrapper.get('button[aria-label="Remove News"]').trigger('click')
     await wrapper.get('input[maxlength="200"]').setValue('Final exam')
-    const numberInputs = wrapper.findAll('input[type="number"]')
-    expect((numberInputs[1]?.element as HTMLInputElement).value).toBe('1')
-    expect((numberInputs[2]?.element as HTMLInputElement).value).toBe('5')
-    await numberInputs[0]?.setValue('2')
-    await numberInputs[1]?.setValue('1.5')
+    const finalRows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
+    const audioSegment = finalRows.find((item) => item.text().includes('Listening section'))
+    const silenceSegment = finalRows.find((item) => item.text().includes('Silence'))
+    const audioNumberInputs = audioSegment?.findAll('input[type="number"]') ?? []
+    expect((audioNumberInputs[1]?.element as HTMLInputElement).value).toBe('1')
+    expect((silenceSegment?.get('input[type="number"]').element as HTMLInputElement).value).toBe(
+      '5',
+    )
+    await audioNumberInputs[0]?.setValue('2')
+    await audioNumberInputs[1]?.setValue('1.5')
     await wrapper.findAll('button').find((button) => button.text() === 'Assemble and publish')?.trigger('click')
     await flushPromises()
 

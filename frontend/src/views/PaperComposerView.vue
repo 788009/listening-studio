@@ -51,11 +51,13 @@ interface DraftSegment extends AssemblySegmentInput {
   key: number
   audio?: Audio
   commentEditing: boolean
+  previewEndPosition?: number
 }
 
 interface PreviewTarget {
   segmentKey: number
   fromHere: boolean
+  endIndex?: number
   fingerprint: string
 }
 
@@ -537,6 +539,41 @@ function canPlaySegment(segment: DraftSegment, index: number): boolean {
   return placeholderIndex !== null && Boolean(segments.value[placeholderIndex]?.audioId)
 }
 
+function setPreviewEndPosition(segment: DraftSegment, event: Event): void {
+  const input = event.target as HTMLInputElement
+  segment.previewEndPosition = input.value === '' ? undefined : input.valueAsNumber
+}
+
+function isPreviewEndPositionValid(segment: DraftSegment, index: number): boolean {
+  const position = segment.previewEndPosition
+  return (
+    position === undefined ||
+    (Number.isInteger(position) && position >= index + 1 && position <= segments.value.length)
+  )
+}
+
+function previewEndIndex(segment: DraftSegment, index: number): number | undefined {
+  return isPreviewEndPositionValid(segment, index) && segment.previewEndPosition !== undefined
+    ? segment.previewEndPosition - 1
+    : undefined
+}
+
+function previewTargetMatches(
+  target: PreviewTarget | null,
+  segment: DraftSegment,
+  index: number,
+  fromHere: boolean,
+): boolean {
+  if (!target || (fromHere && !isPreviewEndPositionValid(segment, index))) return false
+  const endIndex = fromHere ? previewEndIndex(segment, index) : index
+  return (
+    target.segmentKey === segment.key &&
+    target.fromHere === fromHere &&
+    target.endIndex === endIndex &&
+    target.fingerprint === segmentFingerprint.value
+  )
+}
+
 function isQuestionCountSilence(segment: DraftSegment): boolean {
   return segment.type === 'smart' && segment.smartMode === 'question_count_silence'
 }
@@ -629,12 +666,19 @@ function validate(): string | null {
 
 async function playPreview(index: number, fromHere: boolean): Promise<void> {
   const segment = segments.value[index]
-  if (!segment || !canPlaySegment(segment, index)) return
+  if (
+    !segment ||
+    !canPlaySegment(segment, index) ||
+    (fromHere && !isPreviewEndPositionValid(segment, index))
+  ) return
   const fingerprint = segmentFingerprint.value
-  const samePreview =
-    activePreview.value?.segmentKey === segment.key &&
-    activePreview.value.fromHere === fromHere &&
-    activePreview.value.fingerprint === fingerprint
+  const endIndex = fromHere ? previewEndIndex(segment, index) : index
+  const samePreview = previewTargetMatches(
+    activePreview.value,
+    segment,
+    index,
+    fromHere,
+  )
   if (samePreview && previewMediaUrl.value) {
     const player = previewPlayer.value
     if (!player) return
@@ -656,13 +700,13 @@ async function playPreview(index: number, fromHere: boolean): Promise<void> {
   previewBusy.value = true
   await cancelPendingPreview(false, true)
   if (requestVersion !== previewRequestVersion) return
-  pendingPreview.value = { segmentKey: segment.key, fromHere, fingerprint }
+  pendingPreview.value = { segmentKey: segment.key, fromHere, endIndex, fingerprint }
   errorMessage.value = ''
   try {
     const acceptedPreview = await createAssemblyPreview({
       segments: segments.value.map(segmentInput),
       startIndex: index,
-      endIndex: fromHere ? undefined : index,
+      endIndex,
     })
     if (requestVersion !== previewRequestVersion) {
       void deleteAssemblyPreview(acceptedPreview.jobId).catch(() => undefined)
@@ -1142,17 +1186,31 @@ onUnmounted(() => {
                     @click="playPreview(index, false)"
                   >
                     <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m8 5 11 7-11 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
-                    {{ pendingPreview?.segmentKey === segment.key && !pendingPreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && !activePreview.fromHere && activePreview.fingerprint === segmentFingerprint && previewPlaying ? t('Stop') : t('Play') }}
+                    {{ previewTargetMatches(pendingPreview, segment, index, false) && previewBusy ? t('Preparing playback') : previewTargetMatches(activePreview, segment, index, false) && previewPlaying ? t('Stop') : t('Play') }}
                   </button>
                   <button
                     type="button"
-                    :disabled="previewBusy || !canPlaySegment(segment, index)"
+                    :disabled="previewBusy || !canPlaySegment(segment, index) || !isPreviewEndPositionValid(segment, index)"
                     class="inline-flex h-9 items-center gap-2 border border-line px-3 text-sm disabled:opacity-40"
                     @click="playPreview(index, true)"
                   >
                     <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 5v14M9 5l10 7-10 7V5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" /></svg>
-                    {{ pendingPreview?.segmentKey === segment.key && pendingPreview.fromHere && previewBusy ? t('Preparing playback') : activePreview?.segmentKey === segment.key && activePreview.fromHere && activePreview.fingerprint === segmentFingerprint && previewPlaying ? t('Stop') : t('Play from here') }}
+                    {{ previewTargetMatches(pendingPreview, segment, index, true) && previewBusy ? t('Preparing playback') : previewTargetMatches(activePreview, segment, index, true) && previewPlaying ? t('Stop') : t('Play from here') }}
                   </button>
+                  <label class="inline-flex h-9 items-center gap-2 text-sm text-muted">
+                    {{ t('To') }}
+                    <input
+                      :value="segment.previewEndPosition ?? ''"
+                      :aria-label="t('Preview end segment')"
+                      type="number"
+                      :min="index + 1"
+                      :max="segments.length"
+                      step="1"
+                      class="h-9 w-16 border border-line px-2 text-sm text-ink"
+                      @input="setPreviewEndPosition(segment, $event)"
+                    />
+                    {{ t('segment') }}
+                  </label>
                 </div>
               </div>
               <div data-move-options class="relative flex justify-end gap-1">
