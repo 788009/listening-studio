@@ -1074,13 +1074,15 @@ onUnmounted(() => {
                     <label class="mt-3 block text-xs text-muted">{{ t('Comment text') }}
                       <textarea v-model="segment.commentText" rows="4" class="mt-1 w-full resize-y border border-line px-3 py-2 text-sm leading-6 text-ink" />
                     </label>
-                    <button type="button" :disabled="!segment.commentText?.trim()" class="mt-3 h-9 bg-ink px-3 text-sm font-medium text-white disabled:opacity-40" @click="confirmComment(segment)">{{ t('Confirm') }}</button>
                   </template>
                   <template v-else>
                     <p class="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{{ segment.commentText }}</p>
-                    <button type="button" class="mt-3 h-9 border border-line px-3 text-sm font-medium" @click="segment.commentEditing = true">{{ t('Edit') }}</button>
                   </template>
-                  <label class="mt-3 inline-flex items-center gap-2 text-sm"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
+                  <div class="mt-3 flex items-center gap-5">
+                    <button v-if="segment.commentEditing" type="button" :disabled="!segment.commentText?.trim()" class="h-9 bg-ink px-3 text-sm font-medium text-white disabled:opacity-40" @click="confirmComment(segment)">{{ t('Confirm') }}</button>
+                    <button v-else type="button" class="h-9 border border-line px-3 text-sm font-medium" @click="segment.commentEditing = true">{{ t('Edit') }}</button>
+                    <label class="inline-flex items-center gap-2 text-sm"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
+                  </div>
                 </template>
                 <template v-else-if="segment.type === 'smart'">
                   <p class="text-sm font-semibold">{{ t(isQuestionCountSilence(segment) ? 'Question-count smart silence' : 'Smart question-number audio') }}</p>
