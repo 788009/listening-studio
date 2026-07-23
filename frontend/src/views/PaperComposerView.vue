@@ -451,7 +451,25 @@ function moveToIndex(index: number, target: number): boolean {
   next.splice(target, 0, item)
   segments.value = next
   activePlaceholder.value = null
+  scrollSegmentIntoView(item.key)
   return true
+}
+
+function scrollSegmentIntoView(segmentKey: number): void {
+  void nextTick(() => {
+    const list = segmentList.value
+    const item = list?.querySelector<HTMLElement>(
+      `[data-segment-key="${segmentKey}"]`,
+    )
+    if (!list || !item) return
+    const listRect = list.getBoundingClientRect()
+    const itemRect = item.getBoundingClientRect()
+    if (itemRect.top < listRect.top) {
+      list.scrollTop -= listRect.top - itemRect.top
+    } else if (itemRect.bottom > listRect.bottom) {
+      list.scrollTop += itemRect.bottom - listRect.bottom
+    }
+  })
 }
 
 function toggleMoveOptions(index: number): void {
@@ -1174,7 +1192,7 @@ onUnmounted(() => {
             class="divide-y divide-line overflow-y-auto overscroll-contain border-y border-line"
             :class="previewMediaUrl ? 'max-h-[70vh]' : 'max-h-[85vh]'"
           >
-            <li v-for="(segment, index) in segments" :key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_auto]">
+            <li v-for="(segment, index) in segments" :key="segment.key" :data-segment-key="segment.key" class="grid min-w-0 gap-4 py-4 sm:grid-cols-[2rem_minmax(0,1fr)_auto]">
               <div class="flex flex-col items-center gap-2 pt-1">
                 <span class="text-sm tabular-nums text-muted">{{ index + 1 }}</span>
                 <input

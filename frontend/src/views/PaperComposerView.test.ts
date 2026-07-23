@@ -408,6 +408,66 @@ describe('paper composer view', () => {
     wrapper.unmount()
   })
 
+  it('scrolls the moved segment into the segment list viewport', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const path = String(input)
+        if (path === '/api/assembly-templates') return Promise.resolve(response([]))
+        if (path.startsWith('/api/audio-tags')) {
+          return Promise.resolve(response([fullPaperTag, topicTag]))
+        }
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [audio], page: 1, pageSize: 10, total: 1 }))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const { wrapper } = await mountView()
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Add to end')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add comment')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
+
+    const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
+    const rows = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')
+    const movedRow = rows[2]
+    const movedKey = movedRow?.attributes('data-segment-key')
+    if (!movedRow || !movedKey) throw new Error('Moved segment was not rendered')
+    vi.spyOn(segmentList.element, 'getBoundingClientRect').mockReturnValue({
+      top: 0,
+      right: 400,
+      bottom: 100,
+      left: 0,
+      width: 400,
+      height: 100,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(movedRow.element, 'getBoundingClientRect').mockReturnValue({
+      top: 120,
+      right: 400,
+      bottom: 160,
+      left: 0,
+      width: 400,
+      height: 40,
+      x: 0,
+      y: 120,
+      toJSON: () => ({}),
+    })
+    segmentList.element.scrollTop = 0
+
+    await movedRow.findAll('button').find((button) => button.text() === 'Move options')?.trigger('click')
+    const moveDialog = movedRow.get('[role="dialog"]')
+    await moveDialog.get('input[aria-label="Segment count"]').setValue('2')
+    await moveDialog.get('button[aria-label="Move by offset"]').trigger('click')
+    await flushPromises()
+
+    expect(segmentList.element.scrollTop).toBe(60)
+    wrapper.unmount()
+  })
+
   it('asks before overwriting a template with the same title', async () => {
     const writes: { path: string; method: string; body: Record<string, unknown> }[] = []
     const existingTemplate = {
