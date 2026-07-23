@@ -236,6 +236,23 @@ describe('paper composer view', () => {
       .findAll('[aria-labelledby="segments-title"] ol > li')
       .find((item) => item.find('textarea').exists())
     await commentSegment?.get('textarea').setValue('Section directions')
+    await commentSegment
+      ?.findAll('button')
+      .find((button) => button.text() === 'Confirm')
+      ?.trigger('click')
+    expect(commentSegment?.find('textarea').exists()).toBe(false)
+    expect(commentSegment?.text()).toContain('Section directions')
+    await commentSegment
+      ?.findAll('button')
+      .find((button) => button.text() === 'Edit')
+      ?.trigger('click')
+    expect((commentSegment?.get('textarea').element as HTMLTextAreaElement).value).toBe(
+      'Section directions',
+    )
+    await commentSegment
+      ?.findAll('button')
+      .find((button) => button.text() === 'Confirm')
+      ?.trigger('click')
     const commentIncludeText = commentSegment
       ?.findAll('label')
       .find((label) => label.text() === 'Include text')
@@ -528,6 +545,13 @@ describe('paper composer view', () => {
     await wrapper.findAll('button').find((button) => button.text() === 'Replace')?.trigger('click')
     await flushPromises()
     expect(wrapper.findAll('[aria-labelledby="segments-title"] ol > li')).toHaveLength(3)
+    const loadedComment = wrapper
+      .findAll('[aria-labelledby="segments-title"] ol > li')
+      .find((item) => item.text().includes('Question directions'))
+    expect(loadedComment?.find('textarea').exists()).toBe(false)
+    expect(
+      loadedComment?.findAll('button').some((button) => button.text() === 'Edit'),
+    ).toBe(true)
     const smartMode = wrapper
       .findAll('select')
       .find((item) => item.find('option[value="question_count_silence"]').exists())

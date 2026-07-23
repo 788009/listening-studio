@@ -50,6 +50,7 @@ const tagGroups: { label: string; type: CreationTagType }[] = [
 interface DraftSegment extends AssemblySegmentInput {
   key: number
   audio?: Audio
+  commentEditing: boolean
 }
 
 interface PreviewTarget {
@@ -180,6 +181,7 @@ function draft(type: AssemblySegmentType, values: Partial<DraftSegment> = {}): D
     smartMode: 'question_number',
     smartSilencePrevious: false,
     smartSilenceNext: false,
+    commentEditing: false,
     ...values,
     key: nextKey++,
   }
@@ -340,8 +342,20 @@ function addSilence(): void {
 
 function addComment(): void {
   appendSegments(
-    draft('comment', { commentText: '', includeText: true, includeTopic: false }),
+    draft('comment', {
+      commentText: '',
+      commentEditing: true,
+      includeText: true,
+      includeTopic: false,
+    }),
   )
+}
+
+function confirmComment(segment: DraftSegment): void {
+  const text = segment.commentText?.trim()
+  if (!text) return
+  segment.commentText = text
+  segment.commentEditing = false
 }
 
 function seconds(milliseconds: number | undefined): number {
@@ -1056,9 +1070,16 @@ onUnmounted(() => {
                 </template>
                 <template v-else-if="segment.type === 'comment'">
                   <p class="text-sm font-semibold">{{ t('Comment') }}</p>
-                  <label class="mt-3 block text-xs text-muted">{{ t('Comment text') }}
-                    <textarea v-model="segment.commentText" rows="4" class="mt-1 w-full resize-y border border-line px-3 py-2 text-sm leading-6 text-ink" />
-                  </label>
+                  <template v-if="segment.commentEditing">
+                    <label class="mt-3 block text-xs text-muted">{{ t('Comment text') }}
+                      <textarea v-model="segment.commentText" rows="4" class="mt-1 w-full resize-y border border-line px-3 py-2 text-sm leading-6 text-ink" />
+                    </label>
+                    <button type="button" :disabled="!segment.commentText?.trim()" class="mt-3 h-9 bg-ink px-3 text-sm font-medium text-white disabled:opacity-40" @click="confirmComment(segment)">{{ t('Confirm') }}</button>
+                  </template>
+                  <template v-else>
+                    <p class="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{{ segment.commentText }}</p>
+                    <button type="button" class="mt-3 h-9 border border-line px-3 text-sm font-medium" @click="segment.commentEditing = true">{{ t('Edit') }}</button>
+                  </template>
                   <label class="mt-3 inline-flex items-center gap-2 text-sm"><input v-model="segment.includeText" type="checkbox" />{{ t('Include text') }}</label>
                 </template>
                 <template v-else-if="segment.type === 'smart'">

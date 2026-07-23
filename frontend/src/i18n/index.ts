@@ -201,6 +201,7 @@ const zhCN: Record<string, string> = {
   'No segments yet': '暂无段落',
   Comment: '注释',
   'Comment text': '注释文本',
+  Confirm: '确定',
   Silence: '静默',
   'Duration seconds': '时长（秒）',
   'Smart question-number audio': '题号智能音频',
