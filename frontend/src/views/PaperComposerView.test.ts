@@ -148,7 +148,7 @@ describe('paper composer view', () => {
     const searchResults = wrapper.get('[aria-labelledby="audio-source-title"] ul')
     expect(searchResults.classes()).toContain('max-h-[68vh]')
     expect(searchResults.classes()).toContain('overflow-y-auto')
-    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add to end')?.trigger('click')
     const segmentList = wrapper.get('[aria-labelledby="segments-title"] ol')
     expect(segmentList.classes()).toContain('max-h-[85vh]')
     expect(segmentList.classes()).toContain('overflow-y-auto')
@@ -237,7 +237,7 @@ describe('paper composer view', () => {
     const { router, wrapper } = await mountView()
     await flushPromises()
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add to end')?.trigger('click')
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Add comment')
@@ -374,7 +374,7 @@ describe('paper composer view', () => {
     const { wrapper } = await mountView()
     await flushPromises()
 
-    await wrapper.findAll('button').find((button) => button.text() === 'Add')?.trigger('click')
+    await wrapper.findAll('button').find((button) => button.text() === 'Add to end')?.trigger('click')
     await wrapper
       .findAll('button')
       .find((button) => button.text() === 'Add comment')
@@ -590,7 +590,40 @@ describe('paper composer view', () => {
 
     expect(requests.some((path) => path.includes('q=topic%3Anews'))).toBe(true)
     expect(wrapper.text()).toContain('Question-count smart silence')
-    await wrapper.findAll('button').find((button) => button.text() === 'Select')?.trigger('click')
+    const audioSource = wrapper.get('[aria-labelledby="audio-source-title"]')
+    expect(audioSource.text()).toContain('Add destination:')
+    expect(audioSource.text()).toContain('Placeholder at segment 3')
+    expect(
+      audioSource.findAll('button').some((button) => button.text() === 'Fill this placeholder'),
+    ).toBe(true)
+
+    await audioSource
+      .findAll('button')
+      .find((button) => button.text() === 'Cancel placeholder selection')
+      ?.trigger('click')
+    expect((audioSource.get('input[type="search"]').element as HTMLInputElement).value).toBe(
+      'topic:news',
+    )
+    expect(audioSource.text()).toContain('End of segment list')
+    expect(audioSource.findAll('button').some((button) => button.text() === 'Add to end')).toBe(true)
+    await audioSource
+      .findAll('button')
+      .find((button) => button.text() === 'Add to end')
+      ?.trigger('click')
+    const appendedAudio = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')[3]
+    expect(appendedAudio?.text()).toContain(audio.title)
+    await appendedAudio
+      ?.findAll('label')
+      .find((label) => label.text() === 'Include topic')
+      ?.get('input')
+      .setValue(false)
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Choose audio')?.trigger('click')
+    await flushPromises()
+    await audioSource
+      .findAll('button')
+      .find((button) => button.text() === 'Fill this placeholder')
+      ?.trigger('click')
     const placeholder = wrapper.findAll('[aria-labelledby="segments-title"] ol > li')[2]
     expect(placeholder?.text()).toContain(audio.title)
     expect(
@@ -608,6 +641,7 @@ describe('paper composer view', () => {
       placeholder?.findAll('button').some((button) => button.text() === 'Clear selected audio'),
     ).toBe(false)
     expect(wrapper.get('[aria-labelledby="paper-tags-title"]').text()).not.toContain('News')
+    expect(audioSource.text()).toContain('End of segment list')
     wrapper.unmount()
   })
 })

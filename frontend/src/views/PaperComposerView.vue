@@ -417,6 +417,10 @@ function selectPlaceholder(index: number): void {
   void loadPage(true)
 }
 
+function cancelPlaceholderSelection(): void {
+  activePlaceholder.value = null
+}
+
 function move(index: number, offset: -1 | 1): void {
   const target = index + offset
   moveToIndex(index, target)
@@ -1037,17 +1041,25 @@ onUnmounted(() => {
               <h2 id="audio-source-title" class="text-base font-semibold">{{ t('Audio library') }}</h2>
               <p class="mt-1 text-sm text-muted">{{ t('{count} available', { count: total }) }}</p>
             </div>
-            <span v-if="activePlaceholder !== null" class="text-xs font-medium text-accent">{{ t('Filling placeholder') }}</span>
           </div>
           <AudioSearchBox v-model="query" :tags="tagCatalog" :busy="loading" @submit="loadPage(true)" />
-          <ul class="mt-4 max-h-[68vh] divide-y divide-line overflow-y-auto overscroll-contain border-y border-line">
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-y border-line py-3 text-sm">
+            <p>
+              <span class="text-muted">{{ t('Add destination') }}:</span>
+              <span class="ml-2 font-medium">
+                {{ activePlaceholder === null ? t('End of segment list') : t('Placeholder at segment {position}', { position: activePlaceholder + 1 }) }}
+              </span>
+            </p>
+            <button v-if="activePlaceholder !== null" type="button" class="font-medium text-accent" @click="cancelPlaceholderSelection">{{ t('Cancel placeholder selection') }}</button>
+          </div>
+          <ul class="max-h-[68vh] divide-y divide-line overflow-y-auto overscroll-contain border-b border-line">
             <li v-for="audio in candidates" :key="audio.id" class="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
               <div class="min-w-0">
                 <p class="break-words text-sm font-semibold">{{ audio.title }}</p>
                 <p class="mt-1 text-xs text-muted">{{ audio.questions?.length ?? 0 }} {{ t('Questions') }} · {{ audio.durationSeconds === null ? '' : duration(audio.durationSeconds) }}</p>
                 <audio class="mt-2 h-8 w-full" controls preload="none" :src="audioMediaPath(audio.id)" />
               </div>
-              <button type="button" class="h-9 border border-line px-3 text-sm font-medium hover:border-ink" @click="addAudio(audio)">{{ activePlaceholder === null ? t('Add') : t('Select') }}</button>
+              <button type="button" class="h-9 border border-line px-3 text-sm font-medium hover:border-ink" @click="addAudio(audio)">{{ activePlaceholder === null ? t('Add to end') : t('Fill this placeholder') }}</button>
             </li>
           </ul>
           <nav v-if="totalPages > 1" class="mt-4 flex items-center justify-between text-sm">
