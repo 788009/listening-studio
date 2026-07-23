@@ -360,6 +360,12 @@ describe('audio views', () => {
     expect(wrapper.findAll('pre')).toHaveLength(2)
     expect(wrapper.findAll('pre')[0]?.text()).toContain('1. Who spoke first?')
     expect(wrapper.findAll('pre')[1]?.text()).toMatch(/^[AB]$/)
+    const textGroup = wrapper.findAll('[role="group"]').find((group) => group.attributes('aria-label') === 'Text')
+    const textButton = textGroup?.findAll('button').find((button) => button.text() === 'Text')
+    expect(textButton).toBeDefined()
+    await textButton?.trigger('click')
+    expect(wrapper.findAll('pre')).toHaveLength(3)
+    expect(wrapper.findAll('pre')[2]?.text()).toBe('Woman: First line\n\nStudent: Second line')
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
       expect.arrayContaining(['Author', 'Speakers', 'Topic']),
     )
@@ -484,7 +490,7 @@ describe('audio views', () => {
     await flushPromises()
 
     const textHeading = wrapper.findAll('h2').find((item) => item.text() === 'Text')
-    const transcript = textHeading?.element.parentElement?.querySelector('ol')
+    const transcript = textHeading?.element.closest('.grid')?.querySelector('ol')
     const lines = transcript?.querySelectorAll('li')
     expect(lines).toHaveLength(3)
     expect(lines?.[1]?.textContent).toBe('Section directions')

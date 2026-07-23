@@ -22,6 +22,7 @@ import ExamQuestionsDisplay from '@/components/ExamQuestionsDisplay.vue'
 import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
 import AudioQuestionsEditor from '@/components/AudioQuestionsEditor.vue'
 import SpeakerVoiceLines from '@/components/SpeakerVoiceLines.vue'
+import TranscriptTextDisplay from '@/components/TranscriptTextDisplay.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
@@ -52,6 +53,7 @@ const tagDialogType = ref<EditableAudioTagType | null>(null)
 const tagDialogInitialEnglishValue = ref('')
 const tagDialogError = ref('')
 const questionPresentation = ref<'preview' | 'paper'>('preview')
+const textPresentation = ref<'preview' | 'text'>('preview')
 
 type EditableAudioTagType = Extract<AudioTagType, 'topic' | 'category'>
 
@@ -74,6 +76,16 @@ const isFullPaper = computed(() =>
 const orderedUtterances = computed(() =>
   [...(audio.value?.utterances ?? [])].sort((left, right) => left.position - right.position),
 )
+const transcriptText = computed(() => {
+  if (orderedUtterances.value.length === 0) return audio.value?.text ?? ''
+  return orderedUtterances.value
+    .map((utterance) =>
+      utterance.speakerDisplayName
+        ? `${utterance.speakerDisplayName}: ${utterance.text}`
+        : utterance.text,
+    )
+    .join('\n\n')
+})
 const tagGroups = computed(() => [
   { label: 'Topics', type: 'topic' as const },
   { label: 'Categories', type: 'category' as const },
@@ -122,6 +134,8 @@ async function loadAudio(): Promise<void> {
   loading.value = true
   errorMessage.value = ''
   editing.value = false
+  questionPresentation.value = 'preview'
+  textPresentation.value = 'preview'
   try {
     if (!Number.isInteger(audioId.value) || audioId.value < 1) {
       throw new TypeError('Audio not found')
@@ -456,8 +470,30 @@ watch(() => route.params.id, loadAudio, { immediate: true })
       </div>
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
-        <h2 class="text-sm font-semibold">{{ t('Text') }}</h2>
-        <ol v-if="orderedUtterances.length > 0" class="min-w-0 space-y-4">
+        <div class="flex min-w-0 items-center justify-between gap-3 md:block">
+          <h2 class="text-sm font-semibold">{{ t('Text') }}</h2>
+          <div class="inline-flex shrink-0 border border-line md:mt-3" role="group" :aria-label="t('Text')">
+            <button
+              type="button"
+              class="h-8 px-3 text-sm font-medium"
+              :class="textPresentation === 'preview' ? 'bg-ink text-white' : 'hover:bg-surface-alt'"
+              :aria-pressed="textPresentation === 'preview'"
+              @click="textPresentation = 'preview'"
+            >
+              {{ t('Preview') }}
+            </button>
+            <button
+              type="button"
+              class="h-8 border-l border-line px-3 text-sm font-medium"
+              :class="textPresentation === 'text' ? 'bg-ink text-white' : 'hover:bg-surface-alt'"
+              :aria-pressed="textPresentation === 'text'"
+              @click="textPresentation = 'text'"
+            >
+              {{ t('Text') }}
+            </button>
+          </div>
+        </div>
+        <ol v-if="textPresentation === 'preview' && orderedUtterances.length > 0" class="min-w-0 space-y-4">
           <li
             v-for="utterance in orderedUtterances"
             :key="utterance.position"
@@ -467,7 +503,12 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             <p class="min-w-0 break-words text-sm leading-6">{{ utterance.text }}</p>
           </li>
         </ol>
-        <p v-else class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6">{{ audio.text }}</p>
+        <p v-else-if="textPresentation === 'preview'" class="min-w-0 whitespace-pre-wrap break-words text-sm leading-6">{{ audio.text }}</p>
+        <TranscriptTextDisplay
+          v-else
+          :title="audio.title"
+          :text="transcriptText"
+        />
       </div>
 
       <div v-if="isOwner && audio.errorSummary" class="border-b border-line py-6">
