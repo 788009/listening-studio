@@ -327,6 +327,32 @@ class AssemblyIntegrationTest(unittest.TestCase):
         )
         self.assertFalse(created.json()["segments"][4]["includeText"])
 
+        duplicate = self.send(
+            "POST",
+            "/api/assembly-templates",
+            headers=self.headers("admin"),
+            json={**payload, "title": "  STRUCTURED EXAM  "},
+        )
+        self.assertEqual(duplicate.status_code, 409, duplicate.text)
+        self.assertEqual(
+            duplicate.json()["error"]["details"],
+            {"templateId": created.json()["id"], "title": "Structured exam"},
+        )
+
+        overwritten = self.send(
+            "PUT",
+            f"/api/assembly-templates/{created.json()['id']}",
+            headers=self.headers("admin"),
+            json={
+                "title": "STRUCTURED EXAM",
+                "segments": [{"type": "silence", "silenceMilliseconds": 3000}],
+            },
+        )
+        self.assertEqual(overwritten.status_code, 200, overwritten.text)
+        self.assertEqual(overwritten.json()["title"], "STRUCTURED EXAM")
+        self.assertEqual(len(overwritten.json()["segments"]), 1)
+        self.assertEqual(overwritten.json()["segments"][0]["silenceMilliseconds"], 3000)
+
         invalid_comment = self.send(
             "POST",
             "/api/assembly-templates",

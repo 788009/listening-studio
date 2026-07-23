@@ -408,6 +408,118 @@ describe('paper composer view', () => {
     wrapper.unmount()
   })
 
+  it('asks before overwriting a template with the same title', async () => {
+    const writes: { path: string; method: string; body: Record<string, unknown> }[] = []
+    const existingTemplate = {
+      id: 3,
+      title: 'Exam template',
+      ownerUserId: 'Admin',
+      createdAt: '',
+      updatedAt: '',
+      segments: [
+        {
+          id: 1,
+          position: 0,
+          type: 'silence',
+          silenceMilliseconds: 1000,
+          repeatCount: 1,
+          repeatIntervalMilliseconds: 0,
+          includeText: false,
+          includeTopic: false,
+        },
+      ],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const method = init?.method ?? 'GET'
+        if (path === '/api/assembly-templates' && method === 'GET') {
+          return Promise.resolve(response([existingTemplate]))
+        }
+        if (path.startsWith('/api/audio-tags')) {
+          return Promise.resolve(response([fullPaperTag]))
+        }
+        if (path.startsWith('/api/audios?')) {
+          return Promise.resolve(response({ items: [], page: 1, pageSize: 10, total: 0 }))
+        }
+        if (path === '/api/assembly-templates' && method === 'POST') {
+          writes.push({
+            path,
+            method,
+            body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+          })
+          return Promise.resolve(
+            response(
+              {
+                error: {
+                  code: 'conflict',
+                  message: 'Assembly template title already exists',
+                  details: { templateId: 3, title: 'Exam template' },
+                  request_id: 'request-1',
+                },
+              },
+              409,
+            ),
+          )
+        }
+        if (path === '/api/assembly-templates/3' && method === 'PUT') {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          writes.push({ path, method, body })
+          return Promise.resolve(
+            response({
+              ...existingTemplate,
+              title: String(body.title),
+              segments: [
+                {
+                  id: 2,
+                  position: 0,
+                  ...(body.segments as Record<string, unknown>[])[0],
+                },
+              ],
+            }),
+          )
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const { wrapper } = await mountView('admin')
+    await flushPromises()
+    await wrapper.findAll('button').find((button) => button.text() === 'Add silence')?.trigger('click')
+    const titleInput = wrapper.get('input[placeholder="Template title"]')
+    await titleInput.setValue('Exam template')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Save current segments as template')
+      ?.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Overwrite existing template?')
+    expect(wrapper.get('[role="dialog"]').text()).toContain('Exam template')
+    expect(writes.map((item) => item.method)).toEqual(['POST'])
+
+    await wrapper.get('[role="dialog"]').findAll('button').find((button) => button.text() === 'Cancel')?.trigger('click')
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect((titleInput.element as HTMLInputElement).value).toBe('Exam template')
+
+    await wrapper
+      .findAll('button')
+      .find((button) => button.text() === 'Save current segments as template')
+      ?.trigger('click')
+    await flushPromises()
+    await wrapper.get('[role="dialog"]').findAll('button').find((button) => button.text() === 'Overwrite')?.trigger('click')
+    await flushPromises()
+
+    expect(writes.map((item) => item.method)).toEqual(['POST', 'POST', 'PUT'])
+    expect(writes[2]?.body).toMatchObject({
+      title: 'Exam template',
+      segments: [{ type: 'silence', silenceMilliseconds: 5000 }],
+    })
+    expect(wrapper.find('[role="dialog"]').exists()).toBe(false)
+    expect((titleInput.element as HTMLInputElement).value).toBe('')
+    wrapper.unmount()
+  })
+
   it('shows a loading state while a template audio is being loaded', async () => {
     let resolveAudio: ((value: Response) => void) | undefined
     vi.stubGlobal(

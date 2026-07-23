@@ -237,6 +237,16 @@ class AssemblyService:
     ) -> AssemblyTemplate:
         self._require_admin(owner)
         value, normalized = normalize_audio_title(title)
+        existing = session.scalar(
+            select(AssemblyTemplate).where(
+                AssemblyTemplate.normalized_title == normalized
+            )
+        )
+        if existing is not None:
+            raise ConflictError(
+                "Assembly template title already exists",
+                details={"templateId": existing.id, "title": existing.title},
+            )
         template = AssemblyTemplate(
             owner=owner, title=value, normalized_title=normalized
         )

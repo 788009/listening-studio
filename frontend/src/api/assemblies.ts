@@ -50,16 +50,30 @@ export interface AssemblyPreviewAccepted {
   jobId: number
 }
 
+export interface AssemblyTemplateWriteInput {
+  title: string
+  segments: AssemblySegmentInput[]
+}
+
 export function listAssemblyTemplates(): Promise<AssemblyTemplate[]> {
   return apiRequest<AssemblyTemplate[]>('/assembly-templates')
 }
 
-export function createAssemblyTemplate(input: {
-  title: string
-  segments: AssemblySegmentInput[]
-}): Promise<AssemblyTemplate> {
+export function createAssemblyTemplate(
+  input: AssemblyTemplateWriteInput,
+): Promise<AssemblyTemplate> {
   return apiRequest<AssemblyTemplate>('/assembly-templates', {
     method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function updateAssemblyTemplate(
+  templateId: number,
+  input: AssemblyTemplateWriteInput,
+): Promise<AssemblyTemplate> {
+  return apiRequest<AssemblyTemplate>(`/assembly-templates/${positiveId(templateId)}`, {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
 }

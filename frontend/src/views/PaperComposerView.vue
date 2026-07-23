@@ -10,10 +10,12 @@ import {
   deleteAssemblyTemplate,
   listAssemblyTemplates,
   assemblyPreviewMediaPath,
+  updateAssemblyTemplate,
   type AssemblySegmentInput,
   type AssemblySegmentType,
   type AssemblySmartMode,
   type AssemblyTemplate,
+  type AssemblyTemplateWriteInput,
 } from '@/api/assemblies'
 import {
   audioMediaPath,
@@ -61,6 +63,12 @@ interface PreviewTarget {
   fingerprint: string
 }
 
+interface PendingTemplateOverwrite {
+  templateId: number
+  existingTitle: string
+  input: AssemblyTemplateWriteInput
+}
+
 const router = useRouter()
 const auth = useAuthStore()
 const { locale, t } = useI18n()
@@ -70,6 +78,7 @@ const templates = ref<AssemblyTemplate[]>([])
 const templateId = ref('')
 const appliedTemplateId = ref('')
 const pendingTemplateId = ref<string | null>(null)
+const pendingTemplateOverwrite = ref<PendingTemplateOverwrite | null>(null)
 const templateLoading = ref(false)
 const templateTitle = ref('')
 const segments = ref<DraftSegment[]>([])
@@ -868,21 +877,68 @@ async function saveTemplate(): Promise<void> {
     errorMessage.value = t('Enter text for every comment segment')
     return
   }
+  const input: AssemblyTemplateWriteInput = {
+    title: templateTitle.value.trim(),
+    segments: segments.value.map((segment) => {
+      const item = segmentInput(segment)
+      if (item.type === 'placeholder') delete item.audioId
+      return item
+    }),
+  }
   savingTemplate.value = true
   errorMessage.value = ''
   try {
-    const created = await createAssemblyTemplate({
-      title: templateTitle.value.trim(),
-      segments: segments.value.map((segment) => {
-        const input = segmentInput(segment)
-        if (input.type === 'placeholder') delete input.audioId
-        return input
-      }),
-    })
-    templates.value = [created, ...templates.value]
-    templateId.value = String(created.id)
-    appliedTemplateId.value = templateId.value
-    templateTitle.value = ''
+    const created = await createAssemblyTemplate(input)
+    finishTemplateSave(created, true)
+  } catch (error) {
+    const conflict = templateConflict(error)
+    if (conflict) {
+      pendingTemplateOverwrite.value = { ...conflict, input }
+    } else {
+      errorMessage.value = error instanceof ApiError ? error.message : t('Template could not be saved')
+    }
+  } finally {
+    savingTemplate.value = false
+  }
+}
+
+function templateConflict(
+  error: unknown,
+): Omit<PendingTemplateOverwrite, 'input'> | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null
+  if (typeof error.details !== 'object' || error.details === null) return null
+  const details = error.details as Record<string, unknown>
+  if (!Number.isInteger(details.templateId) || Number(details.templateId) < 1) return null
+  return {
+    templateId: Number(details.templateId),
+    existingTitle:
+      typeof details.title === 'string' ? details.title : templateTitle.value.trim(),
+  }
+}
+
+function finishTemplateSave(template: AssemblyTemplate, created: boolean): void {
+  const exists = templates.value.some((item) => item.id === template.id)
+  templates.value = created || !exists
+    ? [template, ...templates.value]
+    : templates.value.map((item) => (item.id === template.id ? template : item))
+  templateId.value = String(template.id)
+  appliedTemplateId.value = templateId.value
+  templateTitle.value = ''
+  pendingTemplateOverwrite.value = null
+}
+
+function closeTemplateOverwrite(): void {
+  if (!savingTemplate.value) pendingTemplateOverwrite.value = null
+}
+
+async function confirmTemplateOverwrite(): Promise<void> {
+  const pending = pendingTemplateOverwrite.value
+  if (!pending || savingTemplate.value) return
+  savingTemplate.value = true
+  errorMessage.value = ''
+  try {
+    const updated = await updateAssemblyTemplate(pending.templateId, pending.input)
+    finishTemplateSave(updated, false)
   } catch (error) {
     errorMessage.value = error instanceof ApiError ? error.message : t('Template could not be saved')
   } finally {
@@ -1364,6 +1420,17 @@ onUnmounted(() => {
       @confirm="confirmTemplateReplacement"
     >
       <p>{{ t('Selecting this template will replace the current segments.') }}</p>
+    </ConfirmDialog>
+
+    <ConfirmDialog
+      :open="pendingTemplateOverwrite !== null"
+      :title="t('Overwrite existing template?')"
+      :busy="savingTemplate"
+      confirm-label="Overwrite"
+      @close="closeTemplateOverwrite"
+      @confirm="confirmTemplateOverwrite"
+    >
+      <p>{{ t('A template titled {title} already exists. Overwrite it with the current segments?', { title: pendingTemplateOverwrite?.existingTitle ?? '' }) }}</p>
     </ConfirmDialog>
   </section>
 </template>
