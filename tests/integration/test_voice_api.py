@@ -11,6 +11,7 @@ import httpx
 from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.app.core.auth import Principal
@@ -21,11 +22,14 @@ from backend.app.db.models.audio import (
     AudioStatus,
     AudioVisibility,
 )
+from backend.app.db.models.audio_tag import (
+    AudioTag,
+    AudioTagTranslation,
+    AudioTagType,
+)
 from backend.app.db.models.user import User, UserRole
 from backend.app.db.models.voice import (
     Voice,
-    VoiceSampleSource,
-    VoiceStatus,
     VoiceVisibility,
 )
 from backend.app.db.models.voice_tag import VoiceTagType
@@ -38,6 +42,7 @@ from backend.app.integrations.identity import (
 from backend.app.repositories.users import UserRepository
 from backend.app.repositories.voices import VoiceRepository
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audio_tags import AudioTagService
 from backend.app.services.audios import AudioService, AudioUtteranceInput
 from backend.app.services.voice_management import VoiceManagementService
 from backend.app.services.voice_storage import VoiceStorage
@@ -545,6 +550,23 @@ class VoiceApiIntegrationTest(unittest.TestCase):
                     )
                 ],
             )
+            audio_voice_tag = AudioTagService().create_tag(
+                session,
+                tag_type=AudioTagType.VOICE,
+                english_value="Referenced",
+                translations=[
+                    TagTranslationInput(language="zh-CN", value="引用音色")
+                ],
+            )
+            audio.tags.append(audio_voice_tag)
+            session.add(
+                AudioTag(
+                    type=AudioTagType.VOICE,
+                    value="Referenced_(deleted)",
+                    normalized_value="referenced_(deleted)",
+                )
+            )
+            archived_tag_id = audio_voice_tag.id
             AudioService(self.audio_storage).transition_status(
                 session,
                 audio,
@@ -597,6 +619,12 @@ class VoiceApiIntegrationTest(unittest.TestCase):
             f"/api/audios/{audio.id}",
             headers=self.headers("first"),
         )
+        archived_tag_search = self.send(
+            "GET",
+            "/api/audios",
+            headers=self.headers("first"),
+            params={"q": "voice:引用音色_(已删除)_2"},
+        )
         deleted = self.send(
             "DELETE",
             f"/api/voices/{deletable.id}",
@@ -630,11 +658,27 @@ class VoiceApiIntegrationTest(unittest.TestCase):
                 "position": 0,
             },
         )
+        self.assertEqual(archived_tag_search.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in archived_tag_search.json()["items"]],
+            [audio.id],
+        )
         self.assertEqual(deleted.status_code, 204)
         self.assertFalse(self.voice_storage.directory(deletable.id).exists())
         with self.app.state.session_factory() as session:
             self.assertIsNone(session.get(Voice, deletable.id))
             self.assertIsNone(session.get(Voice, referenced.id))
+            archived_tag = session.get(AudioTag, archived_tag_id)
+            assert archived_tag is not None
+            self.assertEqual(archived_tag.value, "Referenced_(deleted)_2")
+            chinese = session.scalar(
+                select(AudioTagTranslation).where(
+                    AudioTagTranslation.tag_id == archived_tag.id,
+                    AudioTagTranslation.language == "zh-CN",
+                )
+            )
+            assert chinese is not None
+            self.assertEqual(chinese.value, "引用音色_(已删除)_2")
 
         class FailingRepository(VoiceRepository):
             def delete(self, session: Session, voice: Voice) -> None:

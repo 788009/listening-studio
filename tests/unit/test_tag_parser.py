@@ -107,6 +107,27 @@ class TagParserTest(unittest.TestCase):
                 normalized_value="with_questions",
             ),
         )
+        self.assertEqual(
+            parse_tag_term("voice:Teacher_(deleted)_2", "audio"),
+            ParsedTagTerm(
+                type=TagType.VOICE,
+                normalized_value="teacher_(deleted)_2",
+            ),
+        )
+        self.assertEqual(
+            parse_tag_term("voice:教师_(已删除)_2", "audio"),
+            ParsedTagTerm(
+                type=TagType.VOICE,
+                normalized_value="教师_(已删除)_2",
+            ),
+        )
+        self.assertEqual(
+            parse_tag_term("voice:Teacher_(deleted)_10", "audio"),
+            ParsedTagTerm(
+                type=TagType.VOICE,
+                normalized_value="teacher_(deleted)_10",
+            ),
+        )
 
     def test_query_is_split_into_tag_terms_and_keywords(self) -> None:
         query = parse_search_query(

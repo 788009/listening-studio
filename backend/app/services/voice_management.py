@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.exceptions import ConflictError, NotFoundError
 from backend.app.db.models.audio import Audio
+from backend.app.db.models.audio_tag import AudioTag, AudioTagType
 from backend.app.db.models.voice import (
     Voice,
     VoiceSampleSource,
@@ -15,9 +16,11 @@ from backend.app.db.models.voice import (
     VoiceVisibility,
 )
 from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
+from backend.app.repositories.audio_tags import AudioTagRepository
 from backend.app.repositories.voice_tags import VoiceTagRepository
 from backend.app.repositories.voices import VoiceRepository
 from backend.app.services.audio_storage import AudioStorage
+from backend.app.services.audio_voice_tags import audio_voice_tag_value
 from backend.app.services.authorization import (
     AuthorizationPrincipal,
     AuthorizationService,
@@ -27,6 +30,7 @@ from backend.app.services.authorization import (
     ResourceVisibility,
 )
 from backend.app.services.tag_parser import ParsedQuery, TagType, parse_search_query
+from backend.app.services.tag_values import MAX_TAG_VALUE_LENGTH
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -45,11 +49,13 @@ class VoiceManagementService:
         *,
         repository: VoiceRepository | None = None,
         tag_repository: VoiceTagRepository | None = None,
+        audio_tag_repository: AudioTagRepository | None = None,
     ) -> None:
         self.voice_storage = voice_storage
         self.audio_storage = audio_storage
         self.repository = repository or VoiceRepository()
         self.tag_repository = tag_repository or VoiceTagRepository()
+        self.audio_tag_repository = audio_tag_repository or AudioTagRepository()
         self.voice_service = VoiceService(voice_storage, self.repository)
         self.authorization = AuthorizationService()
 
@@ -199,6 +205,7 @@ class VoiceManagementService:
 
         staged = self.voice_storage.stage_delete(voice.id)
         try:
+            archived_tag_count = self._archive_audio_voice_tags(session, voice)
             self.repository.delete(session, voice)
             session.commit()
         except Exception:
@@ -211,7 +218,82 @@ class VoiceManagementService:
             user_db_id=voice.author_id,
             resource_type="voice",
             resource_id=voice_id,
-        ).info("Voice deleted voice_id={}", voice_id)
+        ).info(
+            "Voice deleted voice_id={} archived_audio_voice_tag_count={}",
+            voice_id,
+            archived_tag_count,
+        )
+
+    def _archive_audio_voice_tags(self, session: Session, voice: Voice) -> int:
+        current_value = audio_voice_tag_value(voice)
+        tags = self.audio_tag_repository.list_for_voice(
+            session,
+            voice_id=voice.id,
+            current_normalized_value=current_value.normalized_value,
+        )
+        for tag in tags:
+            self._archive_audio_voice_tag(session, tag)
+        return len(tags)
+
+    def _archive_audio_voice_tag(self, session: Session, tag: AudioTag) -> None:
+        english_value, chinese_value = self._deleted_tag_values(session, tag)
+        chinese_translation = next(
+            (
+                translation
+                for translation in tag.translations
+                if translation.language.casefold() == "zh-cn"
+            ),
+            None,
+        )
+        tag.value = english_value
+        tag.normalized_value = english_value.casefold()
+        if chinese_translation is None:
+            self.audio_tag_repository.add_translation(
+                session,
+                tag=tag,
+                language="zh-CN",
+                value=chinese_value,
+                normalized_value=chinese_value.casefold(),
+            )
+        else:
+            chinese_translation.value = chinese_value
+            chinese_translation.normalized_value = chinese_value.casefold()
+        session.flush()
+
+    def _deleted_tag_values(
+        self,
+        session: Session,
+        tag: AudioTag,
+    ) -> tuple[str, str]:
+        chinese_translation = next(
+            (
+                translation.value
+                for translation in tag.translations
+                if translation.language.casefold() == "zh-cn"
+            ),
+            tag.value,
+        )
+        suffix_number = 1
+        while True:
+            number_suffix = "" if suffix_number == 1 else f"_{suffix_number}"
+            english_suffix = f"_(deleted){number_suffix}"
+            english_value = (
+                f"{tag.value[: MAX_TAG_VALUE_LENGTH - len(english_suffix)]}"
+                f"{english_suffix}"
+            )
+            existing = self.audio_tag_repository.get_by_normalized_value(
+                session,
+                AudioTagType.VOICE,
+                english_value.casefold(),
+            )
+            if existing is None or existing.id == tag.id:
+                chinese_suffix = f"_(已删除){number_suffix}"
+                chinese_value = (
+                    f"{chinese_translation[: MAX_TAG_VALUE_LENGTH - len(chinese_suffix)]}"
+                    f"{chinese_suffix}"
+                )
+                return english_value, chinese_value
+            suffix_number += 1
 
     def _descriptor(self, voice: Voice) -> ResourceDescriptor:
         return ResourceDescriptor(

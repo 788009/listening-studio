@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from backend.app.db.models.audio import Audio, audio_tag_associations
+from backend.app.db.models.audio import Audio, AudioUtterance, audio_tag_associations
 from backend.app.db.models.audio_tag import (
     AudioTag,
     AudioTagTranslation,
@@ -51,6 +51,53 @@ class AudioTagRepository:
             AudioTag.normalized_value == normalized_value,
         )
         return session.scalar(statement)
+
+    def list_for_voice(
+        self,
+        session: Session,
+        *,
+        voice_id: int,
+        current_normalized_value: str,
+    ) -> list[AudioTag]:
+        statement = (
+            select(AudioTag, audio_tag_associations.c.audio_id)
+            .join(
+                audio_tag_associations,
+                audio_tag_associations.c.tag_id == AudioTag.id,
+            )
+            .join(
+                AudioUtterance,
+                AudioUtterance.audio_id == audio_tag_associations.c.audio_id,
+            )
+            .options(selectinload(AudioTag.translations))
+            .where(
+                AudioTag.type == AudioTagType.VOICE,
+                AudioUtterance.voice_id == voice_id,
+            )
+        )
+        rows = list(session.execute(statement))
+        if not rows:
+            return []
+
+        audio_ids = {audio_id for _, audio_id in rows}
+        voice_ids_by_audio: dict[int, set[int | None]] = {
+            audio_id: set() for audio_id in audio_ids
+        }
+        for audio_id, linked_voice_id in session.execute(
+            select(AudioUtterance.audio_id, AudioUtterance.voice_id).where(
+                AudioUtterance.audio_id.in_(audio_ids)
+            )
+        ):
+            voice_ids_by_audio[audio_id].add(linked_voice_id)
+
+        result: dict[int, AudioTag] = {}
+        for tag, audio_id in rows:
+            if (
+                tag.normalized_value == current_normalized_value
+                or voice_ids_by_audio[audio_id] == {voice_id}
+            ):
+                result[tag.id] = tag
+        return list(result.values())
 
     def create(
         self,

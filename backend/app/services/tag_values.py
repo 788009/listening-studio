@@ -13,6 +13,10 @@ from backend.app.core.exceptions import ConflictError, DomainValidationError
 
 _WHITESPACE = re.compile(r"\s+")
 _ENGLISH_VALUE = re.compile(r"^(?=.*[A-Za-z0-9])[A-Za-z0-9_-]+$")
+_DELETED_VALUE_SUFFIX = re.compile(
+    r"_\((?:deleted|已删除)\)(?:_(?:[2-9]|[1-9][0-9]+))?$",
+    re.IGNORECASE,
+)
 MAX_TAG_VALUE_LENGTH = 255
 _LANGUAGE_CODE_ADAPTER = TypeAdapter(LanguageCode)
 
@@ -106,8 +110,10 @@ def normalize_english_tag_value(raw_value: object) -> NormalizedTagValue:
 
 def normalize_translated_tag_value(raw_value: object) -> NormalizedTagValue:
     value = _canonical_value(raw_value, "translation.value")
+    deleted_suffix = _DELETED_VALUE_SUFFIX.search(value)
+    value_to_validate = value[: deleted_suffix.start()] if deleted_suffix else value
     has_letter_or_number = False
-    for character in value:
+    for character in value_to_validate:
         if character.isalnum():
             has_letter_or_number = True
             continue

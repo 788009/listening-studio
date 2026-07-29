@@ -4,7 +4,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from backend.app.db.models.audio import Audio, AudioStatus, AudioUtterance
-from backend.app.db.models.generation_batch import GenerationBatchSpeakerVoice
+from backend.app.db.models.generation_batch import (
+    GenerationBatch,
+    GenerationBatchSpeakerVoice,
+    GenerationBatchStatus,
+)
 from backend.app.db.models.user import User
 from backend.app.db.models.voice import Voice, VoiceSampleSource
 from backend.app.db.models.voice_tag import VoiceTag
@@ -57,8 +61,20 @@ class VoiceRepository:
         voice_id: int,
     ) -> int:
         statement = (
-            select(func.count()).where(
-                GenerationBatchSpeakerVoice.voice_id == voice_id
+            select(func.count())
+            .select_from(GenerationBatchSpeakerVoice)
+            .join(
+                GenerationBatch,
+                GenerationBatch.id == GenerationBatchSpeakerVoice.batch_id,
+            )
+            .where(
+                GenerationBatchSpeakerVoice.voice_id == voice_id,
+                GenerationBatch.status.in_(
+                    {
+                        GenerationBatchStatus.PENDING,
+                        GenerationBatchStatus.PROCESSING,
+                    }
+                ),
             )
         )
         return session.scalar(statement) or 0

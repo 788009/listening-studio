@@ -143,6 +143,22 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             "A short source corpus.",
         )
 
+    def test_active_batch_prevents_voice_deletion(self) -> None:
+        response = self.submit({"monologue": 1}, 1)
+        self.assertEqual(response.status_code, 202, response.text)
+
+        active_delete = self.send(
+            "DELETE",
+            f"/api/voices/{self.voice_ids[0]}",
+            headers=self.headers(),
+        )
+
+        self.assertEqual(active_delete.status_code, 409)
+        self.assertEqual(
+            active_delete.json()["error"]["details"]["batchVoiceMappingCount"],
+            1,
+        )
+
     def test_dialogue_requires_two_speakers_and_counts_are_positive(self) -> None:
         one_speaker = self.submit({"long_dialogue": 1}, 1)
         zero_count = self.submit({"short_dialogue": 0, "monologue": 1}, 2)

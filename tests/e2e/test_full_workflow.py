@@ -570,11 +570,7 @@ class FullWorkflowTest(unittest.TestCase):
             f"/api/voices/{host_voice_id}",
             headers=self.teacher_headers("delete-used-voice"),
         )
-        self.assert_status(delete_voice, 409, "delete used voice conflict")
-        self.assertGreater(
-            delete_voice.json()["error"]["details"]["batchVoiceMappingCount"],
-            0,
-        )
+        self.assert_status(delete_voice, 204, "delete used voice")
 
         other_profile = self.send(
             "POST",
@@ -632,7 +628,7 @@ class FullWorkflowTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in single_record.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.VOICE, "Host_voice"),
+                    (AudioTagType.VOICE, "Host_voice_(deleted)"),
                     (AudioTagType.TOPIC, "climate_change"),
                 },
             )
@@ -649,7 +645,7 @@ class FullWorkflowTest(unittest.TestCase):
                 {(tag.type, tag.value) for tag in dialogue_record.tags},
                 {
                     (AudioTagType.AUTHOR, "TeacherOne"),
-                    (AudioTagType.VOICE, "Host_voice"),
+                    (AudioTagType.VOICE, "Host_voice_(deleted)"),
                     (AudioTagType.VOICE, "Guest_voice"),
                     (AudioTagType.TOPIC, "climate_change"),
                 },
@@ -728,7 +724,7 @@ class FullWorkflowTest(unittest.TestCase):
                 f"job {job_id} completion log is missing",
             )
         self.assertIn("paperItemCount", delete_audio.text)
-        self.assertIn("batchVoiceMappingCount", delete_voice.text)
+        self.assertEqual(delete_voice.text, "")
         self.assertIn("teacher-subject", self.oidc.authenticated_subjects)
 
 

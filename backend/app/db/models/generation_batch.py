@@ -239,7 +239,7 @@ class GenerationBatchSpeakerVoice(Base):
     speaker: Mapped[str] = mapped_column(String(200), nullable=False)
     normalized_speaker: Mapped[str] = mapped_column(String(200), nullable=False)
     voice_id: Mapped[int] = mapped_column(
-        ForeignKey("voices.id", ondelete="RESTRICT"),
+        ForeignKey("voices.id", ondelete="CASCADE"),
         nullable=False,
     )
     batch: Mapped[GenerationBatch] = relationship(back_populates="speaker_voices")

@@ -30,7 +30,7 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine = create_db_engine(database_url)
             with engine.connect() as connection:
                 revision = MigrationContext.configure(connection).get_current_revision()
-            self.assertEqual(revision, "20260723_0022")
+            self.assertEqual(revision, "20260729_0023")
 
             command.downgrade(config, "base")
             with engine.connect() as connection:
@@ -522,6 +522,69 @@ class DatabaseIntegrationTest(unittest.TestCase):
             engine.dispose()
 
         self.assertEqual(preserved_history, (None, "Current"))
+
+    def test_deleted_voice_cascades_terminal_batch_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            database_path = Path(temporary_dir) / "deletable-used-voice.sqlite3"
+            database_url = f"sqlite:///{database_path}"
+            config = Config(PROJECT_ROOT / "alembic.ini")
+            config.set_main_option("sqlalchemy.url", database_url)
+            command.upgrade(config, "20260723_0022")
+            engine = create_db_engine(database_url)
+            with engine.begin() as connection:
+                connection.execute(
+                    text(
+                        "INSERT INTO users "
+                        "(issuer, subject, status, user_id, normalized_user_id) "
+                        "VALUES ('issuer', 'subject', 'active', 'TeacherOne', "
+                        "'teacherone')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO jobs (type, owner_id, input_summary) "
+                        "VALUES ('corpus_generation', 1, '{}')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO voices "
+                        "(author_id, title, normalized_title, sample_source) "
+                        "VALUES (1, 'Historical voice', 'historical voice', "
+                        "'original')"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO generation_batches (owner_id, job_id) "
+                        "VALUES (1, 1)"
+                    )
+                )
+                connection.execute(
+                    text(
+                        "INSERT INTO generation_batch_speaker_voices "
+                        "(batch_id, speaker, normalized_speaker, voice_id) "
+                        "VALUES (1, 'Speaker', 'speaker', 1)"
+                    )
+                )
+
+            command.upgrade(config, "head")
+            with engine.begin() as connection:
+                foreign_key = next(
+                    item
+                    for item in inspect(connection).get_foreign_keys(
+                        "generation_batch_speaker_voices"
+                    )
+                    if item["constrained_columns"] == ["voice_id"]
+                )
+                connection.execute(text("DELETE FROM voices WHERE id = 1"))
+                remaining = connection.scalar(
+                    text("SELECT COUNT(*) FROM generation_batch_speaker_voices")
+                )
+            engine.dispose()
+
+        self.assertEqual(foreign_key["options"].get("ondelete"), "CASCADE")
+        self.assertEqual(remaining, 0)
 
     def test_audio_voice_tag_migration_preserves_existing_links(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
