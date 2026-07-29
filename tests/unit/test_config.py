@@ -25,6 +25,9 @@ class SettingsTest(unittest.TestCase):
             "LISTENING_DIALOGUE_SILENCE_MILLISECONDS": "750",
             "LISTENING_DEBUG_AUTH_ENABLED": "true",
             "LISTENING_METRICS_TOKEN": "internal-metrics-token",
+            "DASHSCOPE_API_KEY": "dashscope-secret",
+            "DASHSCOPE_BASE_URL": "https://dashscope.example/v1",
+            "DASHSCOPE_MODEL": "test-model",
         }
 
         with patch.dict(os.environ, environment, clear=True):
@@ -47,6 +50,14 @@ class SettingsTest(unittest.TestCase):
             "internal-metrics-token",
         )
         self.assertEqual(settings.cosyvoice_model_dir, Path("/models/cosyvoice"))
+        self.assertEqual(
+            settings.dashscope_api_key.get_secret_value()
+            if settings.dashscope_api_key
+            else None,
+            "dashscope-secret",
+        )
+        self.assertEqual(settings.dashscope_base_url, "https://dashscope.example/v1")
+        self.assertEqual(settings.dashscope_model, "test-model")
 
     def test_auth_session_secret_has_minimum_length(self) -> None:
         with self.assertRaises(ValidationError):

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
 from backend.app.core.exceptions import ConflictError, DomainValidationError
@@ -14,7 +15,7 @@ from backend.app.db.models.audio_tag import (
     AudioTagTranslation,
     AudioTagType,
 )
-from backend.app.db.models.voice_tag import VoiceTagType
+from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.services.audio_tags import AudioTagService
 from backend.app.services.tag_values import TagTranslationInput
@@ -42,6 +43,8 @@ class AudioTagIntegrationTest(unittest.TestCase):
 
     def test_audio_and_voice_tag_ids_are_independent(self) -> None:
         with self.session_factory() as session:
+            previous_voice_id = session.scalar(select(func.max(VoiceTag.id))) or 0
+            previous_audio_id = session.scalar(select(func.max(AudioTag.id))) or 0
             voice_tag = VoiceTagService().create_tag(
                 session,
                 tag_type=VoiceTagType.GENDER,
@@ -54,8 +57,8 @@ class AudioTagIntegrationTest(unittest.TestCase):
             )
             session.commit()
 
-            self.assertEqual(voice_tag.id, 1)
-            self.assertEqual(audio_tag.id, 1)
+            self.assertEqual(voice_tag.id, previous_voice_id + 1)
+            self.assertEqual(audio_tag.id, previous_audio_id + 1)
             self.assertNotEqual(voice_tag.__tablename__, audio_tag.__tablename__)
 
     def test_service_protects_type_english_value_and_uniqueness(self) -> None:

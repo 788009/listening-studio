@@ -8,8 +8,7 @@ from backend.app.core.logging import configure_logging
 from backend.app.db.session import create_db_engine, create_session_factory
 from backend.app.integrations.cosyvoice import CosyVoiceAdapter
 from backend.app.integrations.llm import (
-    PlaceholderListeningContentGenerator,
-    PlaceholderTopicTagSuggester,
+    DashScopeLlmIntegration,
     ValidatingListeningContentGenerator,
     ValidatingTopicTagSuggester,
 )
@@ -66,13 +65,22 @@ def build_handlers(settings: Settings) -> dict[str, JobHandler]:
         integration=integration,
         synthesis_service=audio_service,
     )
+    if (
+        settings.dashscope_api_key is None
+        or not settings.dashscope_base_url
+        or not settings.dashscope_model
+    ):
+        raise RuntimeError(
+            "DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, and DASHSCOPE_MODEL are required"
+        )
+    llm = DashScopeLlmIntegration(
+        api_key=settings.dashscope_api_key.get_secret_value(),
+        base_url=settings.dashscope_base_url,
+        model=settings.dashscope_model,
+    )
     corpus_service = CorpusGenerationService(
-        generator=ValidatingListeningContentGenerator(
-            PlaceholderListeningContentGenerator()
-        ),
-        tag_suggester=ValidatingTopicTagSuggester(
-            PlaceholderTopicTagSuggester()
-        ),
+        generator=ValidatingListeningContentGenerator(llm),
+        tag_suggester=ValidatingTopicTagSuggester(llm),
         corpus_storage=CorpusStorage(settings.data_dir),
     )
     return {

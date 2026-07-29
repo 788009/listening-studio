@@ -686,7 +686,10 @@ class FullWorkflowTest(unittest.TestCase):
             )
 
         self.assertEqual(len(self.llm.calls), 1)
-        self.assertEqual(self.llm.calls[0][1], f"job-{batch_job_id}")
+        self.assertEqual(
+            self.llm.calls[0][1],
+            f"job-{batch_job_id}-short_dialogue",
+        )
         self.assertEqual(
             [call.operation for call in self.tts.calls].count("extract_voice"),
             2,

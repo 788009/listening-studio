@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 import random
 import unittest
+from types import SimpleNamespace
 
 from pydantic import ValidationError
 
 from backend.app.core.exceptions import JobFailedError
 from backend.app.integrations.llm import (
     GeneratedListeningContent,
+    DashScopeLlmIntegration,
     ListeningGenerationRequest,
     PlaceholderListeningContentGenerator,
     PlaceholderTopicTagSuggester,
@@ -17,6 +20,31 @@ from backend.app.integrations.llm import (
     ValidatingListeningContentGenerator,
     ValidatingTopicTagSuggester,
 )
+
+
+def completion(content: str) -> SimpleNamespace:
+    return SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content=content))]
+    )
+
+
+class FakeCompletions:
+    def __init__(self, effects: list[object]) -> None:
+        self.effects = list(effects)
+        self.calls: list[dict[str, object]] = []
+
+    def create(self, **kwargs: object) -> object:
+        self.calls.append(kwargs)
+        effect = self.effects.pop(0)
+        if isinstance(effect, Exception):
+            raise effect
+        return effect
+
+
+class FakeOpenAI:
+    def __init__(self, effects: list[object]) -> None:
+        self.completions = FakeCompletions(effects)
+        self.chat = SimpleNamespace(completions=self.completions)
 
 
 class InvalidGenerator:
@@ -32,14 +60,10 @@ class InvalidTopicSuggester:
 
 
 class LlmIntegrationTest(unittest.TestCase):
-    def test_placeholder_uses_each_question_type_count(self) -> None:
+    def test_placeholder_uses_requested_question_type_count(self) -> None:
         request = ListeningGenerationRequest(
             corpus="Source corpus",
-            question_type_counts={
-                QuestionType.SHORT_DIALOGUE: 2,
-                QuestionType.LONG_DIALOGUE: 3,
-                QuestionType.MONOLOGUE: 2,
-            },
+            question_type_counts={QuestionType.SHORT_DIALOGUE: 7},
         )
         result = PlaceholderListeningContentGenerator().generate(
             request,
@@ -47,18 +71,13 @@ class LlmIntegrationTest(unittest.TestCase):
         )
 
         self.assertEqual(len(result.items), 7)
-        self.assertEqual(
-            [item.question_type for item in result.items],
-            [
-                QuestionType.SHORT_DIALOGUE,
-                QuestionType.SHORT_DIALOGUE,
-                QuestionType.LONG_DIALOGUE,
-                QuestionType.LONG_DIALOGUE,
-                QuestionType.LONG_DIALOGUE,
-                QuestionType.MONOLOGUE,
-                QuestionType.MONOLOGUE,
-            ],
+        self.assertTrue(
+            all(
+                item.question_type is QuestionType.SHORT_DIALOGUE
+                for item in result.items
+            )
         )
+        self.assertEqual(len({item.title for item in result.items}), 7)
         self.assertTrue(all(item.questions for item in result.items))
         self.assertTrue(
             all(
@@ -68,21 +87,15 @@ class LlmIntegrationTest(unittest.TestCase):
             )
         )
 
-    def test_placeholder_returns_all_available_examples_when_count_is_larger(self) -> None:
-        result = ValidatingListeningContentGenerator(
-            PlaceholderListeningContentGenerator()
-        ).generate(
+    def test_request_rejects_multiple_question_types(self) -> None:
+        with self.assertRaises(ValidationError):
             ListeningGenerationRequest(
                 corpus="Source corpus",
                 question_type_counts={
-                    QuestionType.SHORT_DIALOGUE: 7,
-                    QuestionType.LONG_DIALOGUE: 7,
-                    QuestionType.MONOLOGUE: 6,
+                    QuestionType.SHORT_DIALOGUE: 1,
+                    QuestionType.MONOLOGUE: 1,
                 },
-            ),
-            call_id="all-examples",
-        )
-        self.assertEqual(len(result.items), 11)
+            )
 
     def test_request_rejects_total_count_above_limit(self) -> None:
         with self.assertRaises(ValidationError):
@@ -153,6 +166,101 @@ class LlmIntegrationTest(unittest.TestCase):
                 TopicSuggestionRequest(corpus="Source corpus", existing_topics=()),
                 call_id="invalid-topic",
             )
+
+    def test_dashscope_content_uses_prompt_material_and_strict_json(self) -> None:
+        payload = {
+            "items": [
+                {
+                    "title": "Community Garden Plan",
+                    "utterances": [
+                        {"speaker": "Man", "text": "Where should we plant herbs?"},
+                        {
+                            "speaker": "Woman",
+                            "text": "Near the entrance where volunteers can water them.",
+                        },
+                    ],
+                    "questions": [
+                        {
+                            "prompt": "Where will the herbs be planted?",
+                            "correctAnswers": ["Near the entrance."],
+                            "wrongAnswers": ["Behind the school.", "Beside the road."],
+                        }
+                    ],
+                }
+            ]
+        }
+        fake = FakeOpenAI([completion(json.dumps(payload))])
+        integration = DashScopeLlmIntegration(
+            api_key="secret",
+            base_url="https://example.invalid/v1",
+            model="test-model",
+            client=fake,  # type: ignore[arg-type]
+            sleep=lambda _: None,
+        )
+
+        result = integration.generate(
+            ListeningGenerationRequest(
+                corpus="A corpus about community gardens",
+                question_type_counts={QuestionType.SHORT_DIALOGUE: 1},
+            ),
+            call_id="content-test",
+        )
+
+        self.assertEqual(result.items[0].title, "Community Garden Plan")
+        self.assertEqual(result.items[0].question_type, QuestionType.SHORT_DIALOGUE)
+        call = fake.completions.calls[0]
+        self.assertEqual(call["model"], "test-model")
+        self.assertEqual(call["response_format"], {"type": "json_object"})
+        messages = call["messages"]
+        assert isinstance(messages, list)
+        user_prompt = messages[1]["content"]
+        self.assertIn("# 短对话", user_prompt)
+        self.assertIn('"Finding a Parking Space"', user_prompt)
+        self.assertIn("A corpus about community gardens", user_prompt)
+
+    def test_dashscope_retries_three_times_for_any_response_error(self) -> None:
+        valid = completion(
+            json.dumps(
+                {
+                    "topics": [
+                        {
+                            "english_value": "community_gardens",
+                            "translations": [
+                                {"language": "zh-CN", "value": "社区花园"}
+                            ],
+                        }
+                    ]
+                }
+            )
+        )
+        fake = FakeOpenAI(
+            [
+                RuntimeError("network"),
+                completion("not-json"),
+                completion('{"topics":[]}'),
+                valid,
+            ]
+        )
+        delays: list[float] = []
+        integration = DashScopeLlmIntegration(
+            api_key="secret",
+            base_url="https://example.invalid/v1",
+            model="test-model",
+            client=fake,  # type: ignore[arg-type]
+            sleep=delays.append,
+        )
+
+        result = integration.suggest(
+            TopicSuggestionRequest(
+                corpus="Community gardening source material",
+                existing_topics=("education",),
+            ),
+            call_id="topic-retry",
+        )
+
+        self.assertEqual(result.topics[0].english_value, "community_gardens")
+        self.assertEqual(len(fake.completions.calls), 4)
+        self.assertEqual(delays, [1.0, 2.0, 4.0])
 
 
 if __name__ == "__main__":

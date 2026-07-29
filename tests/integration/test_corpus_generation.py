@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,10 +22,14 @@ from backend.app.db.models.voice_tag import VoiceTag, VoiceTagType
 from backend.app.factory import create_app
 from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT_HEADER
 from backend.app.integrations.llm import (
+    GeneratedTagTranslation,
     PlaceholderListeningContentGenerator,
-    PlaceholderTopicTagSuggester,
+    QuestionType,
     ListeningGenerationRequest,
     ListeningGenerationResult,
+    SuggestedTopicTag,
+    TopicSuggestionRequest,
+    TopicSuggestionResult,
     ValidatingListeningContentGenerator,
     ValidatingTopicTagSuggester,
 )
@@ -48,6 +51,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 class DuplicateTitleGenerator:
     def __init__(self) -> None:
         self.delegate = PlaceholderListeningContentGenerator()
+        self.calls: list[tuple[ListeningGenerationRequest, str]] = []
 
     def generate(
         self,
@@ -55,12 +59,37 @@ class DuplicateTitleGenerator:
         *,
         call_id: str,
     ) -> ListeningGenerationResult:
+        self.calls.append((request, call_id))
         result = self.delegate.generate(request, call_id=call_id)
         items = list(result.items)
-        items[1] = items[1].model_copy(
-            update={"title": "Ｆinding a Parking Space"}
-        )
+        if len(items) > 1:
+            items[1] = items[1].model_copy(
+                update={"title": "Ｆinding a Parking Space"}
+            )
         return result.model_copy(update={"items": items})
+
+
+class NewTopicSuggester:
+    def suggest(
+        self,
+        request: TopicSuggestionRequest,
+        *,
+        call_id: str,
+    ) -> TopicSuggestionResult:
+        del request, call_id
+        return TopicSuggestionResult(
+            topics=[
+                SuggestedTopicTag(
+                    english_value="sustainable_travel",
+                    translations=[
+                        GeneratedTagTranslation(
+                            language="zh-CN",
+                            value="可持续旅行",
+                        )
+                    ],
+                )
+            ]
+        )
 
 
 class CorpusGenerationIntegrationTest(unittest.TestCase):
@@ -208,12 +237,11 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 ]
             )
             session.commit()
+        generator = DuplicateTitleGenerator()
         service = CorpusGenerationService(
-            generator=ValidatingListeningContentGenerator(
-                DuplicateTitleGenerator()
-            ),
+            generator=ValidatingListeningContentGenerator(generator),
             tag_suggester=ValidatingTopicTagSuggester(
-                PlaceholderTopicTagSuggester(random.Random(1))
+                NewTopicSuggester()
             ),
             corpus_storage=CorpusStorage(self.settings.data_dir),
         )
@@ -223,6 +251,15 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             poll_interval_seconds=0.01,
         )
         self.assertTrue(worker.run_once())
+        self.assertEqual(len(generator.calls), 3)
+        self.assertEqual(
+            [set(request.question_type_counts) for request, _ in generator.calls],
+            [
+                {QuestionType.SHORT_DIALOGUE},
+                {QuestionType.LONG_DIALOGUE},
+                {QuestionType.MONOLOGUE},
+            ],
+        )
 
         with self.app.state.session_factory() as session:
             batch = session.get(GenerationBatch, batch_id)
@@ -233,13 +270,13 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             self.assertEqual(len(batch.items), 4)
             self.assertEqual(session.query(Audio).count(), 2)
             self.assertEqual(
-                [(tag.type, tag.value) for tag in batch.tags],
-                [
-                    (AudioTagType.TOPIC, "travel"),
+                {(tag.type, tag.value) for tag in batch.tags},
+                {
+                    (AudioTagType.TOPIC, "sustainable_travel"),
                     (AudioTagType.CATEGORY, "short"),
                     (AudioTagType.CATEGORY, "long"),
                     (AudioTagType.CATEGORY, "monologue"),
-                ],
+                },
             )
             self.assertEqual(
                 {
@@ -282,13 +319,13 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             {"short_dialogue": 2, "long_dialogue": 1, "monologue": 1},
         )
         self.assertEqual(
-            [(tag["type"], tag["englishValue"]) for tag in payload["tags"]],
-            [
-                ("topic", "travel"),
+            {(tag["type"], tag["englishValue"]) for tag in payload["tags"]},
+            {
+                ("topic", "sustainable_travel"),
                 ("category", "short"),
                 ("category", "long"),
                 ("category", "monologue"),
-            ],
+            },
         )
         localized_tags = self.send(
             "GET",
@@ -301,9 +338,31 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 tag["englishValue"]: tag["displayValue"]
                 for tag in localized_tags.json()
             },
-            {"short": "短对话", "long": "长对话", "monologue": "独白"},
+            {
+                "short": "短对话",
+                "long": "长对话",
+                "monologue": "独白",
+                "full_paper": "套卷",
+            },
         )
-        self.assertEqual(payload["items"][0]["draft"]["questions"][0]["correctAnswers"], ["Park the car."])
+        localized_topics = self.send(
+            "GET",
+            "/api/audio-tags?type=topic&language=zh-CN",
+            headers=self.headers(),
+        )
+        self.assertEqual(localized_topics.status_code, 200, localized_topics.text)
+        self.assertEqual(
+            next(
+                tag["displayValue"]
+                for tag in localized_topics.json()
+                if tag["englishValue"] == "sustainable_travel"
+            ),
+            "可持续旅行",
+        )
+        self.assertEqual(
+            payload["items"][0]["draft"]["questions"][0]["correctAnswers"],
+            ["Park the car."],
+        )
         self.assertFalse((self.root / "data" / "jobs" / str(job_id)).exists())
 
 

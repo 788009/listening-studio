@@ -29,6 +29,22 @@ class Settings(BaseSettings):
         ge=1,
         le=MAX_GENERATION_COUNT,
     )
+    dashscope_api_key: SecretStr | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DASHSCOPE_API_KEY", "LISTENING_DASHSCOPE_API_KEY"
+        ),
+    )
+    dashscope_base_url: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "DASHSCOPE_BASE_URL", "LISTENING_DASHSCOPE_BASE_URL"
+        ),
+    )
+    dashscope_model: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DASHSCOPE_MODEL", "LISTENING_DASHSCOPE_MODEL"),
+    )
     dialogue_silence_milliseconds: int = Field(default=500, ge=0, le=10_000)
     debug_auth_enabled: bool = False
     auth_session_secret: SecretStr = SecretStr("development-only-change-before-use")

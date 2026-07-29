@@ -97,23 +97,20 @@ class CorpusGenerationService:
             session.commit()
             corpus = self._read_corpus(job_id)
             checkpoint(20)
-            result = ListeningGenerationResult.model_validate(
-                self.generator.generate(
-                    ListeningGenerationRequest(
-                        corpus=corpus,
-                        question_type_counts=batch.question_type_counts,
-                        language=owner.locale,
-                    ),
-                    call_id=request_id,
-                )
+            generated_items = self._generate_contents(
+                corpus=corpus,
+                question_type_counts=batch.question_type_counts,
+                language=owner.locale,
+                request_id=request_id,
+                checkpoint=checkpoint,
             )
-            generated_items = self._deduplicate_titles(session, result.items)
-            checkpoint(55)
+            generated_items = self._deduplicate_titles(session, generated_items)
             topic_tags = self._suggest_topics(
                 session,
                 corpus=corpus,
                 language=owner.locale,
                 request_id=request_id,
+                checkpoint=checkpoint,
             )
             category_tags = self._question_type_categories(session, generated_items)
             batch.tags = [*topic_tags, *category_tags]
@@ -145,6 +142,13 @@ class CorpusGenerationService:
             self._fail(session, batch)
             raise
         except Exception as exc:
+            logger.bind(
+                request_id=request_id,
+                job_id=job_id,
+                user_db_id=owner_id,
+                resource_type="generation_batch",
+                resource_id=batch_id,
+            ).opt(exception=exc).error("Corpus draft generation failed")
             self._fail(session, batch)
             raise JobFailedError("Corpus draft generation failed") from exc
         finally:
@@ -159,6 +163,35 @@ class CorpusGenerationService:
         except (OSError, UnicodeError) as exc:
             raise JobFailedError("Staged corpus could not be read") from exc
 
+    def _generate_contents(
+        self,
+        *,
+        corpus: str,
+        question_type_counts: dict[str, int],
+        language: str,
+        request_id: str,
+        checkpoint: Callable[[int], None],
+    ) -> list[GeneratedListeningContent]:
+        total_count = sum(question_type_counts.values())
+        completed_count = 0
+        contents: list[GeneratedListeningContent] = []
+        for raw_question_type, count in question_type_counts.items():
+            question_type = QuestionType(raw_question_type)
+            result = ListeningGenerationResult.model_validate(
+                self.generator.generate(
+                    ListeningGenerationRequest(
+                        corpus=corpus,
+                        question_type_counts={question_type: count},
+                        language=language,
+                    ),
+                    call_id=f"{request_id}-{question_type.value}",
+                )
+            )
+            contents.extend(result.items)
+            completed_count += count
+            checkpoint(20 + round(35 * completed_count / total_count))
+        return contents
+
     def _suggest_topics(
         self,
         session: Session,
@@ -166,6 +199,7 @@ class CorpusGenerationService:
         corpus: str,
         language: str,
         request_id: str,
+        checkpoint: Callable[[int], None],
     ) -> list[AudioTag]:
         existing = self.tag_repository.list_tags(session, AudioTagType.TOPIC)
         result = TopicSuggestionResult.model_validate(
@@ -175,9 +209,10 @@ class CorpusGenerationService:
                     existing_topics=tuple(tag.value for tag in existing),
                     language=language,
                 ),
-                call_id=request_id,
+                call_id=f"{request_id}-topics",
             )
         )
+        checkpoint(70)
         tags: list[AudioTag] = []
         for suggestion in result.topics:
             normalized = normalize_english_tag_value(suggestion.english_value)
