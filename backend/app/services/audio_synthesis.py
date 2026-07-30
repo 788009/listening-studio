@@ -37,6 +37,7 @@ from backend.app.services.audios import (
 from backend.app.services.authorization import AuthorizationService
 from backend.app.services.jobs import JobService
 from backend.app.services.audio_voice_tags import audio_voice_tag_value
+from backend.app.services.speech_synthesis import ChunkedSpeechSynthesizer
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
@@ -78,6 +79,11 @@ class AudioSynthesisService:
         self.job_service = job_service or JobService()
         self.authorization = authorization or AuthorizationService()
         self.combiner = combiner or AudioCombiner()
+        self.synthesizer = (
+            ChunkedSpeechSynthesizer(integration, combiner=self.combiner)
+            if integration is not None
+            else None
+        )
 
     def prepare_single_speaker(
         self,
@@ -296,7 +302,8 @@ class AudioSynthesisService:
             raise JobFailedError("Single-speaker audio task data is invalid")
         utterance = audio.utterances[0]
         checkpoint(20)
-        self.integration.synthesize(
+        assert self.synthesizer is not None
+        self.synthesizer.synthesize(
             self.voice_storage.path(utterance.voice_id, VoiceAsset.MODEL),
             utterance.text,
             self.audio_storage.temporary_audio_path(job_id),
@@ -318,7 +325,8 @@ class AudioSynthesisService:
         for position, utterance in enumerate(audio.utterances):
             checkpoint(20 + (position * 55 // utterance_count))
             segment_path = self.audio_storage.segment_audio_path(job_id, position)
-            self.integration.synthesize(
+            assert self.synthesizer is not None
+            self.synthesizer.synthesize(
                 self.voice_storage.path(utterance.voice_id, VoiceAsset.MODEL),
                 utterance.text,
                 segment_path,

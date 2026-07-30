@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 
 import httpx
@@ -264,6 +265,35 @@ class AudioSynthesisIntegrationTest(unittest.TestCase):
             [item["id"] for item in search.json()["items"]],
             [audio_id],
         )
+
+    def test_single_speaker_job_synthesizes_text_in_complete_sentence_chunks(
+        self,
+    ) -> None:
+        voice_id = self.create_voice(user_id="TeacherOne", title="Chunked voice")
+        first = " ".join(["First", *[f"word{index}" for index in range(2, 21)]]) + "."
+        second = " ".join(["Second", *[f"word{index}" for index in range(2, 21)]]) + "."
+        response = self.send(
+            "POST",
+            "/api/audios",
+            headers=self.headers("first"),
+            json={
+                "title": "Chunked listening",
+                "text": f"{first} {second}",
+                "voiceId": voice_id,
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+        self.assertEqual(response.status_code, 202, response.text)
+        fake = FakeCosyVoiceIntegration()
+
+        self.assertTrue(self.worker(fake).run_once())
+
+        self.assertEqual([call.text for call in fake.calls], [first, second])
+        output_path = self.audio_storage.path(response.json()["audioId"])
+        with wave.open(str(output_path), "rb") as audio_file:
+            self.assertEqual(audio_file.getnframes(), 1600)
+            self.assertEqual(audio_file.getframerate(), 8000)
 
     def test_voice_access_rules_are_checked_before_records_are_created(self) -> None:
         other_private = self.create_voice(

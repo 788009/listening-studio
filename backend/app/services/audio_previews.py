@@ -41,6 +41,7 @@ from backend.app.services.audios import (
 )
 from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.jobs import JobService
+from backend.app.services.speech_synthesis import ChunkedSpeechSynthesizer
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 
 
@@ -100,6 +101,11 @@ class AudioPreviewService:
             AudioService(audio_storage) if audio_storage is not None else None
         )
         self.combiner = combiner or AudioCombiner()
+        self.synthesizer = (
+            ChunkedSpeechSynthesizer(integration, combiner=self.combiner)
+            if integration is not None
+            else None
+        )
         self.max_upload_bytes = max_upload_bytes
         self.audio_transcoder = audio_transcoder or FfmpegAudioTranscoder()
 
@@ -333,7 +339,8 @@ class AudioPreviewService:
         checkpoint(25)
         temporary = self.job_storage.audio_preview_temporary_path(job_id)
         temporary.unlink(missing_ok=True)
-        self.integration.synthesize(
+        assert self.synthesizer is not None
+        self.synthesizer.synthesize(
             self.voice_storage.path(voice.id, VoiceAsset.MODEL),
             preview_input.text,
             temporary,
