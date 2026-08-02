@@ -1,5 +1,5 @@
 import { apiRequest } from './client'
-import type { ResourceVisibility } from './voices'
+import type { ResourceVisibility, VoiceAuthor } from './voices'
 
 export type ManagedResourceKind =
   | 'voice'
@@ -22,6 +22,7 @@ export interface ManagedReference {
 export interface ManagedResource {
   id: number
   kind: ManagedResourceKind
+  author: VoiceAuthor
   title: string
   status: string
   visibility?: ResourceVisibility

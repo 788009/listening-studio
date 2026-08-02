@@ -18,6 +18,7 @@ import {
   type VoiceTag,
 } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import AuthorLink from '@/components/AuthorLink.vue'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import ResourceTagPicker from '@/components/ResourceTagPicker.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
@@ -80,6 +81,11 @@ function resetForm(current: Voice): void {
   selectedGenderTagIds.value = current.tags
     .filter((tag) => tag.type === 'gender')
     .map((tag) => tag.id)
+}
+
+function sampleAudioLabel(audio: AudioSummary): string {
+  const authorName = audio.author.username || audio.author.userId
+  return `${audio.title} - ${authorName} @${audio.author.userId}`
 }
 
 async function loadVoice(): Promise<void> {
@@ -238,12 +244,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             {{ t('Voices') }}
           </RouterLink>
           <h1 id="voice-title" class="break-words text-3xl font-semibold">{{ voice.title }}</h1>
-          <RouterLink
-            :to="`/user/${voice.author.userId}`"
-            class="mt-1 inline-block break-words text-sm text-muted hover:text-ink"
-          >
-            {{ voice.author.username || voice.author.userId }}
-          </RouterLink>
+          <AuthorLink :author="voice.author" class="mt-1 text-sm" />
         </div>
         <div class="flex flex-wrap gap-2">
           <button
@@ -331,7 +332,7 @@ watch(() => route.params.id, loadVoice, { immediate: true })
             >
               <option value="" disabled>{{ editingOptionsLoading ? t('Loading audio') : t('Select audio') }}</option>
               <option v-for="audio in sampleAudio" :key="audio.id" :value="String(audio.id)">
-                {{ audio.title }} - {{ audio.author.username || audio.author.userId }}
+                {{ sampleAudioLabel(audio) }}
               </option>
             </select>
           </div>
@@ -401,7 +402,12 @@ watch(() => route.params.id, loadVoice, { immediate: true })
 
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
-        <VoiceTagLines :tags="voice.tags" search-path="/voices" grouped />
+        <VoiceTagLines
+          :tags="voice.tags"
+          :author="voice.author"
+          search-path="/voices"
+          grouped
+        />
       </div>
 
       <div v-if="isOwner && voice.errorSummary" class="border-b border-line py-6">

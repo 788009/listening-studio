@@ -2,18 +2,26 @@
 import { computed } from 'vue'
 
 import type { AudioTag, AudioTagType } from '@/api/audios'
+import type { VoiceAuthor } from '@/api/voices'
 import TagChip from '@/components/TagChip.vue'
 import { useI18n } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
     tags: AudioTag[]
+    author?: VoiceAuthor
     includeAuthor?: boolean
     includeVoice?: boolean
     searchPath?: string
     grouped?: boolean
   }>(),
-  { includeAuthor: true, includeVoice: true, searchPath: undefined, grouped: false },
+  {
+    author: undefined,
+    includeAuthor: true,
+    includeVoice: true,
+    searchPath: undefined,
+    grouped: false,
+  },
 )
 const { t } = useI18n()
 
@@ -40,6 +48,18 @@ const rows = computed(() => {
     }))
     .filter((row) => row.values.length > 0)
 })
+
+function tagLabel(tag: AudioTag): string {
+  if (tag.type === 'author' && props.author) {
+    return props.author.username || props.author.userId
+  }
+  return tag.displayValue.replace(/_/g, ' ')
+}
+
+function secondaryLabel(tag: AudioTag): string | undefined {
+  if (tag.type !== 'author') return undefined
+  return `@${props.author?.userId ?? tag.englishValue}`
+}
 </script>
 
 <template>
@@ -54,7 +74,8 @@ const rows = computed(() => {
         <ul class="flex min-w-0 flex-wrap gap-2">
           <li v-for="tag in row.values" :key="tag.id" class="flex min-w-0 max-w-full">
             <TagChip
-              :label="tag.displayValue.replace(/_/g, ' ')"
+              :label="tagLabel(tag)"
+              :secondary-label="secondaryLabel(tag)"
               :to="searchPath ? { path: searchPath, query: { q: tag.fullTag } } : undefined"
             />
           </li>
@@ -69,7 +90,8 @@ const rows = computed(() => {
     >
       <li v-for="tag in row.values" :key="tag.id" class="flex min-w-0 max-w-full">
         <TagChip
-          :label="tag.displayValue.replace(/_/g, ' ')"
+          :label="tagLabel(tag)"
+          :secondary-label="secondaryLabel(tag)"
           :type-label="row.label"
           :to="searchPath ? { path: searchPath, query: { q: tag.fullTag } } : undefined"
         />

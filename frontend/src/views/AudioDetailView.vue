@@ -17,6 +17,7 @@ import {
 } from '@/api/audios'
 import type { TagTranslation } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import AuthorLink from '@/components/AuthorLink.vue'
 import AudioTagLines from '@/components/AudioTagLines.vue'
 import ExamQuestionsDisplay from '@/components/ExamQuestionsDisplay.vue'
 import AudioQuestionsDisplay from '@/components/AudioQuestionsDisplay.vue'
@@ -272,12 +273,7 @@ watch(() => route.params.id, loadAudio, { immediate: true })
             {{ t('Library') }}
           </RouterLink>
           <h1 id="audio-title" class="break-words text-3xl font-semibold">{{ audio.title }}</h1>
-          <RouterLink
-            :to="`/user/${audio.author.userId}`"
-            class="mt-1 inline-block break-words text-sm text-muted hover:text-ink"
-          >
-            {{ audio.author.username || audio.author.userId }}
-          </RouterLink>
+          <AuthorLink :author="audio.author" class="mt-1 text-sm" />
         </div>
         <div v-if="!editing" class="flex flex-wrap items-center gap-2">
           <RouterLink
@@ -424,7 +420,13 @@ watch(() => route.params.id, loadAudio, { immediate: true })
       <div class="grid gap-6 border-b border-line py-6 md:grid-cols-[10rem_minmax(0,1fr)]">
         <h2 class="text-sm font-semibold">{{ t('Tags') }}</h2>
         <div class="space-y-5">
-          <AudioTagLines :tags="audio.tags" :include-voice="false" search-path="/audio" grouped />
+          <AudioTagLines
+            :tags="audio.tags"
+            :author="audio.author"
+            :include-voice="false"
+            search-path="/audio"
+            grouped
+          />
           <dl>
             <SpeakerVoiceLines :utterances="audio.utterances" />
           </dl>

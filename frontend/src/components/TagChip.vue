@@ -7,6 +7,7 @@ import { useI18n } from '@/i18n'
 const props = withDefaults(
   defineProps<{
     label: string
+    secondaryLabel?: string
     typeLabel?: string
     to?: RouteLocationRaw
     interactive?: boolean
@@ -16,6 +17,7 @@ const props = withDefaults(
   }>(),
   {
     typeLabel: undefined,
+    secondaryLabel: undefined,
     to: undefined,
     interactive: false,
     removable: false,
@@ -67,6 +69,7 @@ function activate(): void {
   >
     <span v-if="typeLabel" class="tag-chip-type">{{ typeLabel }}</span>
     <span class="min-w-0 break-words">{{ label }}</span>
+    <span v-if="secondaryLabel" class="shrink-0 text-muted">{{ secondaryLabel }}</span>
     <svg v-if="removable" viewBox="0 0 16 16" fill="none" class="h-3.5 w-3.5 shrink-0" aria-hidden="true">
       <path d="m4.5 4.5 7 7m0-7-7 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
     </svg>

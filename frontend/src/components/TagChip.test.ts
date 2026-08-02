@@ -14,6 +14,7 @@ describe('TagChip', () => {
     const wrapper = mount(TagChip, {
       props: {
         label: 'climate change',
+        secondaryLabel: '@TeacherOne',
         typeLabel: 'Topic',
         to: { path: '/audio', query: { q: 'topic:climate_change' } },
       },
@@ -22,6 +23,8 @@ describe('TagChip', () => {
 
     expect(wrapper.get('a').classes()).toContain('tag-chip')
     expect(wrapper.text()).toContain('Topic')
+    expect(wrapper.text()).toContain('@TeacherOne')
+    expect(wrapper.findAll('span')[2]?.classes()).toContain('text-muted')
     expect(wrapper.get('a').attributes('href')).toBe('/audio?q=topic:climate_change')
   })
 

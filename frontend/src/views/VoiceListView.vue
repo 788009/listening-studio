@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from 'vue-router'
 
 import { listVoices, type Voice } from '@/api/voices'
 import { ApiError } from '@/api/errors'
+import AuthorLink from '@/components/AuthorLink.vue'
 import ResourceStatus from '@/components/ResourceStatus.vue'
 import VoiceTagLines from '@/components/VoiceTagLines.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -116,34 +117,41 @@ onMounted(loadVoices)
     </p>
 
     <ul v-else class="divide-y divide-line overflow-hidden rounded-lg border border-line bg-surface shadow-panel">
-      <li v-for="voice in voices" :key="voice.id">
-        <RouterLink
-          :to="`/voice/${voice.id}`"
-          class="group grid min-w-0 gap-4 px-4 py-5 hover:bg-canvas sm:grid-cols-[minmax(0,1.25fr)_minmax(12rem,1fr)_8rem_1.5rem] sm:items-center sm:px-5"
+      <li
+        v-for="voice in voices"
+        :key="voice.id"
+        class="group grid min-w-0 gap-4 px-4 py-5 hover:bg-canvas sm:grid-cols-[minmax(0,1.25fr)_minmax(12rem,1fr)_8rem_1.5rem] sm:items-center sm:px-5"
+      >
+        <div class="min-w-0">
+          <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <RouterLink
+              :to="`/voice/${voice.id}`"
+              class="min-w-0 break-words text-base font-semibold hover:text-accent"
+            >
+              {{ voice.title }}
+            </RouterLink>
+            <span v-if="isOwner(voice)" class="text-xs font-medium text-accent">{{ t('Yours') }}</span>
+          </div>
+          <AuthorLink :author="voice.author" class="mt-1 text-sm" />
+        </div>
+        <VoiceTagLines
+          :tags="voice.tags"
+          :author="voice.author"
+          :include-author="false"
+          search-path="/voices"
+        />
+        <div class="flex min-w-0 flex-row items-center gap-4 sm:flex-col sm:items-start sm:gap-2">
+          <ResourceStatus :status="voice.status" />
+          <span class="text-sm capitalize text-muted">{{ t(statusLabel(voice.visibility)) }}</span>
+        </div>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          class="hidden h-5 w-5 text-muted group-hover:text-ink sm:block"
+          aria-hidden="true"
         >
-          <div class="min-w-0">
-            <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 class="min-w-0 break-words text-base font-semibold">{{ voice.title }}</h2>
-              <span v-if="isOwner(voice)" class="text-xs font-medium text-accent">{{ t('Yours') }}</span>
-            </div>
-            <p class="mt-1 break-words text-sm text-muted">
-              {{ voice.author.username || voice.author.userId }}
-            </p>
-          </div>
-          <VoiceTagLines :tags="voice.tags" :include-author="false" />
-          <div class="flex min-w-0 flex-row items-center gap-4 sm:flex-col sm:items-start sm:gap-2">
-            <ResourceStatus :status="voice.status" />
-            <span class="text-sm capitalize text-muted">{{ t(statusLabel(voice.visibility)) }}</span>
-          </div>
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            class="hidden h-5 w-5 text-muted group-hover:text-ink sm:block"
-            aria-hidden="true"
-          >
-            <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
-          </svg>
-        </RouterLink>
+          <path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" />
+        </svg>
       </li>
     </ul>
   </section>

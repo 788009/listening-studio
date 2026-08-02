@@ -10,6 +10,7 @@ import {
   type AudioTag,
 } from '@/api/audios'
 import { ApiError } from '@/api/errors'
+import AuthorLink from '@/components/AuthorLink.vue'
 import AudioSearchBox from '@/components/AudioSearchBox.vue'
 import AudioTagLines from '@/components/AudioTagLines.vue'
 import TagChip from '@/components/TagChip.vue'
@@ -195,12 +196,7 @@ onMounted(async () => {
               {{ formatDuration(audio.durationSeconds) }}
             </span>
           </div>
-          <RouterLink
-            :to="`/user/${audio.author.userId}`"
-            class="mt-1 inline-block break-words text-sm text-muted hover:text-ink"
-          >
-            {{ audio.author.username || audio.author.userId }}
-          </RouterLink>
+          <AuthorLink :author="audio.author" class="mt-1 text-sm" />
           <div
             v-if="audioVoices(audio).length > 0 || contentTags(audio).length > 0"
             class="mt-4 space-y-2 border-t border-line pt-4"

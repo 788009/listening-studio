@@ -10,6 +10,7 @@ from backend.app.api.resource_management_schemas import (
     BulkItemResultResponse,
     BulkResourceUpdateRequest,
     BulkResourceUpdateResponse,
+    ManagedAuthorResponse,
     ManagedReferenceResponse,
     ManagedResourceListResponse,
     ManagedResourceResponse,
@@ -33,10 +34,15 @@ def _service(request: Request) -> ResourceManagementService:
     return ResourceManagementService(request.app.state.settings.data_dir)
 
 
-def _response(item: ManagedResource) -> ManagedResourceResponse:
+def _response(item: ManagedResource, owner: User) -> ManagedResourceResponse:
+    assert owner.user_id is not None
     return ManagedResourceResponse(
         id=item.id,
         kind=item.kind,
+        author=ManagedAuthorResponse(
+            user_id=owner.user_id,
+            username=owner.username,
+        ),
         title=item.title,
         status=item.status,
         visibility=item.visibility,
@@ -86,7 +92,7 @@ async def list_managed_resources(
         query=query,
     )
     return ManagedResourceListResponse(
-        items=[_response(item) for item in result.items],
+        items=[_response(item, owner) for item in result.items],
         page=page,
         page_size=page_size,
         total=result.total,

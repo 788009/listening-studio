@@ -255,6 +255,10 @@ class ResourceManagementIntegrationTest(unittest.TestCase):
         self.assertEqual(filtered.status_code, 200, filtered.text)
         self.assertEqual(filtered.json()["total"], 1)
         self.assertEqual(filtered.json()["items"][0]["id"], values["owned"])
+        self.assertEqual(
+            filtered.json()["items"][0]["author"],
+            {"userId": "TeacherOne", "username": "TeacherOne"},
+        )
         self.assertIn(
             values["topic"],
             {tag["id"] for tag in filtered.json()["items"][0]["tags"]},

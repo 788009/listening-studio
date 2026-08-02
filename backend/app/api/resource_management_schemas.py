@@ -24,9 +24,15 @@ class ManagedReferenceResponse(TagApiModel):
     count: int = Field(ge=1)
 
 
+class ManagedAuthorResponse(TagApiModel):
+    user_id: str
+    username: str | None
+
+
 class ManagedResourceResponse(TagApiModel):
     id: int
     kind: ManagedResourceKind
+    author: ManagedAuthorResponse
     title: str
     status: str
     visibility: str | None = None

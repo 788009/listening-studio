@@ -346,6 +346,8 @@ describe('audio views', () => {
 
     expect(wrapper.text()).not.toContain('A readable listening transcript.')
     expect(wrapper.text()).toContain('Author')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('Teacher One')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
     expect(wrapper.text()).toContain('First line')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('Woman')
@@ -378,6 +380,11 @@ describe('audio views', () => {
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
     ).toContain('/audio?q=topic:climate_change')
+    const authorTag = tagSearchLinks.find((link) =>
+      decodeURIComponent(link.attributes('href') ?? '').includes('author:TeacherOne'),
+    )
+    expect(authorTag?.text()).toContain('Teacher One')
+    expect(authorTag?.text()).toContain('@TeacherOne')
     expect(
       tagSearchLinks.map((link) =>
         decodeURIComponent(link.attributes('href') ?? ''),

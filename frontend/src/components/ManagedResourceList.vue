@@ -44,6 +44,11 @@ function tagLabel(type: string): string {
   return t(type.charAt(0).toUpperCase() + type.slice(1))
 }
 
+function tagValue(item: ManagedResource, type: string, value: string): string {
+  if (type === 'author') return item.author.username || item.author.userId
+  return value.replace(/_/g, ' ')
+}
+
 function statusClass(status: string): string {
   if (status === 'ready' || status === 'completed') return 'text-success'
   if (status === 'failed' || status === 'cancelled') return 'text-danger'
@@ -93,8 +98,10 @@ function statusClass(status: string): string {
         <ul v-if="item.tags.length > 0" class="mt-3 flex min-w-0 flex-wrap gap-2">
           <li v-for="tag in item.tags" :key="tag.id" class="flex min-w-0 max-w-full">
             <TagChip
-              :label="tag.value.replace(/_/g, ' ')"
+              :label="tagValue(item, tag.type, tag.value)"
+              :secondary-label="tag.type === 'author' ? `@${item.author.userId}` : undefined"
               :type-label="tagLabel(tag.type)"
+              :to="tag.type === 'author' ? `/user/${item.author.userId}` : undefined"
             />
           </li>
         </ul>

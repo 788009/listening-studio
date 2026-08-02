@@ -69,6 +69,7 @@ describe('voice views', () => {
         { path: '/voices', component: VoiceListView },
         { path: '/voices/create', component: { template: '<div />' } },
         { path: '/voice/:id', component: VoiceDetailView },
+        { path: '/user/:userId', component: { template: '<div />' } },
       ],
     })
     await router.push('/voices?q=gender%3Afemale_voice')
@@ -85,6 +86,8 @@ describe('voice views', () => {
     )
     expect(fetchMock.mock.calls[0]?.[0]).toContain('q=gender%3Afemale_voice')
     expect(wrapper.get('a[href="/voice/7"]').attributes('href')).toBe('/voice/7')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('Teacher One')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
   })
 
   it('renders untrusted titles as text instead of HTML', async () => {
@@ -107,6 +110,7 @@ describe('voice views', () => {
         { path: '/voices', component: VoiceListView },
         { path: '/voices/create', component: { template: '<div />' } },
         { path: '/voice/:id', component: VoiceDetailView },
+        { path: '/user/:userId', component: { template: '<div />' } },
       ],
     })
     await router.push('/voices')
@@ -144,6 +148,7 @@ describe('voice views', () => {
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
     expect(wrapper.text()).toContain('Author')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
       expect.arrayContaining(['Author', 'Gender']),
     )
@@ -156,6 +161,11 @@ describe('voice views', () => {
         decodeURIComponent(link.attributes('href') ?? ''),
       ),
     ).toContain('/voices?q=gender:female_voice')
+    const authorTag = tagSearchLinks.find((link) =>
+      decodeURIComponent(link.attributes('href') ?? '').includes('author:TeacherOne'),
+    )
+    expect(authorTag?.text()).toContain('Teacher One')
+    expect(authorTag?.text()).toContain('@TeacherOne')
     const useVoiceLink = wrapper.get('a[href="/create?voice=7"]')
     expect(useVoiceLink.text()).toBe('Use voice')
     await wrapper.get('button').trigger('click')

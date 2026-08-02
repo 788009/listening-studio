@@ -9,10 +9,14 @@ import ResourceManagementView from './ResourceManagementView.vue'
 const voice: ManagedResource = {
   id: 1,
   kind: 'voice',
+  author: { userId: 'TeacherOne', username: 'Teacher One' },
   title: 'Calm voice',
   status: 'ready',
   visibility: 'private',
-  tags: [{ id: 4, type: 'gender', value: 'female' }],
+  tags: [
+    { id: 1, type: 'author', value: 'TeacherOne' },
+    { id: 4, type: 'gender', value: 'female' },
+  ],
   createdAt: '2026-01-10T00:00:00Z',
   references: [],
   canDelete: true,
@@ -73,6 +77,7 @@ async function mountView() {
       { path: '/voice/:id', component: { template: '<div />' } },
       { path: '/audio/:id', component: { template: '<div />' } },
       { path: '/generate/:id', component: { template: '<div />' } },
+      { path: '/user/:userId', component: { template: '<div />' } },
     ],
   })
   await router.push('/manage')
@@ -105,6 +110,9 @@ describe('resource management view', () => {
     )
     const wrapper = await mountView()
     await flushPromises()
+
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('Teacher One')
+    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
 
     await wrapper.get('input[aria-label="Select Calm voice"]').setValue(true)
     await wrapper.findAll('button').find((button) => button.text().includes('Next'))?.trigger('click')
