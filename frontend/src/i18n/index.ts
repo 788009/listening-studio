@@ -433,6 +433,7 @@ const zhCN: Record<string, string> = {
   'Corpus text': '语料文本',
   Encoding: '编码',
   'Audio count': '音频数量',
+  'Question type': '题型',
   'Question types': '题型',
   'Multiple choice': '选择题',
   'True or false': '判断题',

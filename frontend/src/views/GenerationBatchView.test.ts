@@ -121,7 +121,7 @@ describe('corpus generation view', () => {
     sessionStorage.clear()
   })
 
-  it('submits source, selected types, count, speakers, and voices', async () => {
+  it('submits source, one selected type, count, speakers, and voices', async () => {
     let submitted: FormData | undefined
     vi.stubGlobal(
       'fetch',
@@ -145,18 +145,18 @@ describe('corpus generation view', () => {
     await wrapper.get('#speaker-name-1').setValue('Man')
     await wrapper.get('#speaker-name-2').setValue('Woman')
     await wrapper.get('#speaker-voice-2').setValue('3')
-    await wrapper.get('#question-count-short_dialogue').setValue('2')
-    const monologue = wrapper.findAll('label').find((item) => item.text().includes('Monologue'))
-    await monologue?.get('input').setValue(true)
+    await wrapper.get('#question-type-long_dialogue').setValue()
+    await wrapper.get('#question-count').setValue('2')
+    expect((wrapper.get('#question-type-short_dialogue').element as HTMLInputElement).checked).toBe(false)
+    expect((wrapper.get('#question-type-long_dialogue').element as HTMLInputElement).checked).toBe(true)
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
     expect(router.currentRoute.value.fullPath).toBe('/generate/7')
     expect(submitted?.get('corpus')).toBe('A travel corpus')
-    expect(JSON.parse(String(submitted?.get('questionTypeCounts')))).toEqual({
-      short_dialogue: 2,
-      monologue: 1,
-    })
+    expect(submitted?.get('questionType')).toBe('long_dialogue')
+    expect(submitted?.get('count')).toBe('2')
+    expect(submitted?.has('questionTypeCounts')).toBe(false)
     expect(JSON.parse(String(submitted?.get('speakerVoiceMap')))).toEqual({ Man: 2, Woman: 3 })
     wrapper.unmount()
   })
@@ -206,11 +206,11 @@ describe('corpus generation view', () => {
     const { wrapper } = await mountView('/generate')
     await flushPromises()
     await wrapper.get('#corpus-text').setValue('Corpus')
-    await wrapper.get('#question-count-short_dialogue').setValue('21')
+    await wrapper.get('#question-count').setValue('21')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toContain('between 1 and 20')
 
-    await wrapper.get('#question-count-short_dialogue').setValue('1')
+    await wrapper.get('#question-count').setValue('1')
     await wrapper.get('#speaker-name-1').setValue('')
     await wrapper.get('form').trigger('submit')
     expect(wrapper.get('[role="alert"]').text()).toContain('unique name and voice')

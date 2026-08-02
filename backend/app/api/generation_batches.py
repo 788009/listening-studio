@@ -115,25 +115,13 @@ def _parse_speaker_voice_map(value: str | None) -> dict[str, int]:
     return parsed
 
 
-def _parse_question_type_counts(value: str) -> dict[QuestionType, object]:
+def _parse_question_type(value: str) -> QuestionType:
     try:
-        parsed = json.loads(value)
-    except (TypeError, ValueError) as exc:
-        raise DomainValidationError(
-            "Question type counts must be valid JSON",
-            details={"field": "questionTypeCounts"},
-        ) from exc
-    if not isinstance(parsed, dict):
-        raise DomainValidationError(
-            "Question type counts must be an object",
-            details={"field": "questionTypeCounts"},
-        )
-    try:
-        return {QuestionType(key): count for key, count in parsed.items()}
+        return QuestionType(value)
     except (TypeError, ValueError) as exc:
         raise DomainValidationError(
             "Question type is invalid",
-            details={"field": "questionTypeCounts"},
+            details={"field": "questionType"},
         ) from exc
 
 
@@ -144,7 +132,8 @@ def _parse_question_type_counts(value: str) -> dict[QuestionType, object]:
 )
 async def create_generation_batch(
     request: Request,
-    question_type_counts: Annotated[str, Form(alias="questionTypeCounts")],
+    question_type: Annotated[str, Form(alias="questionType")],
+    count: Annotated[int, Form()],
     corpus: Annotated[str | None, Form()] = None,
     file: Annotated[UploadFile | None, File()] = None,
     encoding: Annotated[str | None, Form()] = None,
@@ -163,7 +152,7 @@ async def create_generation_batch(
             details={"fields": ["corpus", "file"]},
         )
     service = _service(request)
-    type_counts = _parse_question_type_counts(question_type_counts)
+    parsed_question_type = _parse_question_type(question_type)
     speaker_voices = _parse_speaker_voice_map(speaker_voice_map)
     if file is None:
         if encoding is not None:
@@ -175,7 +164,8 @@ async def create_generation_batch(
             session,
             owner=user,
             corpus=corpus or "",
-            question_type_counts=type_counts,
+            question_type=parsed_question_type,
+            count=count,
             speaker_voice_map=speaker_voices,
             request_id=request.state.request_id,
         )
@@ -188,7 +178,8 @@ async def create_generation_batch(
             filename=file.filename or "",
             content=content,
             encoding=encoding or "",
-            question_type_counts=type_counts,
+            question_type=parsed_question_type,
+            count=count,
             speaker_voice_map=speaker_voices,
             request_id=request.state.request_id,
         )

@@ -95,11 +95,13 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
 
     def submit(
         self,
-        question_type_counts: dict[str, int],
+        question_type: str,
+        count: int,
         speakers: int,
     ) -> httpx.Response:
         fields: list[tuple[str, tuple[None, str]]] = [
-            ("questionTypeCounts", (None, json.dumps(question_type_counts))),
+            ("questionType", (None, question_type)),
+            ("count", (None, str(count))),
             ("corpus", (None, "A short source corpus.")),
             (
                 "speakerVoiceMap",
@@ -122,7 +124,7 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
 
     def test_submission_stages_corpus_without_precreating_draft_items(self) -> None:
-        response = self.submit({"short_dialogue": 2, "monologue": 1}, 2)
+        response = self.submit("short_dialogue", 2, 2)
         self.assertEqual(response.status_code, 202, response.text)
         batch_id = response.json()["batchId"]
         job_id = response.json()["jobId"]
@@ -134,7 +136,7 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
             self.assertEqual(batch.status, GenerationBatchStatus.PENDING)
             self.assertEqual(
                 batch.question_type_counts,
-                {"short_dialogue": 2, "monologue": 1},
+                {"short_dialogue": 2},
             )
             self.assertEqual(batch.items, [])
             self.assertEqual(job.status, JobStatus.QUEUED)
@@ -144,7 +146,7 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
 
     def test_active_batch_prevents_voice_deletion(self) -> None:
-        response = self.submit({"monologue": 1}, 1)
+        response = self.submit("monologue", 1, 1)
         self.assertEqual(response.status_code, 202, response.text)
 
         active_delete = self.send(
@@ -160,22 +162,23 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
 
     def test_dialogue_requires_two_speakers_and_counts_are_positive(self) -> None:
-        one_speaker = self.submit({"long_dialogue": 1}, 1)
-        zero_count = self.submit({"short_dialogue": 0, "monologue": 1}, 2)
-        monologue = self.submit({"monologue": 1}, 1)
+        one_speaker = self.submit("long_dialogue", 1, 1)
+        zero_count = self.submit("short_dialogue", 0, 2)
+        monologue = self.submit("monologue", 1, 1)
 
         self.assertEqual(one_speaker.status_code, 422)
         self.assertEqual(zero_count.status_code, 422)
         self.assertEqual(monologue.status_code, 202, monologue.text)
 
     def test_rejects_invalid_question_type_and_file_encoding(self) -> None:
-        invalid_type = self.submit({"multiple_choice": 1}, 1)
+        invalid_type = self.submit("multiple_choice", 1, 1)
         invalid_file = self.send(
             "POST",
             "/api/generation-batches",
             headers=self.headers(),
             files=[
-                ("questionTypeCounts", (None, json.dumps({"monologue": 1}))),
+                ("questionType", (None, "monologue")),
+                ("count", (None, "1")),
                 ("encoding", (None, "latin-1")),
                 ("file", ("corpus.txt", b"source", "text/plain")),
                 ("speakerVoiceMap", (None, json.dumps({"Narrator": self.voice_ids[0]}))),
@@ -183,6 +186,34 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(invalid_type.status_code, 422)
         self.assertEqual(invalid_file.status_code, 422)
+
+    def test_rejects_legacy_multi_type_creation_payload(self) -> None:
+        response = self.send(
+            "POST",
+            "/api/generation-batches",
+            headers=self.headers(),
+            files=[
+                (
+                    "questionTypeCounts",
+                    (None, json.dumps({"short_dialogue": 1, "monologue": 1})),
+                ),
+                ("corpus", (None, "A short source corpus.")),
+                (
+                    "speakerVoiceMap",
+                    (
+                        None,
+                        json.dumps(
+                            {
+                                "Speaker 1": self.voice_ids[0],
+                                "Speaker 2": self.voice_ids[1],
+                            }
+                        ),
+                    ),
+                ),
+            ],
+        )
+
+        self.assertEqual(response.status_code, 422)
 
 
 if __name__ == "__main__":

@@ -187,19 +187,8 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             "/api/generation-batches",
             headers=self.headers(),
             files=[
-                (
-                    "questionTypeCounts",
-                    (
-                        None,
-                        json.dumps(
-                            {
-                                "short_dialogue": 2,
-                                "long_dialogue": 1,
-                                "monologue": 1,
-                            }
-                        ),
-                    ),
-                ),
+                ("questionType", (None, "short_dialogue")),
+                ("count", (None, "2")),
                 ("corpus", (None, "A source corpus about a journey.")),
                 (
                     "speakerVoiceMap",
@@ -251,14 +240,10 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             poll_interval_seconds=0.01,
         )
         self.assertTrue(worker.run_once())
-        self.assertEqual(len(generator.calls), 3)
+        self.assertEqual(len(generator.calls), 1)
         self.assertEqual(
             [set(request.question_type_counts) for request, _ in generator.calls],
-            [
-                {QuestionType.SHORT_DIALOGUE},
-                {QuestionType.LONG_DIALOGUE},
-                {QuestionType.MONOLOGUE},
-            ],
+            [{QuestionType.SHORT_DIALOGUE}],
         )
 
         with self.app.state.session_factory() as session:
@@ -267,15 +252,13 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             assert batch is not None and job is not None
             self.assertEqual(batch.status, GenerationBatchStatus.COMPLETED)
             self.assertEqual(job.status, JobStatus.SUCCEEDED)
-            self.assertEqual(len(batch.items), 4)
+            self.assertEqual(len(batch.items), 2)
             self.assertEqual(session.query(Audio).count(), 2)
             self.assertEqual(
                 {(tag.type, tag.value) for tag in batch.tags},
                 {
                     (AudioTagType.TOPIC, "sustainable_travel"),
                     (AudioTagType.CATEGORY, "short"),
-                    (AudioTagType.CATEGORY, "long"),
-                    (AudioTagType.CATEGORY, "monologue"),
                 },
             )
             self.assertEqual(
@@ -289,8 +272,6 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
                 },
                 {
                     "short": {"zh-CN": "短对话"},
-                    "long": {"zh-CN": "长对话"},
-                    "monologue": {"zh-CN": "独白"},
                 },
             )
             first = batch.items[0].generated_content
@@ -316,15 +297,13 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
         self.assertEqual(payload["progress"], 100)
         self.assertEqual(
             payload["questionTypeCounts"],
-            {"short_dialogue": 2, "long_dialogue": 1, "monologue": 1},
+            {"short_dialogue": 2},
         )
         self.assertEqual(
             {(tag["type"], tag["englishValue"]) for tag in payload["tags"]},
             {
                 ("topic", "sustainable_travel"),
                 ("category", "short"),
-                ("category", "long"),
-                ("category", "monologue"),
             },
         )
         localized_tags = self.send(
@@ -340,8 +319,6 @@ class CorpusGenerationIntegrationTest(unittest.TestCase):
             },
             {
                 "short": "短对话",
-                "long": "长对话",
-                "monologue": "独白",
                 "full_paper": "套卷",
             },
         )

@@ -33,12 +33,8 @@ const inputMode = ref<InputMode>('text')
 const corpus = ref('')
 const corpusFile = ref<File | null>(null)
 const encoding = ref('utf-8')
-const selectedQuestionTypes = ref<QuestionType[]>(['short_dialogue'])
-const questionTypeCounts = ref<Record<QuestionType, number>>({
-  short_dialogue: 1,
-  long_dialogue: 1,
-  monologue: 1,
-})
+const selectedQuestionType = ref<QuestionType>('short_dialogue')
+const questionCount = ref(1)
 const speakers = ref<SpeakerDraft[]>([
   { key: 1, name: t('Speaker {position}', { position: 1 }), voiceId: '' },
   { key: 2, name: t('Speaker {position}', { position: 2 }), voiceId: '' },
@@ -55,34 +51,7 @@ const batchId = computed(() => {
   const value = Number(route.params.id)
   return Number.isInteger(value) && value > 0 ? value : null
 })
-const selectedQuestionTypeCounts = computed(() =>
-  Object.fromEntries(
-    questionOptions
-      .filter((option) => selectedQuestionTypes.value.includes(option.value))
-      .map((option) => [option.value, questionTypeCounts.value[option.value]]),
-  ) as Partial<Record<QuestionType, number>>,
-)
-const totalCount = computed(() =>
-  Object.values(selectedQuestionTypeCounts.value).reduce(
-    (total, count) => total + (count ?? 0),
-    0,
-  ),
-)
-const requiresDialogue = computed(() =>
-  selectedQuestionTypes.value.some((type) => type !== 'monologue'),
-)
-
-function toggleQuestionType(value: QuestionType, selected: boolean): void {
-  if (selected) {
-    if (!selectedQuestionTypes.value.includes(value)) {
-      selectedQuestionTypes.value = [...selectedQuestionTypes.value, value]
-    }
-    return
-  }
-  selectedQuestionTypes.value = selectedQuestionTypes.value.filter(
-    (item) => item !== value,
-  )
-}
+const requiresDialogue = computed(() => selectedQuestionType.value !== 'monologue')
 
 function removeSpeaker(speakerKey: number): void {
   if (speakers.value.length <= 1) return
@@ -95,17 +64,8 @@ function selectFile(event: Event): void {
 
 function validate(): Record<string, number> | null {
   errorMessage.value = ''
-  if (totalCount.value === 0) {
-    errorMessage.value = t('Select at least one question type')
-    return null
-  }
-  if (
-    Object.values(selectedQuestionTypeCounts.value).some(
-      (count) => !Number.isInteger(count) || (count ?? 0) < 1,
-    ) ||
-    totalCount.value > MAX_COUNT
-  ) {
-    errorMessage.value = t('Total count must be between 1 and {count}', {
+  if (!Number.isInteger(questionCount.value) || questionCount.value < 1 || questionCount.value > MAX_COUNT) {
+    errorMessage.value = t('Count must be between 1 and {count}', {
       count: MAX_COUNT,
     })
     return null
@@ -151,7 +111,8 @@ async function submit(): Promise<void> {
       corpus: inputMode.value === 'text' ? corpus.value.trim() : undefined,
       file: inputMode.value === 'file' ? corpusFile.value ?? undefined : undefined,
       encoding: inputMode.value === 'file' ? encoding.value : undefined,
-      questionTypeCounts: selectedQuestionTypeCounts.value,
+      questionType: selectedQuestionType.value,
+      count: questionCount.value,
       speakerVoiceMap,
     })
     await router.replace({ name: 'generation-batch', params: { id: accepted.batchId } })
@@ -273,41 +234,39 @@ onUnmounted(stopPolling)
 
       <section class="border-b border-line px-5 py-6">
         <fieldset>
-          <div class="flex items-center justify-between gap-4">
-            <legend class="text-base font-semibold">{{ t('Question types') }}</legend>
-            <p class="text-sm font-medium tabular-nums text-muted">{{ t('Total: {count}', { count: totalCount }) }}</p>
-          </div>
-          <div class="mt-4 grid gap-3 sm:grid-cols-3">
-            <div
+          <legend class="text-base font-semibold">{{ t('Question type') }}</legend>
+          <div class="mt-4 grid overflow-hidden border border-line sm:grid-cols-3">
+            <label
               v-for="option in questionOptions"
               :key="option.value"
-              class="flex min-h-40 flex-col border border-line px-4 py-4"
-              :class="selectedQuestionTypes.includes(option.value) ? 'border-accent bg-accent-soft' : ''"
+              :for="`question-type-${option.value}`"
+              class="relative min-h-24 cursor-pointer border-b border-line px-4 py-4 transition-colors last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0"
+              :class="selectedQuestionType === option.value ? 'bg-accent-soft text-ink' : 'bg-surface text-muted hover:bg-canvas'"
             >
-              <label :for="`question-type-${option.value}`" class="flex cursor-pointer items-center gap-3 text-sm font-semibold">
+              <span class="flex items-center justify-between gap-3">
+                <span class="text-sm font-semibold">{{ t(option.label) }}</span>
                 <input
                   :id="`question-type-${option.value}`"
-                  type="checkbox"
-                  class="h-4 w-4 accent-accent"
-                  :checked="selectedQuestionTypes.includes(option.value)"
-                  @change="toggleQuestionType(option.value, ($event.target as HTMLInputElement).checked)"
+                  v-model="selectedQuestionType"
+                  type="radio"
+                  name="question-type"
+                  :value="option.value"
+                  class="h-4 w-4 shrink-0 accent-accent"
                 />
-                {{ t(option.label) }}
-              </label>
-              <p class="mt-2 text-xs leading-5 text-muted">{{ t(option.detail) }}</p>
-              <div class="mt-auto pt-4">
-                <label :for="`question-count-${option.value}`" class="mb-1 block text-xs font-medium text-muted">{{ t('Quantity') }}</label>
-                <input
-                  :id="`question-count-${option.value}`"
-                  v-model.number="questionTypeCounts[option.value]"
-                  type="number"
-                  min="1"
-                  :max="MAX_COUNT"
-                  :disabled="!selectedQuestionTypes.includes(option.value)"
-                  class="h-9 w-full border border-line bg-surface px-3 text-sm tabular-nums disabled:cursor-not-allowed disabled:opacity-50"
-                />
-              </div>
-            </div>
+              </span>
+              <span class="mt-2 block text-xs leading-5 text-muted">{{ t(option.detail) }}</span>
+            </label>
+          </div>
+          <div class="mt-5 flex flex-col gap-2 border-t border-line pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <label for="question-count" class="text-sm font-medium">{{ t('Quantity') }}</label>
+            <input
+              id="question-count"
+              v-model.number="questionCount"
+              type="number"
+              min="1"
+              :max="MAX_COUNT"
+              class="h-10 w-full border border-line bg-surface px-3 text-sm tabular-nums focus:border-accent focus:outline-none sm:w-32"
+            />
           </div>
         </fieldset>
       </section>

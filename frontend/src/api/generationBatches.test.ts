@@ -16,7 +16,7 @@ function response(body: unknown): Response {
 describe('generation batch API', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('submits repeated fields and a speaker voice map as multipart data', async () => {
+  it('submits one question type, count, and speaker voice map as multipart data', async () => {
     let body: FormData | undefined
     vi.stubGlobal(
       'fetch',
@@ -28,14 +28,14 @@ describe('generation batch API', () => {
 
     await createGenerationBatch({
       corpus: 'Corpus text',
-      questionTypeCounts: { short_dialogue: 3, monologue: 1 },
+      questionType: 'short_dialogue',
+      count: 3,
       speakerVoiceMap: { Host: 7, Guest: 9 },
     })
 
-    expect(JSON.parse(String(body?.get('questionTypeCounts')))).toEqual({
-      short_dialogue: 3,
-      monologue: 1,
-    })
+    expect(body?.get('questionType')).toBe('short_dialogue')
+    expect(body?.get('count')).toBe('3')
+    expect(body?.has('questionTypeCounts')).toBe(false)
     expect(body?.getAll('tagIds')).toEqual([])
     expect(body?.get('corpus')).toBe('Corpus text')
     expect(JSON.parse(String(body?.get('speakerVoiceMap')))).toEqual({ Host: 7, Guest: 9 })

@@ -65,7 +65,8 @@ export interface GenerationBatchCreationInput {
   corpus?: string
   file?: File
   encoding?: string
-  questionTypeCounts: Partial<Record<QuestionType, number>>
+  questionType: QuestionType
+  count: number
   speakerVoiceMap: Record<string, number>
 }
 
@@ -73,7 +74,8 @@ export function createGenerationBatch(
   input: GenerationBatchCreationInput,
 ): Promise<GenerationBatchAccepted> {
   const form = new FormData()
-  form.set('questionTypeCounts', JSON.stringify(input.questionTypeCounts))
+  form.set('questionType', input.questionType)
+  form.set('count', String(input.count))
   form.set('speakerVoiceMap', JSON.stringify(input.speakerVoiceMap))
   if (input.file) {
     form.set('file', input.file)

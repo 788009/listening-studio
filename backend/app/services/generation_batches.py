@@ -160,7 +160,8 @@ class GenerationBatchService:
         *,
         owner: User,
         corpus: str,
-        question_type_counts: Mapping[object, object],
+        question_type: object,
+        count: object,
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
@@ -168,7 +169,8 @@ class GenerationBatchService:
             session,
             owner=owner,
             corpus=self.validator.validate_text(corpus),
-            question_type_counts=question_type_counts,
+            question_type=question_type,
+            count=count,
             speaker_voice_map=speaker_voice_map,
             request_id=request_id,
         )
@@ -181,7 +183,8 @@ class GenerationBatchService:
         filename: str,
         content: bytes,
         encoding: str,
-        question_type_counts: Mapping[object, object],
+        question_type: object,
+        count: object,
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
@@ -189,7 +192,8 @@ class GenerationBatchService:
             session,
             owner=owner,
             corpus=self.validator.validate_file(filename, content, encoding),
-            question_type_counts=question_type_counts,
+            question_type=question_type,
+            count=count,
             speaker_voice_map=speaker_voice_map,
             request_id=request_id,
         )
@@ -227,19 +231,25 @@ class GenerationBatchService:
         *,
         owner: User,
         corpus: str,
-        question_type_counts: Mapping[object, object],
+        question_type: object,
+        count: object,
         speaker_voice_map: Mapping[str, int],
         request_id: str,
     ) -> GenerationBatchSubmission:
-        normalized_counts = self._question_type_counts(question_type_counts)
+        normalized_type, normalized_count = self._question_type_count(
+            question_type,
+            count,
+        )
         speaker_voices = self._speaker_voices(session, owner, speaker_voice_map)
-        minimum_speakers = 2 if any(
-            item in {QuestionType.SHORT_DIALOGUE, QuestionType.LONG_DIALOGUE}
-            for item, _ in normalized_counts
-        ) else 1
+        minimum_speakers = (
+            2
+            if normalized_type
+            in {QuestionType.SHORT_DIALOGUE, QuestionType.LONG_DIALOGUE}
+            else 1
+        )
         if len(speaker_voices) < minimum_speakers:
             raise DomainValidationError(
-                "Selected question types require more speakers",
+                "Selected question type requires more speakers",
                 details={
                     "field": "speakerVoiceMap",
                     "minimumSpeakers": minimum_speakers,
@@ -259,10 +269,7 @@ class GenerationBatchService:
                 session,
                 owner=owner,
                 job=job,
-                question_type_counts=[
-                    (question_type.value, count)
-                    for question_type, count in normalized_counts
-                ],
+                question_type_counts=[(normalized_type.value, normalized_count)],
                 tags=[],
                 speaker_voices=speaker_voices,
             )
@@ -282,60 +289,42 @@ class GenerationBatchService:
             resource_id=batch.id,
         ).info(
             "Corpus generation batch submitted batch_id={} job_id={} "
-            "corpus_length={} question_type_counts={}",
+            "corpus_length={} question_type={} count={}",
             batch.id,
             job.id,
             len(corpus),
-            ",".join(
-                f"{question_type.value}:{count}"
-                for question_type, count in normalized_counts
-            ),
+            normalized_type.value,
+            normalized_count,
         )
         return GenerationBatchSubmission(batch=batch, job=job)
 
-    def _question_type_counts(
+    def _question_type_count(
         self,
-        values: Mapping[object, object],
-    ) -> list[tuple[QuestionType, int]]:
-        if not isinstance(values, Mapping) or not values:
+        raw_type: object,
+        raw_count: object,
+    ) -> tuple[QuestionType, int]:
+        try:
+            question_type = QuestionType(raw_type)
+        except (TypeError, ValueError) as exc:
             raise DomainValidationError(
-                "At least one question type is required",
-                details={"field": "questionTypeCounts"},
-            )
-        normalized: dict[QuestionType, int] = {}
-        for raw_type, raw_count in values.items():
-            try:
-                question_type = QuestionType(raw_type)
-            except (TypeError, ValueError) as exc:
-                raise DomainValidationError(
-                    "Question type is invalid",
-                    details={"field": "questionTypeCounts"},
-                ) from exc
-            if (
-                isinstance(raw_count, bool)
-                or not isinstance(raw_count, int)
-                or raw_count < 1
-            ):
-                raise DomainValidationError(
-                    "Question type count must be positive",
-                    details={"field": "questionTypeCounts"},
-                )
-            normalized[question_type] = raw_count
-        total = sum(normalized.values())
-        if total > self.max_generation_count:
+                "Question type is invalid",
+                details={"field": "questionType"},
+            ) from exc
+        if (
+            isinstance(raw_count, bool)
+            or not isinstance(raw_count, int)
+            or raw_count < 1
+        ):
             raise DomainValidationError(
-                "Total generation count exceeds the allowed range",
-                details={
-                    "field": "questionTypeCounts",
-                    "maxCount": self.max_generation_count,
-                },
+                "Generation count must be positive",
+                details={"field": "count"},
             )
-        order = {
-            QuestionType.SHORT_DIALOGUE: 0,
-            QuestionType.LONG_DIALOGUE: 1,
-            QuestionType.MONOLOGUE: 2,
-        }
-        return sorted(normalized.items(), key=lambda item: order[item[0]])
+        if raw_count > self.max_generation_count:
+            raise DomainValidationError(
+                "Generation count exceeds the allowed range",
+                details={"field": "count", "maxCount": self.max_generation_count},
+            )
+        return question_type, raw_count
 
     def _speaker_voices(
         self,
