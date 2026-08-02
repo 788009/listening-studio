@@ -346,8 +346,9 @@ describe('audio views', () => {
 
     expect(wrapper.text()).not.toContain('A readable listening transcript.')
     expect(wrapper.text()).toContain('Author')
-    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('Teacher One')
-    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
+    const authorLink = wrapper.get('a[href="/user/TeacherOne"]')
+    expect(authorLink.text()).toBe('Teacher One')
+    expect(authorLink.element.parentElement?.textContent).toContain('@TeacherOne')
     expect(wrapper.text()).toContain('First line')
     expect(wrapper.text()).toContain('Second line')
     expect(wrapper.text()).toContain('Woman')

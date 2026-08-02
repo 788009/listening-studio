@@ -86,8 +86,9 @@ describe('voice views', () => {
     )
     expect(fetchMock.mock.calls[0]?.[0]).toContain('q=gender%3Afemale_voice')
     expect(wrapper.get('a[href="/voice/7"]').attributes('href')).toBe('/voice/7')
-    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('Teacher One')
-    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
+    const authorLink = wrapper.get('a[href="/user/TeacherOne"]')
+    expect(authorLink.text()).toBe('Teacher One')
+    expect(authorLink.element.parentElement?.textContent).toContain('@TeacherOne')
   })
 
   it('renders untrusted titles as text instead of HTML', async () => {
@@ -148,7 +149,9 @@ describe('voice views', () => {
 
     expect(wrapper.get('audio').attributes('src')).toBe('/media/voice/7/sample')
     expect(wrapper.text()).toContain('Author')
-    expect(wrapper.get('a[href="/user/TeacherOne"]').text()).toContain('@TeacherOne')
+    const authorLink = wrapper.get('a[href="/user/TeacherOne"]')
+    expect(authorLink.text()).toBe('Teacher One')
+    expect(authorLink.element.parentElement?.textContent).toContain('@TeacherOne')
     expect(wrapper.findAll('dt').map((item) => item.text())).toEqual(
       expect.arrayContaining(['Author', 'Gender']),
     )

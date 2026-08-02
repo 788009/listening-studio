@@ -20,23 +20,20 @@ async function mountAuthorLink(username: string | null) {
 }
 
 describe('AuthorLink', () => {
-  it('shows the display name and muted user ID in one profile link', async () => {
+  it('links only the display name and shows the muted user ID as text', async () => {
     const wrapper = await mountAuthorLink('Teacher One')
 
     expect(wrapper.get('a').attributes('href')).toBe('/user/TeacherOne')
-    expect(wrapper.findAll('span').map((item) => item.text())).toEqual([
-      'Teacher One',
-      '@TeacherOne',
-    ])
+    expect(wrapper.get('a').text()).toBe('Teacher One')
+    expect(wrapper.findAll('a')).toHaveLength(1)
+    expect(wrapper.findAll('span')[1]?.text()).toBe('@TeacherOne')
     expect(wrapper.findAll('span')[1]?.classes()).toContain('text-muted')
   })
 
   it('falls back to the user ID when no display name is set', async () => {
     const wrapper = await mountAuthorLink(null)
 
-    expect(wrapper.findAll('span').map((item) => item.text())).toEqual([
-      'TeacherOne',
-      '@TeacherOne',
-    ])
+    expect(wrapper.get('a').text()).toBe('TeacherOne')
+    expect(wrapper.findAll('span')[1]?.text()).toBe('@TeacherOne')
   })
 })
