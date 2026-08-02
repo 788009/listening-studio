@@ -15,6 +15,7 @@ import { setLocale } from '@/i18n'
 export interface CurrentUser {
   userId: string | null
   username: string | null
+  suggestedUsername?: string | null
   locale: string
   profileComplete: boolean
   role: UserRole

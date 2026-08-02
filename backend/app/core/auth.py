@@ -82,6 +82,9 @@ class AuthenticationMiddleware:
         state = scope.setdefault("state", {})
         state["principal"] = principal
         state["current_user"] = user
+        state["suggested_username"] = (
+            external_identity.suggested_username if external_identity else None
+        )
         await self.app(scope, receive, send)
 
 

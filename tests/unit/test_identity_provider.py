@@ -32,7 +32,11 @@ class PlaceholderIdentityProviderTest(unittest.TestCase):
 
     def test_signed_session_round_trip(self) -> None:
         provider = self.provider()
-        identity = ExternalIdentity("https://issuer.example", "teacher-1")
+        identity = ExternalIdentity(
+            "https://issuer.example",
+            "teacher-1",
+            suggested_username="Teacher One",
+        )
 
         token = provider.issue_session(identity, now=100)
 
@@ -102,6 +106,7 @@ class FakeOidcClient:
                 "iss": "https://issuer.example",
                 "sub": "oidc-user",
                 "aud": "client-id",
+                "name": "Teacher One",
             },
         }
 
@@ -169,7 +174,11 @@ class OidcIdentityProviderTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(
             result.identity,
-            ExternalIdentity("https://issuer.example", "oidc-user"),
+            ExternalIdentity(
+                "https://issuer.example",
+                "oidc-user",
+                suggested_username="Teacher One",
+            ),
         )
         self.assertEqual(
             result.claim_names,
@@ -187,7 +196,7 @@ class OidcIdentityProviderTest(unittest.IsolatedAsyncioTestCase):
 
         result = await provider.complete_authorization(request)
 
-        self.assertEqual(result.claim_names, ("aud", "iss", "sub"))
+        self.assertEqual(result.claim_names, ("aud", "iss", "name", "sub"))
         self.assertEqual(
             result.userinfo_claim_names,
             ("email_verified", "name", "sub"),

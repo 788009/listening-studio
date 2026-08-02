@@ -306,7 +306,11 @@ class AuthenticationIntegrationTest(unittest.TestCase):
         ) -> OidcAuthorizationResult:
             self.assertIsInstance(request.session, dict)
             return OidcAuthorizationResult(
-                identity=ExternalIdentity("https://issuer.example", "oidc-user"),
+                identity=ExternalIdentity(
+                    "https://issuer.example",
+                    "oidc-user",
+                    suggested_username="Teacher One",
+                ),
                 claim_names=("iss", "name", "sub"),
             )
 
@@ -329,6 +333,7 @@ class AuthenticationIntegrationTest(unittest.TestCase):
         self.assertEqual(callback.headers["location"], "http://frontend.test/")
         self.assertEqual(current_user.status_code, 200)
         self.assertEqual(current_user.json()["userId"], None)
+        self.assertEqual(current_user.json()["suggestedUsername"], "Teacher One")
         self.assertFalse(current_user.json()["profileComplete"])
         app.state.db_engine.dispose()
 

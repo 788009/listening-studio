@@ -59,6 +59,7 @@ class UpdateProfileRequest(ApiModel):
 class CurrentUserResponse(ApiModel):
     user_id: str | None
     username: str | None
+    suggested_username: str | None = None
     locale: str
     profile_complete: bool
     role: UserRole
@@ -108,10 +109,19 @@ def _attached_user(session: Session, current_user: User) -> User:
     return user
 
 
-def _current_user_response(user: User) -> CurrentUserResponse:
+def _current_user_response(
+    user: User,
+    *,
+    suggested_username: str | None = None,
+) -> CurrentUserResponse:
     return CurrentUserResponse(
         user_id=user.user_id,
         username=user.username,
+        suggested_username=(
+            suggested_username
+            if not user.is_profile_complete and user.username is None
+            else None
+        ),
         locale=user.locale,
         profile_complete=user.is_profile_complete,
         role=user.role,
@@ -131,9 +141,13 @@ def _managed_user_response(user: User) -> ManagedUserResponse:
 
 @router.get("/me", response_model=CurrentUserResponse)
 async def get_current_user(
+    request: Request,
     current_user: User = Depends(require_teacher),
 ) -> CurrentUserResponse:
-    return _current_user_response(current_user)
+    return _current_user_response(
+        current_user,
+        suggested_username=request.state.suggested_username,
+    )
 
 
 @router.post("/me/profile", response_model=CurrentUserResponse)

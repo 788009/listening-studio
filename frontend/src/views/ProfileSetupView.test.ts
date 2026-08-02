@@ -5,6 +5,7 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 
 import ProfileSetupView from './ProfileSetupView.vue'
 import { setLocale } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
 
 function errorResponse(code: string, message: string): Response {
   return new Response(
@@ -24,6 +25,32 @@ describe('profile setup view', () => {
   afterEach(() => {
     setLocale('en')
     vi.unstubAllGlobals()
+  })
+
+  it('prefills an editable display name from the OIDC identity', async () => {
+    const pinia = createPinia()
+    useAuthStore(pinia).setCurrentUser({
+      userId: null,
+      username: null,
+      suggestedUsername: 'Teacher One',
+      locale: 'en',
+      profileComplete: false,
+      role: 'user',
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/setup-profile', component: ProfileSetupView }],
+    })
+    await router.push('/setup-profile')
+
+    const wrapper = mount(ProfileSetupView, {
+      global: { plugins: [pinia, router] },
+    })
+    const usernameInput = wrapper.get<HTMLInputElement>('#username')
+
+    expect(usernameInput.element.value).toBe('Teacher One')
+    await usernameInput.setValue('Preferred Name')
+    expect(usernameInput.element.value).toBe('Preferred Name')
   })
 
   it('explains when the requested user ID is already occupied', async () => {

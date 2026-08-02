@@ -61,6 +61,7 @@ def _configure_oidc_client(client: AsyncOAuth2Client) -> None:
 class ExternalIdentity:
     issuer: str
     subject: str
+    suggested_username: str | None = None
 
 
 class LoginMethod(str, Enum):
@@ -101,6 +102,15 @@ def _decode_base64(value: str) -> bytes:
         altchars=b"-_",
         validate=True,
     )
+
+
+def _validated_suggested_username(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip()
+    if not normalized or len(normalized) > 200:
+        return None
+    return normalized
 
 
 class PlaceholderIdentityProvider:
@@ -152,13 +162,16 @@ class PlaceholderIdentityProvider:
         now: int | None = None,
     ) -> str:
         issued_at = int(time.time()) if now is None else now
+        session_payload: dict[str, object] = {
+            "issuer": identity.issuer,
+            "subject": identity.subject,
+            "session_kind": self.session_kind,
+            "expires_at": issued_at + self.max_age_seconds,
+        }
+        if identity.suggested_username is not None:
+            session_payload["suggested_username"] = identity.suggested_username
         payload = json.dumps(
-            {
-                "issuer": identity.issuer,
-                "subject": identity.subject,
-                "session_kind": self.session_kind,
-                "expires_at": issued_at + self.max_age_seconds,
-            },
+            session_payload,
             ensure_ascii=False,
             separators=(",", ":"),
             sort_keys=True,
@@ -195,7 +208,17 @@ class PlaceholderIdentityProvider:
                 return None
             if payload.get("session_kind") != self.session_kind:
                 return None
-            return self._validated_identity(payload["issuer"], payload["subject"])
+            identity = self._validated_identity(payload["issuer"], payload["subject"])
+            if identity is None:
+                return None
+            suggested_username = _validated_suggested_username(
+                payload.get("suggested_username")
+            )
+            return ExternalIdentity(
+                issuer=identity.issuer,
+                subject=identity.subject,
+                suggested_username=suggested_username,
+            )
         except (
             AttributeError,
             binascii.Error,
@@ -317,6 +340,13 @@ class OidcIdentityProvider:
             identity = self._validated_identity(issuer, subject)
             if identity is None:
                 raise OidcAuthenticationError("OIDC identity claims are invalid")
+            identity = ExternalIdentity(
+                issuer=identity.issuer,
+                subject=identity.subject,
+                suggested_username=_validated_suggested_username(
+                    id_token_claims.get("name")
+                ),
+            )
             claim_names = set(id_token_claims)
 
             try:
