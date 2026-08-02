@@ -22,6 +22,7 @@ CSRF_COOKIE_NAME = "listening_csrf"
 CSRF_HEADER_NAME = "X-CSRF-Token"
 _UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 _LOGIN_PATH = "/auth/debug/session"
+_LOGIN_PATHS = {_LOGIN_PATH, "/auth/oidc/login"}
 _MULTIPART_OVERHEAD_BYTES = 64 * 1024
 _MEMORY_SPOOL_BYTES = 1024 * 1024
 
@@ -201,7 +202,7 @@ class SecurityMiddleware:
 
     def _rate_bucket(self, request: Request) -> str | None:
         path = request.url.path
-        if request.method == "POST" and path == _LOGIN_PATH:
+        if path in _LOGIN_PATHS and request.method in {"GET", "POST"}:
             return "login"
         if request.method == "GET" and path.startswith("/media/"):
             return "playback"

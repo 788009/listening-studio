@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from loguru import logger
 from pydantic import BaseModel, ConfigDict
 
 from backend.app.core.exceptions import DomainValidationError
 from backend.app.core.security import CSRF_COOKIE_NAME, issue_csrf_token
-from backend.app.integrations.identity import IdentityProvider, LoginMethod
-from backend.app.integrations.identity import PlaceholderIdentityProvider
+from backend.app.integrations.identity import (
+    ExternalIdentity,
+    IdentityProvider,
+    LoginMethod,
+    OidcAuthenticationError,
+    OidcIdentityProvider,
+    PlaceholderIdentityProvider,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -47,6 +54,39 @@ def _placeholder_provider(request: Request) -> PlaceholderIdentityProvider:
     return provider
 
 
+def _oidc_provider(request: Request) -> OidcIdentityProvider:
+    provider = _identity_provider(request)
+    if not isinstance(provider, OidcIdentityProvider):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return provider
+
+
+def _set_identity_cookies(
+    response: Response,
+    request: Request,
+    provider: IdentityProvider,
+    identity: ExternalIdentity,
+) -> None:
+    token = provider.issue_session(identity)
+    settings = request.app.state.settings
+    response.set_cookie(
+        settings.auth_session_cookie_name,
+        token,
+        max_age=settings.auth_session_max_age_seconds,
+        httponly=True,
+        secure=settings.environment == "production",
+        samesite="lax",
+    )
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        issue_csrf_token(token, settings.auth_session_secret),
+        max_age=settings.auth_session_max_age_seconds,
+        httponly=False,
+        secure=settings.environment == "production",
+        samesite="lax",
+    )
+
+
 @router.get("/capabilities", response_model=AuthenticationCapabilitiesResponse)
 async def get_authentication_capabilities(
     request: Request,
@@ -75,24 +115,43 @@ async def create_debug_session(
             details={"fields": ["issuer", "subject"]},
         )
 
-    token = provider.issue_session(identity)
     response = Response(status_code=204)
-    response.set_cookie(
-        provider.cookie_name,
-        token,
-        max_age=provider.max_age_seconds,
-        httponly=True,
-        secure=request.app.state.settings.environment == "production",
-        samesite="lax",
+    _set_identity_cookies(response, request, provider, identity)
+    return response
+
+
+@router.get("/oidc/login")
+async def begin_oidc_login(request: Request) -> RedirectResponse:
+    return await _oidc_provider(request).authorize_redirect(request)
+
+
+@router.get("/oidc/callback")
+async def complete_oidc_login(request: Request) -> RedirectResponse:
+    provider = _oidc_provider(request)
+    try:
+        result = await provider.complete_authorization(request)
+    except OidcAuthenticationError as exc:
+        cause = exc.__cause__
+        cause_name = type(cause).__name__ if cause else None
+        cause_code = getattr(cause, "error", None) if cause else None
+        logger.bind(request_id=request.state.request_id).warning(
+            "OIDC authentication callback failed stage={} cause_type={} cause_code={}",
+            str(exc),
+            cause_name,
+            cause_code,
+        )
+        raise HTTPException(status_code=400, detail="OIDC authentication failed")
+
+    request.session.clear()
+    logger.bind(request_id=request.state.request_id).info(
+        "OIDC authentication completed claim_names={} userinfo_claim_names={} "
+        "userinfo_subject_matches={}",
+        list(result.claim_names),
+        list(result.userinfo_claim_names),
+        result.userinfo_subject_matches,
     )
-    response.set_cookie(
-        CSRF_COOKIE_NAME,
-        issue_csrf_token(token, request.app.state.settings.auth_session_secret),
-        max_age=provider.max_age_seconds,
-        httponly=False,
-        secure=request.app.state.settings.environment == "production",
-        samesite="lax",
-    )
+    response = RedirectResponse(provider.post_login_url, status_code=303)
+    _set_identity_cookies(response, request, provider, result.identity)
     return response
 
 

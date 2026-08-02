@@ -22,6 +22,8 @@ from backend.app.integrations.identity import (
     ExternalIdentity,
     IdentityProviderCapabilities,
     LoginMethod,
+    OidcAuthorizationResult,
+    OidcIdentityProvider,
     PlaceholderIdentityProvider,
 )
 from backend.app.repositories.users import UserRepository
@@ -275,6 +277,60 @@ class AuthenticationIntegrationTest(unittest.TestCase):
         self.assertEqual(header_response.status_code, 401)
         self.assertEqual(cookie_response.status_code, 401)
         self.assertEqual(debug_entry.status_code, 404)
+
+    def test_oidc_callback_creates_application_session(self) -> None:
+        settings = Settings(
+            _env_file=None,
+            environment="test",
+            debug_auth_enabled=False,
+            auth_session_secret="test-session-secret-with-32-characters",
+            cosyvoice_model_dir=self.root / "model",
+            database_url=self.database_url,
+            data_dir=self.root / "data",
+            log_dir=self.root / "logs",
+            oidc_enabled=True,
+            oidc_discovery_url=(
+                "https://issuer.example/.well-known/openid-configuration"
+            ),
+            oidc_client_id="client-id",
+            oidc_client_secret="client-secret",
+            oidc_redirect_uri="http://testserver/auth/oidc/callback",
+            oidc_post_login_url="http://frontend.test/",
+        )
+        app = create_app(settings)
+        provider = app.state.identity_provider
+        assert isinstance(provider, OidcIdentityProvider)
+
+        async def complete_authorization(
+            request: Request,
+        ) -> OidcAuthorizationResult:
+            self.assertIsInstance(request.session, dict)
+            return OidcAuthorizationResult(
+                identity=ExternalIdentity("https://issuer.example", "oidc-user"),
+                claim_names=("iss", "name", "sub"),
+            )
+
+        provider.complete_authorization = complete_authorization  # type: ignore[method-assign]
+
+        async def scenario() -> tuple[httpx.Response, httpx.Response]:
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(
+                transport=transport,
+                base_url="http://testserver",
+                follow_redirects=False,
+            ) as client:
+                callback = await client.get("/auth/oidc/callback")
+                current_user = await client.get("/api/users/me")
+                return callback, current_user
+
+        callback, current_user = asyncio.run(scenario())
+
+        self.assertEqual(callback.status_code, 303)
+        self.assertEqual(callback.headers["location"], "http://frontend.test/")
+        self.assertEqual(current_user.status_code, 200)
+        self.assertEqual(current_user.json()["userId"], None)
+        self.assertFalse(current_user.json()["profileComplete"])
+        app.state.db_engine.dispose()
 
 
 if __name__ == "__main__":

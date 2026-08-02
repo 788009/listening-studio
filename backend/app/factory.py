@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from loguru import logger
+from starlette.middleware.sessions import SessionMiddleware
 
 from backend.app.api.auth import router as auth_router
 from backend.app.api.audios import media_router as audio_media_router
@@ -36,6 +37,7 @@ from backend.app.frontend import install_frontend
 from backend.app.health import router as health_router
 from backend.app.integrations.identity import (
     IdentityProvider,
+    OidcIdentityProvider,
     PlaceholderIdentityProvider,
 )
 
@@ -62,8 +64,10 @@ def create_app(
     app.state.settings = settings
     app.state.db_engine = engine
     app.state.session_factory = create_session_factory(engine)
-    app.state.identity_provider = identity_provider or PlaceholderIdentityProvider(
-        settings
+    app.state.identity_provider = identity_provider or (
+        PlaceholderIdentityProvider(settings)
+        if settings.debug_auth_enabled or not settings.oidc_enabled
+        else OidcIdentityProvider(settings)
     )
     install_exception_handlers(app)
     app.add_middleware(
@@ -86,6 +90,15 @@ def create_app(
         playback_rate_limit=settings.playback_rate_limit,
     )
     app.add_middleware(RequestLoggingMiddleware)
+    if isinstance(app.state.identity_provider, OidcIdentityProvider):
+        app.add_middleware(
+            SessionMiddleware,
+            secret_key=settings.auth_session_secret.get_secret_value(),
+            session_cookie=settings.oidc_flow_cookie_name,
+            max_age=settings.oidc_flow_max_age_seconds,
+            same_site="lax",
+            https_only=settings.environment == "production",
+        )
     app.include_router(auth_router)
     app.include_router(users_router)
     app.include_router(voice_tags_router)

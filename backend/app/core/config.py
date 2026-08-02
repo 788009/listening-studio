@@ -1,8 +1,16 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
-from pydantic import AliasChoices, Field, PositiveInt, SecretStr, field_validator
+from pydantic import (
+    AliasChoices,
+    Field,
+    PositiveInt,
+    SecretStr,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from backend.app.integrations.llm import MAX_GENERATION_COUNT
@@ -51,6 +59,19 @@ class Settings(BaseSettings):
     metrics_token: SecretStr | None = None
     auth_session_cookie_name: str = "listening_session"
     auth_session_max_age_seconds: PositiveInt = 8 * 60 * 60
+    oidc_enabled: bool = False
+    oidc_discovery_url: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: SecretStr | None = None
+    oidc_redirect_uri: str | None = None
+    oidc_post_login_url: str = "/"
+    oidc_scopes: str = "openid profile email phone"
+    oidc_token_endpoint_auth_method: Literal[
+        "client_secret_basic", "client_secret_post"
+    ] = "client_secret_basic"
+    oidc_pkce_enabled: bool = False
+    oidc_flow_cookie_name: str = "listening_oidc_flow"
+    oidc_flow_max_age_seconds: PositiveInt = 10 * 60
     cosyvoice_model_dir: Path = Field(
         validation_alias=AliasChoices(
             "COSYVOICE_MODEL_DIR", "LISTENING_COSYVOICE_MODEL_DIR"
@@ -73,6 +94,40 @@ class Settings(BaseSettings):
                 "Authentication session secret must be at least 32 characters"
             )
         return value
+
+    @model_validator(mode="after")
+    def validate_oidc_settings(self) -> "Settings":
+        if not self.oidc_enabled:
+            return self
+
+        required = {
+            "oidc_discovery_url": self.oidc_discovery_url,
+            "oidc_client_id": self.oidc_client_id,
+            "oidc_client_secret": (
+                self.oidc_client_secret.get_secret_value()
+                if self.oidc_client_secret is not None
+                else None
+            ),
+            "oidc_redirect_uri": self.oidc_redirect_uri,
+        }
+        missing = [name for name, value in required.items() if not value]
+        if missing:
+            raise ValueError(
+                "OIDC is enabled but required settings are missing: "
+                + ", ".join(missing)
+            )
+
+        assert self.oidc_discovery_url is not None
+        assert self.oidc_redirect_uri is not None
+        discovery = urlparse(self.oidc_discovery_url)
+        redirect = urlparse(self.oidc_redirect_uri)
+        if discovery.scheme != "https" or not discovery.netloc:
+            raise ValueError("OIDC discovery URL must use HTTPS")
+        if redirect.scheme not in {"http", "https"} or not redirect.netloc:
+            raise ValueError("OIDC redirect URI must be an absolute HTTP(S) URL")
+        if "openid" not in self.oidc_scopes.split():
+            raise ValueError("OIDC scopes must include openid")
+        return self
 
 
 @lru_cache

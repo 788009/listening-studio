@@ -81,6 +81,25 @@ the debug form, or should redirect to a provider login URL. This keeps debug
 identity fields out of normal business API calls and allows a real OIDC adapter
 to replace the login mechanism without changing the account UI.
 
+### OpenID Connect Authentication
+
+Set `LISTENING_OIDC_ENABLED=true` and configure the discovery URL, client ID,
+client secret, redirect URI, and post-login URL shown in `.env.example`. When
+debug authentication is disabled, the application uses the OIDC Authorization
+Code flow with `state`, `nonce`, discovery metadata, and signed ID Token
+validation. Set `LISTENING_OIDC_PKCE_ENABLED=true` only when the provider
+advertises S256 PKCE support. The configured redirect URI must also be
+registered with the OIDC provider. Set
+`LISTENING_OIDC_TOKEN_ENDPOINT_AUTH_METHOD` to the client authentication method
+implemented by the provider.
+
+Debug authentication takes precedence when both authentication modes are
+enabled. This allows existing development identities to remain available by
+changing only `LISTENING_DEBUG_AUTH_ENABLED`; disable it to test or use OIDC.
+OIDC profile claims are not copied into local profiles automatically. Local
+accounts continue to use the validated `issuer` and `subject` pair as their
+immutable authentication identity.
+
 ## Frontend
 
 The frontend requires Node 24.15 and npm 11.6. Install dependencies and start
