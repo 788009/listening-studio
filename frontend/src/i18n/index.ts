@@ -32,6 +32,7 @@ const zhCN: Record<string, string> = {
   'User pages': '用户分页',
   'Use light theme': '使用亮色模式',
   'Use dark theme': '使用暗色模式',
+  'Language update failed': '无法更新语言设置',
   'Search the public library or continue your listening work.': '搜索公开听力库，或继续处理你的听力内容。',
   'Search by title, topic, or voice': '按标题、主题或音色搜索',
   'Browse all audio': '浏览全部音频',

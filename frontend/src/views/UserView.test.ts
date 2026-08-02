@@ -25,13 +25,13 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-async function mountUserView(authenticated: boolean) {
+async function mountUserView(authenticated: boolean, currentUserId = 'OtherTeacher') {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(profile)))
   const pinia = createPinia()
   const auth = useAuthStore(pinia)
   if (authenticated) {
     auth.setCurrentUser({
-      userId: 'OtherTeacher',
+      userId: currentUserId,
       username: 'Other Teacher',
       locale: 'en',
       profileComplete: true,
@@ -88,5 +88,14 @@ describe('user view', () => {
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/voices')
     expect(router.currentRoute.value.query.q).toBe('author:TeacherOne')
+  })
+
+  it('edits the display name without including a language field', async () => {
+    const { wrapper } = await mountUserView(true, 'TeacherOne')
+
+    await wrapper.get('button').trigger('click')
+
+    expect(wrapper.find('#edit-username').exists()).toBe(true)
+    expect(wrapper.find('#edit-locale').exists()).toBe(false)
   })
 })

@@ -372,6 +372,13 @@ test('anonymous student can search and inspect public audio', async ({ page }, t
   await expect(page.getByRole('link', { name: 'Batch' })).toHaveCount(0)
   await expect(page.getByRole('link', { name: 'Manage' })).toHaveCount(0)
 
+  await page.getByRole('combobox', { name: 'Language' }).selectOption('zh-CN')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN')
+  await expect(page.getByRole('link', { name: '听力库', exact: true }).first()).toBeVisible()
+  await page.getByRole('combobox', { name: '语言' }).selectOption('en')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+  await expectNoViewportOverflow(page)
+
   await page.keyboard.press('Tab')
   const skipLink = page.getByRole('link', { name: 'Skip to content' })
   await expect(skipLink).toBeFocused()

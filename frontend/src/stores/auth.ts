@@ -10,7 +10,7 @@ import {
   type AuthenticationCapabilities,
   type DebugSessionInput,
 } from '@/api/auth'
-import { setLocale } from '@/i18n'
+import { usePreferencesStore } from '@/stores/preferences'
 
 export interface CurrentUser {
   userId: string | null
@@ -24,6 +24,7 @@ export interface CurrentUser {
 export type UserRole = 'user' | 'admin' | 'super_admin'
 
 export const useAuthStore = defineStore('auth', () => {
+  const preferences = usePreferencesStore()
   const capabilities = ref<AuthenticationCapabilities>({
     loginMethod: 'none',
     loginUrl: null,
@@ -61,7 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       user.value = await apiRequest<CurrentUser>('/users/me')
-      setLocale(user.value.locale)
+      preferences.setLanguage(user.value.locale)
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         user.value = null
@@ -77,7 +78,7 @@ export const useAuthStore = defineStore('auth', () => {
   function setCurrentUser(value: CurrentUser): void {
     user.value = value
     loaded.value = true
-    setLocale(value.locale)
+    preferences.setLanguage(value.locale)
   }
 
   async function signInDebug(input: DebugSessionInput): Promise<CurrentUser> {

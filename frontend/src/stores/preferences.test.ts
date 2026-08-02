@@ -20,4 +20,14 @@ describe('preferences store', () => {
     expect(document.documentElement.dataset.theme).toBe('light')
     expect(localStorage.getItem('listening-studio-theme')).toBe('light')
   })
+
+  it('applies and persists the selected language', () => {
+    const preferences = usePreferencesStore()
+
+    preferences.setLanguage('zh-CN')
+
+    expect(preferences.language).toBe('zh-CN')
+    expect(document.documentElement.lang).toBe('zh-CN')
+    expect(localStorage.getItem('listening-studio-language')).toBe('zh-CN')
+  })
 })

@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia } from 'pinia'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
 
 import ProfileSetupView from './ProfileSetupView.vue'
@@ -22,6 +22,10 @@ function errorResponse(code: string, message: string): Response {
 }
 
 describe('profile setup view', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   afterEach(() => {
     setLocale('en')
     vi.unstubAllGlobals()
@@ -49,6 +53,7 @@ describe('profile setup view', () => {
     const usernameInput = wrapper.get<HTMLInputElement>('#username')
 
     expect(usernameInput.element.value).toBe('Teacher One')
+    expect(wrapper.find('#locale').exists()).toBe(false)
     await usernameInput.setValue('Preferred Name')
     expect(usernameInput.element.value).toBe('Preferred Name')
   })

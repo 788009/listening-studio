@@ -2,6 +2,7 @@
 import { RouterLink, RouterView } from 'vue-router'
 
 import AuthControls from '@/components/AuthControls.vue'
+import LanguageSelect from '@/components/LanguageSelect.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from '@/i18n'
@@ -81,9 +82,15 @@ const { t } = useI18n()
       </nav>
 
       <div class="border-t border-line p-3">
-        <div class="mb-2 flex items-center justify-between px-2">
-          <span class="text-xs text-muted">{{ t('Appearance') }}</span>
-          <ThemeToggle />
+        <div class="mb-2 space-y-1 px-2">
+          <div class="flex min-h-9 items-center justify-between gap-3">
+            <span class="text-xs text-muted">{{ t('Language') }}</span>
+            <LanguageSelect />
+          </div>
+          <div class="flex min-h-9 items-center justify-between gap-3">
+            <span class="text-xs text-muted">{{ t('Appearance') }}</span>
+            <ThemeToggle />
+          </div>
         </div>
         <AuthControls />
       </div>
@@ -97,6 +104,7 @@ const { t } = useI18n()
             <span class="truncate text-sm font-semibold">Listening Studio</span>
           </RouterLink>
           <div class="flex shrink-0 items-center gap-1">
+            <LanguageSelect />
             <ThemeToggle />
             <AuthControls />
           </div>

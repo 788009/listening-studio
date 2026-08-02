@@ -12,7 +12,6 @@ const router = useRouter()
 const { locale: activeLocale, t } = useI18n()
 const userId = ref('')
 const username = ref(auth.user?.suggestedUsername ?? auth.user?.username ?? '')
-const locale = ref(activeLocale.value)
 const errorMessage = ref('')
 const userIdError = ref('')
 const submitting = ref(false)
@@ -31,7 +30,7 @@ async function submit(): Promise<void> {
       body: JSON.stringify({
         userId: userId.value,
         username: username.value || null,
-        locale: locale.value,
+        locale: activeLocale.value,
       }),
     })
     auth.setCurrentUser(user)
@@ -89,18 +88,6 @@ async function submit(): Promise<void> {
           class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
         />
       </div>
-      <div>
-        <label for="locale" class="mb-1 block text-sm font-medium">{{ t('Language') }}</label>
-        <select
-          id="locale"
-          v-model="locale"
-          class="h-10 w-full border border-line bg-surface px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
-        >
-          <option value="en">{{ t('English') }}</option>
-          <option value="zh-CN">{{ t('Chinese') }}</option>
-        </select>
-      </div>
-
       <p v-if="errorMessage" role="alert" class="text-sm text-danger">
         {{ errorMessage }}
       </p>

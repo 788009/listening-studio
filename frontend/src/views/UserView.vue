@@ -31,7 +31,6 @@ const loading = ref(true)
 const errorMessage = ref('')
 const editing = ref(false)
 const username = ref('')
-const locale = ref('en')
 
 const isCurrentUser = computed(
   () => auth.user?.userId?.toLowerCase() === profile.value?.userId.toLowerCase(),
@@ -45,7 +44,6 @@ async function loadProfile(): Promise<void> {
       `/users/${String(route.params.userId)}`,
     )
     username.value = profile.value.username ?? ''
-    locale.value = profile.value.locale
   } catch (error) {
     profile.value = null
     errorMessage.value = error instanceof ApiError ? error.message : t('Profile unavailable')
@@ -59,7 +57,7 @@ async function saveProfile(): Promise<void> {
   try {
     const currentUser = await apiRequest<CurrentUser>('/users/me/profile', {
       method: 'PATCH',
-      body: JSON.stringify({ username: username.value, locale: locale.value }),
+      body: JSON.stringify({ username: username.value }),
     })
     auth.setCurrentUser(currentUser)
     editing.value = false
@@ -107,7 +105,7 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
 
       <form
         v-if="editing"
-        class="mt-6 grid gap-4 rounded-lg border border-line bg-surface p-5 shadow-panel sm:grid-cols-[1fr_12rem_auto] sm:items-end"
+        class="mt-6 grid gap-4 rounded-lg border border-line bg-surface p-5 shadow-panel sm:grid-cols-[1fr_auto] sm:items-end"
         @submit.prevent="saveProfile"
       >
         <div>
@@ -120,21 +118,10 @@ watch(() => route.params.userId, loadProfile, { immediate: true })
             class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
           />
         </div>
-        <div>
-          <label for="edit-locale" class="mb-1 block text-sm font-medium">{{ t('Language') }}</label>
-          <select
-            id="edit-locale"
-            v-model="locale"
-            class="h-10 w-full border border-line px-3 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
-          >
-            <option value="en">{{ t('English') }}</option>
-            <option value="zh-CN">{{ t('Chinese') }}</option>
-          </select>
-        </div>
         <button type="submit" class="h-10 bg-ink px-4 text-sm font-medium text-white hover:bg-accent">
           {{ t('Save') }}
         </button>
-        <p v-if="errorMessage" role="alert" class="text-sm text-danger sm:col-span-3">
+        <p v-if="errorMessage" role="alert" class="text-sm text-danger sm:col-span-2">
           {{ errorMessage }}
         </p>
       </form>
