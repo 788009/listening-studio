@@ -114,8 +114,30 @@ class AudioPreviewAccepted(TagApiModel):
     content_digest: str
 
 
-class PreviewAudioUtteranceRequest(DialogueUtteranceRequest):
+class AudioPreviewSegmentAccepted(AudioPreviewAccepted):
+    position: int = Field(ge=0)
+    text: str
+
+
+class AudioTurnPreviewAccepted(TagApiModel):
+    content_digest: str
+    segments: list[AudioPreviewSegmentAccepted] = Field(min_length=1)
+
+
+class PreviewAudioSegmentRequest(TagApiModel):
     preview_job_id: ResourceId
+    text: str = Field(min_length=1)
+
+
+class PreviewAudioUtteranceRequest(DialogueUtteranceRequest):
+    preview_job_id: ResourceId | None = None
+    segments: list[PreviewAudioSegmentRequest] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def require_one_preview_source(self) -> PreviewAudioUtteranceRequest:
+        if (self.preview_job_id is None) == (len(self.segments) == 0):
+            raise ValueError("Provide either preview_job_id or segments")
+        return self
 
 
 class AudioPublishFromPreviewsRequest(TagApiModel):

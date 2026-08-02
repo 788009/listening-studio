@@ -18,8 +18,10 @@ from starlette.responses import StreamingResponse
 from backend.app.api.audio_schemas import (
     AudioPreviewAccepted,
     AudioPreviewRequest,
+    AudioPreviewSegmentAccepted,
     AudioPublishFromPreviewsRequest,
     AudioResponse,
+    AudioTurnPreviewAccepted,
 )
 from backend.app.api.audios import _response
 from backend.app.api.media import stream_wav
@@ -35,6 +37,7 @@ from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
 from backend.app.services.audio_previews import (
     AudioPreviewService,
+    PublishedAudioSegment,
     PublishedAudioUtterance,
 )
 from backend.app.services.audios import AudioQuestionInput
@@ -84,6 +87,45 @@ async def create_audio_preview(
     return AudioPreviewAccepted(
         job_id=submission.job.id,
         content_digest=submission.content_digest,
+    )
+
+
+@router.post(
+    "/turns",
+    response_model=AudioTurnPreviewAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def create_audio_turn_preview(
+    payload: AudioPreviewRequest,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> AudioTurnPreviewAccepted:
+    submission = _service(request).submit_turn(
+        session,
+        owner=user,
+        voice_id=payload.voice_id,
+        speaker_display_name=payload.speaker_display_name,
+        text=payload.text,
+    )
+    job_ids = [segment.job.id for _, _, segment in submission.segments]
+    logger.bind(
+        request_id=request.state.request_id,
+        job_ids=job_ids,
+        user_db_id=user.id,
+        resource_type="job",
+    ).info("Audio turn preview submitted segment_count={}", len(job_ids))
+    return AudioTurnPreviewAccepted(
+        content_digest=submission.content_digest,
+        segments=[
+            AudioPreviewSegmentAccepted(
+                position=position,
+                text=text,
+                job_id=segment.job.id,
+                content_digest=segment.content_digest,
+            )
+            for position, text, segment in submission.segments
+        ],
     )
 
 
@@ -152,6 +194,10 @@ async def publish_audio_from_previews(
                 voice_id=item.voice_id,
                 speaker_display_name=item.speaker_display_name,
                 text=item.text,
+                segments=tuple(
+                    PublishedAudioSegment(segment.preview_job_id, segment.text)
+                    for segment in item.segments
+                ),
             )
             for item in payload.utterances
         ],

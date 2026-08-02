@@ -5,6 +5,7 @@ import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 import {
   audioPreviewMediaPath,
   createAudioPreview,
+  createAudioTurnPreview,
   createAudioTag,
   deleteAudioPreview,
   getAudioCreationDraft,
@@ -65,9 +66,24 @@ const batchFailures = ref<string[]>([])
 interface GeneratedTurnPreview {
   source: 'generated' | 'upload'
   signature: string
-  jobId: number
   speakerKey: number
   content: AudioPreviewInput
+  segments: GeneratedPreviewSegment[]
+}
+
+interface GeneratedPreviewSegment {
+  text: string
+  jobId: number
+}
+
+interface TurnPreviewSegmentState {
+  text: string
+  requestId: number
+  pendingJobId: number | null
+  readyJobId?: number
+  status: 'submitting' | JobStatus
+  progress: number
+  errorMessage?: string
 }
 
 interface TurnPreviewState {
@@ -75,9 +91,9 @@ interface TurnPreviewState {
   pendingSignature: string
   pendingSpeakerKey: number
   pendingContent: AudioPreviewInput
-  pendingJobId: number | null
   status: 'submitting' | JobStatus
   progress: number
+  segments: TurnPreviewSegmentState[]
   generated?: GeneratedTurnPreview
   errorMessage?: string
 }
@@ -118,15 +134,21 @@ const previewPresentations = computed<Record<number, DialogueTurnPreview>>(() =>
   for (const turn of turns.value) {
     const state = previewStates.value[turn.key]
     if (!state) {
-      result[turn.key] = { status: 'idle', progress: 0 }
+      result[turn.key] = { status: 'idle', progress: 0, segments: [] }
     } else {
       result[turn.key] = {
         status: state.status === 'cancelled' ? 'failed' : state.status,
         progress: state.progress,
-        mediaPath: state.generated
-          ? audioPreviewMediaPath(state.generated.jobId)
-          : undefined,
         errorMessage: state.errorMessage,
+        segments: state.segments.map((segment) => ({
+          text: segment.text,
+          status: segment.status === 'cancelled' ? 'failed' : segment.status,
+          progress: segment.progress,
+          mediaPath: segment.readyJobId
+            ? audioPreviewMediaPath(segment.readyJobId)
+            : undefined,
+          errorMessage: segment.errorMessage,
+        })),
       }
     }
   }
@@ -435,76 +457,146 @@ function normalizedQuestions(): AudioQuestionInput[] | null {
 function schedulePreviewPoll(): void {
   clearTimeout(previewPollTimer)
   const hasActiveJob = previewStateEntries().some(({ state }) =>
-    ['queued', 'running'].includes(state.status),
+    state.segments.some(
+      (segment) =>
+        segment.pendingJobId !== null &&
+        ['queued', 'running'].includes(segment.status),
+    ),
   )
   if (hasActiveJob) previewPollTimer = setTimeout(refreshPreviewJobs, 1000)
 }
 
 async function refreshPreviewJobs(): Promise<void> {
-  const active = previewStateEntries().filter(
-    ({ state }) => state.pendingJobId && ['queued', 'running'].includes(state.status),
+  const active = previewStateEntries().flatMap(({ draftIndex, turnKey, state }) =>
+    state.segments.flatMap((segment, segmentIndex) =>
+      segment.pendingJobId !== null && ['queued', 'running'].includes(segment.status)
+        ? [{ draftIndex, turnKey, segmentIndex, segment }]
+        : [],
+    ),
   )
-  await Promise.all(
-    active.map(async ({ draftIndex, turnKey, state }) => {
-      const jobId = state.pendingJobId
-      if (!jobId) return
-      try {
-        const job = await getJob(jobId)
-        const states = previewBucket(draftIndex)
-        const current = states[turnKey]
-        if (!current || current.pendingJobId !== jobId) return
-        if (job.status === 'succeeded') {
-          const previousJobId = current.generated?.jobId
-          replacePreviewBucket({
-            ...states,
-            [turnKey]: {
-              ...current,
-              pendingJobId: null,
-              status: 'succeeded',
-              progress: job.progress,
-              generated: {
-                source: 'generated',
-                signature: current.pendingSignature,
-                jobId,
-                speakerKey: current.pendingSpeakerKey,
-                content: current.pendingContent,
-              },
-              errorMessage: undefined,
-            },
-          }, draftIndex)
-          if (previousJobId && previousJobId !== jobId) {
-            void deleteAudioPreview(previousJobId).catch(() => undefined)
-          }
-          return
-        }
-        replacePreviewBucket({
-          ...states,
-          [turnKey]: {
-            ...current,
-            status: job.status,
-            progress: job.progress,
-            errorMessage: job.errorSummary,
-          },
-        }, draftIndex)
-      } catch (error) {
-        const states = previewBucket(draftIndex)
-        const current = states[turnKey]
-        if (!current || current.pendingJobId !== jobId) return
-        replacePreviewBucket({
-          ...states,
-          [turnKey]: {
-            ...current,
-            status: 'failed',
-            errorMessage:
-              error instanceof ApiError
-                ? error.message
-                : t('Preview status could not be loaded'),
-          },
-        }, draftIndex)
+  for (const { draftIndex, turnKey, segmentIndex, segment } of active) {
+    const jobId = segment.pendingJobId
+    if (!jobId) continue
+    try {
+      const job = await getJob(jobId)
+      const states = previewBucket(draftIndex)
+      const current = states[turnKey]
+      const currentSegment = current?.segments[segmentIndex]
+      if (!current || currentSegment?.pendingJobId !== jobId) continue
+      if (job.status === 'succeeded') {
+        const segments = current.segments.map((item, position) =>
+          position === segmentIndex
+            ? {
+                ...item,
+                pendingJobId: null,
+                readyJobId: jobId,
+                status: 'succeeded' as const,
+                progress: job.progress,
+                errorMessage: undefined,
+              }
+            : item,
+        )
+        const completed = completeTurnPreview({ ...current, segments })
+        const completedJobIds = new Set(
+          completed.generated?.segments.map((item) => item.jobId) ?? [],
+        )
+        const obsoleteJobIds = completed.status === 'succeeded'
+          ? current.generated?.segments
+              .map((item) => item.jobId)
+              .filter((item) => !completedJobIds.has(item)) ?? []
+          : []
+        replacePreviewBucket(
+          { ...states, [turnKey]: completed },
+          draftIndex,
+        )
+        void Promise.allSettled(
+          obsoleteJobIds.map((item) => deleteAudioPreview(item)),
+        )
+        continue
       }
-    }),
-  )
+      const segments = current.segments.map((item, position) =>
+        position === segmentIndex
+          ? {
+              ...item,
+              status: job.status,
+              progress: job.progress,
+              errorMessage: job.errorSummary,
+            }
+          : item,
+      )
+      replacePreviewBucket(
+        { ...states, [turnKey]: summarizeTurnPreview({ ...current, segments }) },
+        draftIndex,
+      )
+    } catch (error) {
+      const states = previewBucket(draftIndex)
+      const current = states[turnKey]
+      if (!current || current.segments[segmentIndex]?.pendingJobId !== jobId) continue
+      const segments = current.segments.map((item, position) =>
+        position === segmentIndex
+          ? {
+              ...item,
+              status: 'failed' as const,
+              errorMessage:
+                error instanceof ApiError
+                  ? error.message
+                  : t('Preview status could not be loaded'),
+            }
+          : item,
+      )
+      replacePreviewBucket(
+        { ...states, [turnKey]: summarizeTurnPreview({ ...current, segments }) },
+        draftIndex,
+      )
+    }
+  }
   schedulePreviewPoll()
+}
+
+function summarizeTurnPreview(state: TurnPreviewState): TurnPreviewState {
+  const statuses = state.segments.map((segment) => segment.status)
+  const status = statuses.includes('running')
+    ? 'running'
+    : statuses.includes('queued')
+      ? 'queued'
+      : statuses.includes('submitting')
+        ? 'submitting'
+        : statuses.includes('failed') || statuses.includes('cancelled')
+          ? 'failed'
+          : statuses.length > 0 && statuses.every((item) => item === 'succeeded')
+            ? 'succeeded'
+            : 'queued'
+  const progress = state.segments.length
+    ? Math.round(
+        state.segments.reduce((sum, segment) => sum + segment.progress, 0) /
+          state.segments.length,
+      )
+    : 0
+  return { ...state, status, progress }
+}
+
+function completeTurnPreview(state: TurnPreviewState): TurnPreviewState {
+  const summarized = summarizeTurnPreview(state)
+  if (
+    summarized.status !== 'succeeded' ||
+    summarized.segments.some((segment) => !segment.readyJobId)
+  ) {
+    return summarized
+  }
+  return {
+    ...summarized,
+    generated: {
+      source: 'generated',
+      signature: summarized.pendingSignature,
+      speakerKey: summarized.pendingSpeakerKey,
+      content: summarized.pendingContent,
+      segments: summarized.segments.map((segment) => ({
+        text: segment.text,
+        jobId: segment.readyJobId!,
+      })),
+    },
+    errorMessage: undefined,
+  }
 }
 
 async function generateTurnPreview(turnKey: number): Promise<void> {
@@ -546,20 +638,22 @@ async function generatePreview(
         speakerDisplayName: content.speakerDisplayName,
         text: content.text,
       },
-      pendingJobId: null,
       status: 'submitting',
       progress: 0,
+      segments: previous?.segments ?? [],
       generated: previous?.generated,
     },
   }, draftIndex)
   try {
-    const accepted = await createAudioPreview({
+    const accepted = await createAudioTurnPreview({
       voiceId: content.voiceId,
       speakerDisplayName: content.speakerDisplayName,
       text: content.text,
     })
     if (previewBucket(draftIndex)[turnKey]?.requestId !== requestId) {
-      void deleteAudioPreview(accepted.jobId).catch(() => undefined)
+      void Promise.allSettled(
+        accepted.segments.map((segment) => deleteAudioPreview(segment.jobId)),
+      )
       return
     }
     replacePreviewBucket({
@@ -573,19 +667,34 @@ async function generatePreview(
           speakerDisplayName: content.speakerDisplayName,
           text: content.text,
         },
-        pendingJobId: accepted.jobId,
         status: 'queued',
         progress: 0,
+        segments: accepted.segments.map((segment) => {
+          const previousSegment = previous?.generated?.segments[segment.position]
+          return {
+            text: segment.text,
+            requestId: ++nextPreviewRequestId,
+            pendingJobId: segment.jobId,
+            readyJobId:
+              previousSegment?.text === segment.text
+                ? previousSegment.jobId
+                : undefined,
+            status: 'queued',
+            progress: 0,
+          }
+        }),
         generated: previous?.generated,
       },
     }, draftIndex)
-    if (
-      previous?.pendingJobId &&
-      previous.pendingJobId !== accepted.jobId &&
-      previous.pendingJobId !== previous.generated?.jobId
-    ) {
-      void deleteAudioPreview(previous.pendingJobId).catch(() => undefined)
-    }
+    const generatedJobIds = new Set(
+      previous?.generated?.segments.map((segment) => segment.jobId) ?? [],
+    )
+    const abandonedJobIds = previous?.segments
+      .flatMap((segment) => segment.pendingJobId ?? [])
+      .filter((jobId) => !generatedJobIds.has(jobId)) ?? []
+    void Promise.allSettled(
+      abandonedJobIds.map((jobId) => deleteAudioPreview(jobId)),
+    )
     if (refreshAfterSubmit) await refreshPreviewJobs()
   } catch (error) {
     if (previewBucket(draftIndex)[turnKey]?.requestId !== requestId) return
@@ -600,14 +709,97 @@ async function generatePreview(
           speakerDisplayName: content.speakerDisplayName,
           text: content.text,
         },
-        pendingJobId: null,
         status: 'failed',
         progress: 0,
+        segments: previous?.segments ?? [],
         generated: previous?.generated,
         errorMessage:
           error instanceof ApiError ? error.message : t('Preview could not be submitted'),
       },
     }, draftIndex)
+  }
+}
+
+async function regeneratePreviewSegment(
+  turnKey: number,
+  segmentPosition: number,
+): Promise<void> {
+  const states = previewBucket()
+  const state = states[turnKey]
+  const segment = state?.segments[segmentPosition]
+  if (!state || !segment) return
+  const previousPendingJobId = segment.pendingJobId
+  const requestId = ++nextPreviewRequestId
+  const segments = state.segments.map((item, position) =>
+    position === segmentPosition
+      ? {
+          ...item,
+          requestId,
+          pendingJobId: null,
+          status: 'submitting' as const,
+          progress: 0,
+          errorMessage: undefined,
+        }
+      : item,
+  )
+  replacePreviewBucket({
+    ...states,
+    [turnKey]: summarizeTurnPreview({ ...state, segments }),
+  })
+  try {
+    const accepted = await createAudioPreview({
+      voiceId: state.pendingContent.voiceId,
+      speakerDisplayName: state.pendingContent.speakerDisplayName,
+      text: segment.text,
+    })
+    const current = previewStates.value[turnKey]
+    if (current?.segments[segmentPosition]?.requestId !== requestId) {
+      void deleteAudioPreview(accepted.jobId).catch(() => undefined)
+      return
+    }
+    const acceptedSegments = current.segments.map((item, position) =>
+      position === segmentPosition
+        ? {
+            ...item,
+            pendingJobId: accepted.jobId,
+            status: 'queued' as const,
+            progress: 0,
+          }
+        : item,
+    )
+    replacePreviewBucket({
+      ...previewStates.value,
+      [turnKey]: summarizeTurnPreview({ ...current, segments: acceptedSegments }),
+    })
+    if (
+      previousPendingJobId &&
+      previousPendingJobId !== accepted.jobId &&
+      previousPendingJobId !== segment.readyJobId
+    ) {
+      void deleteAudioPreview(previousPendingJobId).catch(() => undefined)
+    }
+    await refreshPreviewJobs()
+  } catch (error) {
+    const current = previewStates.value[turnKey]
+    if (!current || current.segments[segmentPosition]?.requestId !== requestId) return
+    const failedSegments = current.segments.map((item, position) =>
+      position === segmentPosition
+        ? {
+            ...item,
+            pendingJobId: null,
+            status: 'failed' as const,
+            progress: 0,
+            errorMessage:
+              error instanceof ApiError
+                ? error.message
+                : t('Preview could not be submitted'),
+          }
+        : item,
+    )
+    replacePreviewBucket({
+      ...previewStates.value,
+      [turnKey]: summarizeTurnPreview({ ...current, segments: failedSegments }),
+    })
   }
 }
 
@@ -632,9 +824,9 @@ async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
       pendingSignature: signature,
       pendingSpeakerKey: Number(turn.speakerKey),
       pendingContent: content,
-      pendingJobId: null,
       status: 'submitting',
       progress: 0,
+      segments: previous?.segments ?? [],
       generated: previous?.generated,
     },
   })
@@ -651,24 +843,33 @@ async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
         pendingSignature: signature,
         pendingSpeakerKey: Number(turn.speakerKey),
         pendingContent: content,
-        pendingJobId: null,
         status: 'succeeded',
         progress: 100,
+        segments: [
+          {
+            text: content.text,
+            requestId,
+            pendingJobId: null,
+            readyJobId: accepted.jobId,
+            status: 'succeeded',
+            progress: 100,
+          },
+        ],
         generated: {
           source: 'upload',
           signature,
-          jobId: accepted.jobId,
           speakerKey: Number(turn.speakerKey),
           content,
+          segments: [{ text: content.text, jobId: accepted.jobId }],
         },
       },
     })
-    if (previous?.pendingJobId && previous.pendingJobId !== accepted.jobId) {
-      void deleteAudioPreview(previous.pendingJobId).catch(() => undefined)
-    }
-    if (previous?.generated?.jobId && previous.generated.jobId !== accepted.jobId) {
-      void deleteAudioPreview(previous.generated.jobId).catch(() => undefined)
-    }
+    const previousJobIds = previewJobIds(previous)
+    void Promise.allSettled(
+      previousJobIds
+        .filter((jobId) => jobId !== accepted.jobId)
+        .map((jobId) => deleteAudioPreview(jobId)),
+    )
   } catch (error) {
     if (previewStates.value[turnKey]?.requestId !== requestId) return
     replacePreviewBucket({
@@ -678,9 +879,9 @@ async function uploadTurnPreview(turnKey: number, file: File): Promise<void> {
         pendingSignature: signature,
         pendingSpeakerKey: Number(turn.speakerKey),
         pendingContent: content,
-        pendingJobId: null,
         status: 'failed',
         progress: 0,
+        segments: previous?.segments ?? [],
         generated: previous?.generated,
         errorMessage:
           error instanceof ApiError ? error.message : t('Audio preview could not be uploaded'),
@@ -696,7 +897,21 @@ async function generateMissingPreviews(): Promise<void> {
   const missing = content.filter(
     (item) => !previewStates.value[item.turnKey]?.generated,
   )
-  await Promise.all(missing.map((item) => generateTurnPreview(item.turnKey)))
+  await Promise.all(
+    missing.map((item) => {
+      const turn = turns.value.find((value) => value.key === item.turnKey)
+      return turn
+        ? generatePreview(
+            item.turnKey,
+            item,
+            Number(turn.speakerKey),
+            draftStore.currentIndex,
+            false,
+          )
+        : Promise.resolve()
+    }),
+  )
+  await refreshPreviewJobs()
 }
 
 async function removeTurnPreview(turnKey: number): Promise<void> {
@@ -704,12 +919,23 @@ async function removeTurnPreview(turnKey: number): Promise<void> {
   const next = { ...previewStates.value }
   delete next[turnKey]
   replacePreviewBucket(next)
-  const jobIds = new Set(
-    [state?.pendingJobId, state?.generated?.jobId].filter(
-      (jobId): jobId is number => typeof jobId === 'number',
-    ),
+  await Promise.allSettled(
+    previewJobIds(state).map((jobId) => deleteAudioPreview(jobId)),
   )
-  await Promise.allSettled([...jobIds].map((jobId) => deleteAudioPreview(jobId)))
+}
+
+function previewJobIds(state?: TurnPreviewState): number[] {
+  if (!state) return []
+  return [
+    ...new Set([
+      ...state.segments.flatMap((segment) =>
+        [segment.pendingJobId, segment.readyJobId].filter(
+          (jobId): jobId is number => typeof jobId === 'number',
+        ),
+      ),
+      ...(state.generated?.segments.map((segment) => segment.jobId) ?? []),
+    ]),
+  ]
 }
 
 function selectTag(tagId: number): void {
@@ -962,7 +1188,7 @@ async function publishDraftBatchFromPreviews(): Promise<void> {
         }
         return generated
           ? {
-              previewJobId: generated.jobId,
+              ...generatedPreviewPayload(generated),
               voiceId:
                 generated.source === 'upload'
                   ? current.voiceId
@@ -1040,7 +1266,7 @@ async function publishGeneratedAudio(): Promise<void> {
     const current = contentByTurnKey.get(turn.key)
     return generated
       ? {
-          previewJobId: generated.jobId,
+          ...generatedPreviewPayload(generated),
           voiceId:
             generated.source === 'upload' && current
               ? current.voiceId
@@ -1078,6 +1304,21 @@ async function publishGeneratedAudio(): Promise<void> {
   }
 }
 
+function generatedPreviewPayload(generated: GeneratedTurnPreview): {
+  previewJobId?: number
+  segments?: Array<{ previewJobId: number; text: string }>
+} {
+  if (generated.source === 'upload') {
+    return { previewJobId: generated.segments[0]!.jobId }
+  }
+  return {
+    segments: generated.segments.map((segment) => ({
+      previewJobId: segment.jobId,
+      text: segment.text,
+    })),
+  }
+}
+
 async function confirmDiscardChangesAndPublish(): Promise<void> {
   discardChangesDialogOpen.value = false
   if (batchMode.value) {
@@ -1107,8 +1348,7 @@ async function cleanupPreviews(): Promise<void> {
   const jobIds = [
     ...new Set(
       previewStateEntries()
-        .flatMap(({ state }) => [state.pendingJobId, state.generated?.jobId])
-        .filter((jobId): jobId is number => typeof jobId === 'number'),
+        .flatMap(({ state }) => previewJobIds(state)),
     ),
   ]
   standalonePreviewStates.value = {}
@@ -1215,6 +1455,7 @@ onUnmounted(() => clearTimeout(previewPollTimer))
         :previews="previewPresentations"
         :can-upload="auth.isAdmin"
         @generate="generateTurnPreview"
+        @regenerate-segment="regeneratePreviewSegment"
         @upload="uploadTurnPreview"
         @remove="removeTurnPreview"
       />

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import tempfile
 import unicodedata
 import wave
 from collections.abc import Callable
@@ -41,7 +42,10 @@ from backend.app.services.audios import (
 )
 from backend.app.services.job_storage import AUDIO_PREVIEW_JOB_TYPE, JobStorage
 from backend.app.services.jobs import JobService
-from backend.app.services.speech_synthesis import ChunkedSpeechSynthesizer
+from backend.app.services.speech_synthesis import (
+    ChunkedSpeechSynthesizer,
+    chunk_synthesis_text,
+)
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 
 
@@ -65,11 +69,24 @@ class AudioPreviewSubmission:
 
 
 @dataclass(frozen=True)
-class PublishedAudioUtterance:
+class AudioTurnPreviewSubmission:
+    content_digest: str
+    segments: tuple[tuple[int, str, AudioPreviewSubmission], ...]
+
+
+@dataclass(frozen=True)
+class PublishedAudioSegment:
     preview_job_id: int
+    text: str
+
+
+@dataclass(frozen=True)
+class PublishedAudioUtterance:
+    preview_job_id: int | None
     voice_id: int
     speaker_display_name: str
     text: str
+    segments: tuple[PublishedAudioSegment, ...] = ()
 
 
 class AudioPreviewService:
@@ -166,6 +183,61 @@ class AudioPreviewService:
     ) -> AudioPreviewSubmission:
         preview_input = self.normalize_input(voice_id, speaker_display_name, text)
         self.synthesis_service.authorized_voice(session, owner, preview_input.voice_id)
+        submission: AudioPreviewSubmission | None = None
+        try:
+            submission = self._stage_submission(session, owner, preview_input)
+            session.commit()
+            return submission
+        except Exception:
+            session.rollback()
+            if submission is not None:
+                self.job_storage.cleanup(submission.job.id)
+            raise
+
+    def submit_turn(
+        self,
+        session: Session,
+        *,
+        owner: User,
+        voice_id: int,
+        speaker_display_name: str,
+        text: str,
+    ) -> AudioTurnPreviewSubmission:
+        preview_input = self.normalize_input(voice_id, speaker_display_name, text)
+        self.synthesis_service.authorized_voice(session, owner, preview_input.voice_id)
+        chunks = chunk_synthesis_text(preview_input.text)
+        submissions: list[tuple[int, str, AudioPreviewSubmission]] = []
+        try:
+            for position, chunk in enumerate(chunks):
+                segment_input = AudioPreviewInput(
+                    preview_input.voice_id,
+                    preview_input.speaker_display_name,
+                    chunk,
+                )
+                submissions.append(
+                    (
+                        position,
+                        chunk,
+                        self._stage_submission(session, owner, segment_input),
+                    )
+                )
+            session.commit()
+        except Exception:
+            session.rollback()
+            for _, _, submission in submissions:
+                self.job_storage.cleanup(submission.job.id)
+            raise
+        return AudioTurnPreviewSubmission(
+            self.content_digest(preview_input),
+            tuple(submissions),
+        )
+
+    def _stage_submission(
+        self,
+        session: Session,
+        owner: User,
+        preview_input: AudioPreviewInput,
+    ) -> AudioPreviewSubmission:
         digest = self.content_digest(preview_input)
         job: Job | None = None
         try:
@@ -187,10 +259,8 @@ class AudioPreviewService:
                     "text": preview_input.text,
                 },
             )
-            session.commit()
             return AudioPreviewSubmission(job, digest)
         except Exception:
-            session.rollback()
             if job is not None:
                 self.job_storage.cleanup(job.id)
             raise
@@ -387,34 +457,18 @@ class AudioPreviewService:
             )
         self.synthesis_service.validate_visibility(visibility)
         self.synthesis_service.validate_silence(silence_milliseconds)
-        normalized: list[tuple[PublishedAudioUtterance, AudioPreviewInput, Job]] = []
+        normalized: list[
+            tuple[PublishedAudioUtterance, AudioPreviewInput, tuple[Job, ...]]
+        ] = []
         for item in utterances:
             value = self.normalize_input(
                 item.voice_id,
                 item.speaker_display_name,
                 item.text,
             )
-            job = self.get_owned_preview(session, author, item.preview_job_id)
-            digest = self.content_digest(value)
-            uploaded = job.input_summary.get("source") == "upload"
-            if (
-                job.status is not JobStatus.SUCCEEDED
-                or not self.job_storage.audio_preview_path(job.id).is_file()
-                or (
-                    not uploaded
-                    and (
-                        job.input_summary.get("voiceId") != value.voice_id
-                        or job.input_summary.get("contentDigest")
-                        not in {digest, self.legacy_content_digest(value)}
-                    )
-                )
-            ):
-                raise ConflictError("Audio preview is missing or out of date")
-            self.inspection_storage.inspect_file(
-                self.job_storage.audio_preview_path(job.id)
-            )
+            jobs = self._validated_publish_jobs(session, author, item, value)
             self.synthesis_service.authorized_voice(session, author, value.voice_id)
-            normalized.append((item, value, job))
+            normalized.append((item, value, jobs))
 
         names = {
             unicodedata.normalize("NFKC", value.speaker_display_name).casefold()
@@ -443,14 +497,34 @@ class AudioPreviewService:
                 tags=tags,
             )
             self.audio_service.transition_status(session, audio, AudioStatus.PROCESSING)
-            self.combiner.combine_wav(
-                [
-                    self.job_storage.audio_preview_path(job.id)
-                    for _, _, job in normalized
-                ],
-                self.audio_storage.publishing_path(audio.id),
-                silence_milliseconds=silence_milliseconds if len(normalized) > 1 else 0,
-            )
+            publishing_path = self.audio_storage.publishing_path(audio.id)
+            with tempfile.TemporaryDirectory(
+                dir=publishing_path.parent,
+                prefix=".preview-turns-",
+            ) as temporary_dir:
+                turn_paths: list[Path] = []
+                temporary_root = Path(temporary_dir)
+                for position, (_, _, jobs) in enumerate(normalized):
+                    segment_paths = [
+                        self.job_storage.audio_preview_path(job.id) for job in jobs
+                    ]
+                    if len(segment_paths) == 1:
+                        turn_paths.append(segment_paths[0])
+                        continue
+                    turn_path = temporary_root / f"turn-{position:04d}.wav"
+                    self.combiner.combine_wav(
+                        segment_paths,
+                        turn_path,
+                        silence_milliseconds=0,
+                    )
+                    turn_paths.append(turn_path)
+                self.combiner.combine_wav(
+                    turn_paths,
+                    publishing_path,
+                    silence_milliseconds=(
+                        silence_milliseconds if len(normalized) > 1 else 0
+                    ),
+                )
             self.audio_storage.inspect_file(
                 self.audio_storage.publishing_path(audio.id)
             )
@@ -464,7 +538,10 @@ class AudioPreviewService:
             if audio is not None:
                 self.audio_storage.delete_audio(audio.id)
             raise
-        for _, _, job in normalized:
+        cleanup_jobs = {
+            job.id: job for _, _, jobs in normalized for job in jobs
+        }.values()
+        for job in cleanup_jobs:
             try:
                 self.job_storage.cleanup(job.id)
             except OSError:
@@ -472,3 +549,57 @@ class AudioPreviewService:
                     job_id=job.id, resource_type="job", resource_id=job.id
                 ).warning("Published audio preview cleanup failed job_id={}", job.id)
         return audio
+
+    def _validated_publish_jobs(
+        self,
+        session: Session,
+        author: User,
+        item: PublishedAudioUtterance,
+        value: AudioPreviewInput,
+    ) -> tuple[Job, ...]:
+        if item.preview_job_id is not None:
+            job = self.get_owned_preview(session, author, item.preview_job_id)
+            self._validate_publish_job(job, value, allow_upload=True)
+            return (job,)
+
+        expected_chunks = chunk_synthesis_text(value.text)
+        if [segment.text.strip() for segment in item.segments] != expected_chunks:
+            raise ConflictError("Audio preview segments are missing or out of date")
+        jobs: list[Job] = []
+        for segment in item.segments:
+            segment_input = AudioPreviewInput(
+                value.voice_id,
+                value.speaker_display_name,
+                segment.text.strip(),
+            )
+            job = self.get_owned_preview(session, author, segment.preview_job_id)
+            self._validate_publish_job(job, segment_input, allow_upload=False)
+            jobs.append(job)
+        return tuple(jobs)
+
+    def _validate_publish_job(
+        self,
+        job: Job,
+        value: AudioPreviewInput,
+        *,
+        allow_upload: bool,
+    ) -> None:
+        uploaded = job.input_summary.get("source") == "upload"
+        digest = self.content_digest(value)
+        if (
+            job.status is not JobStatus.SUCCEEDED
+            or not self.job_storage.audio_preview_path(job.id).is_file()
+            or (uploaded and not allow_upload)
+            or (
+                not uploaded
+                and (
+                    job.input_summary.get("voiceId") != value.voice_id
+                    or job.input_summary.get("contentDigest")
+                    not in {digest, self.legacy_content_digest(value)}
+                )
+            )
+        ):
+            raise ConflictError("Audio preview is missing or out of date")
+        self.inspection_storage.inspect_file(
+            self.job_storage.audio_preview_path(job.id)
+        )

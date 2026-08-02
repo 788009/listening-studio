@@ -72,6 +72,24 @@ function jobResponse(
   })
 }
 
+function turnPreviewResponse(jobId: number, init?: RequestInit): Response {
+  const body = JSON.parse(String(init?.body)) as { text: string }
+  return jsonResponse(
+    {
+      contentDigest: 'a'.repeat(64),
+      segments: [
+        {
+          position: 0,
+          text: body.text,
+          jobId,
+          contentDigest: 'b'.repeat(64),
+        },
+      ],
+    },
+    202,
+  )
+}
+
 function publishedAudio(id: number) {
   return {
     id,
@@ -314,10 +332,8 @@ describe('direct creation view', () => {
             jsonResponse({ jobId: 80, contentDigest: 'e'.repeat(64) }, 201),
           )
         }
-        if (path === '/api/audio-previews' && init?.method === 'POST') {
-          return Promise.resolve(
-            jsonResponse({ jobId: 81, contentDigest: 'f'.repeat(64) }, 202),
-          )
+        if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
+          return Promise.resolve(turnPreviewResponse(81, init))
         }
         if (path === '/api/jobs/81') {
           return Promise.resolve(jobResponse(81, 'succeeded'))
@@ -367,10 +383,10 @@ describe('direct creation view', () => {
       const path = String(input)
       const options = optionsResponse(path)
       if (options) return Promise.resolve(options)
-      if (path === '/api/audio-previews' && init?.method === 'POST') {
+      if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
         previewBodies.push(JSON.parse(String(init.body)))
         const jobId = nextJobId++
-        return Promise.resolve(jsonResponse({ jobId, contentDigest: 'a'.repeat(64) }, 202))
+        return Promise.resolve(turnPreviewResponse(jobId, init))
       }
       const jobMatch = path.match(/^\/api\/jobs\/(\d+)$/)
       if (jobMatch) return Promise.resolve(jobResponse(Number(jobMatch[1]), 'succeeded'))
@@ -447,13 +463,13 @@ describe('direct creation view', () => {
       title: 'Dialogue practice',
       utterances: [
         {
-          previewJobId: 11,
+          segments: [{ previewJobId: 11, text: 'Second line.' }],
           voiceId: 3,
           speakerDisplayName: 'Man',
           text: 'Second line.',
         },
         {
-          previewJobId: 12,
+          segments: [{ previewJobId: 12, text: 'Changed first line.' }],
           voiceId: 2,
           speakerDisplayName: 'Woman',
           text: 'Changed first line.',
@@ -473,6 +489,109 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
+  it('regenerates one segment and recalculates segments for the whole turn', async () => {
+    const segmentBodies: unknown[] = []
+    const deletedJobs: number[] = []
+    let turnRequestCount = 0
+    let publishBody: unknown
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
+          turnRequestCount += 1
+          const body = JSON.parse(String(init.body)) as { text: string }
+          const segments = turnRequestCount === 1
+            ? [
+                { position: 0, text: 'First sentence.', jobId: 60 },
+                { position: 1, text: 'Second sentence.', jobId: 61 },
+              ]
+            : [{ position: 0, text: body.text, jobId: 63 }]
+          return Promise.resolve(jsonResponse({
+            contentDigest: 'a'.repeat(64),
+            segments: segments.map((segment) => ({
+              ...segment,
+              contentDigest: 'b'.repeat(64),
+            })),
+          }, 202))
+        }
+        if (path === '/api/audio-previews' && init?.method === 'POST') {
+          segmentBodies.push(JSON.parse(String(init.body)))
+          return Promise.resolve(
+            jsonResponse({ jobId: 62, contentDigest: 'c'.repeat(64) }, 202),
+          )
+        }
+        const jobMatch = path.match(/^\/api\/jobs\/(\d+)$/)
+        if (jobMatch) {
+          return Promise.resolve(jobResponse(Number(jobMatch[1]), 'succeeded'))
+        }
+        const deleteMatch = path.match(/^\/api\/audio-previews\/(\d+)$/)
+        if (deleteMatch && init?.method === 'DELETE') {
+          deletedJobs.push(Number(deleteMatch[1]))
+          return Promise.resolve(emptyResponse())
+        }
+        if (path === '/api/audios/from-previews' && init?.method === 'POST') {
+          publishBody = JSON.parse(String(init.body))
+          return Promise.resolve(jsonResponse(publishedAudio(14), 201))
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const wrapper = await mountView()
+    await flushPromises()
+    await wrapper.get('#audio-title').setValue('Segment preview')
+    await wrapper.get('#speaker-name-1').setValue('Narrator')
+    await wrapper.get('#turn-text-1').setValue('First sentence. Second sentence.')
+
+    await button(wrapper, 'Generate preview').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('audio').map((audio) => audio.attributes('src'))).toEqual([
+      '/media/audio-preview/60',
+      '/media/audio-preview/61',
+    ])
+    expect(wrapper.text()).toContain('Segment 1')
+    expect(wrapper.text()).toContain('Segment 2')
+
+    await wrapper.findAll('button')
+      .find((item) => item.text() === 'Regenerate segment')
+      ?.trigger('click')
+    await flushPromises()
+    expect(segmentBodies).toEqual([
+      { voiceId: 2, speakerDisplayName: 'Narrator', text: 'First sentence.' },
+    ])
+    expect(wrapper.findAll('audio').map((audio) => audio.attributes('src'))).toEqual([
+      '/media/audio-preview/62',
+      '/media/audio-preview/61',
+    ])
+    expect(deletedJobs).toContain(60)
+
+    await wrapper.get('#turn-text-1').setValue('Replacement text has one segment.')
+    await button(wrapper, 'Regenerate preview').trigger('click')
+    await flushPromises()
+    expect(turnRequestCount).toBe(2)
+    expect(wrapper.findAll('audio').map((audio) => audio.attributes('src'))).toEqual([
+      '/media/audio-preview/63',
+    ])
+    expect(wrapper.text()).toContain('Replacement text has one segment.')
+    expect(wrapper.text()).not.toContain('Second sentence.')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(publishBody).toMatchObject({
+      utterances: [
+        {
+          text: 'Replacement text has one segment.',
+          segments: [
+            { previewJobId: 63, text: 'Replacement text has one segment.' },
+          ],
+        },
+      ],
+    })
+    wrapper.unmount()
+  })
+
   it('publishes a renamed speaker without requiring regeneration', async () => {
     let publishBody: unknown
     vi.stubGlobal(
@@ -481,10 +600,8 @@ describe('direct creation view', () => {
         const path = String(input)
         const options = optionsResponse(path)
         if (options) return Promise.resolve(options)
-        if (path === '/api/audio-previews' && init?.method === 'POST') {
-          return Promise.resolve(
-            jsonResponse({ jobId: 29, contentDigest: 'c'.repeat(64) }, 202),
-          )
+        if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
+          return Promise.resolve(turnPreviewResponse(29, init))
         }
         if (path === '/api/jobs/29') {
           return Promise.resolve(jobResponse(29, 'succeeded'))
@@ -512,7 +629,7 @@ describe('direct creation view', () => {
     expect(publishBody).toMatchObject({
       utterances: [
         {
-          previewJobId: 29,
+          segments: [{ previewJobId: 29, text: 'Generated text.' }],
           voiceId: 2,
           speakerDisplayName: 'Narrator',
           text: 'Generated text.',
@@ -528,10 +645,8 @@ describe('direct creation view', () => {
       const path = String(input)
       const options = optionsResponse(path)
       if (options) return Promise.resolve(options)
-      if (path === '/api/audio-previews' && init?.method === 'POST') {
-        return Promise.resolve(
-          jsonResponse({ jobId: 30, contentDigest: 'c'.repeat(64) }, 202),
-        )
+      if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
+        return Promise.resolve(turnPreviewResponse(30, init))
       }
       if (path === '/api/jobs/30') {
         return Promise.resolve(jobResponse(30, 'succeeded'))
@@ -567,7 +682,7 @@ describe('direct creation view', () => {
       title: 'Snapshot practice',
       utterances: [
         {
-          previewJobId: 30,
+          segments: [{ previewJobId: 30, text: 'Generated text.' }],
           voiceId: 2,
           speakerDisplayName: 'Woman',
           text: 'Generated text.',
@@ -588,10 +703,10 @@ describe('direct creation view', () => {
       const path = String(input)
       const options = optionsResponse(path)
       if (options) return Promise.resolve(options)
-      if (path === '/api/audio-previews' && init?.method === 'POST') {
+      if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
         const jobId = nextJobId++
         submittedJobs.push(jobId)
-        return Promise.resolve(jsonResponse({ jobId, contentDigest: 'b'.repeat(64) }, 202))
+        return Promise.resolve(turnPreviewResponse(jobId, init))
       }
       const jobMatch = path.match(/^\/api\/jobs\/(\d+)$/)
       if (jobMatch) {
@@ -637,12 +752,10 @@ describe('direct creation view', () => {
         const path = String(input)
         const options = optionsResponse(path)
         if (options) return Promise.resolve(options)
-        if (path === '/api/audio-previews' && init?.method === 'POST') {
+        if (path === '/api/audio-previews/turns' && init?.method === 'POST') {
           previewBodies.push(JSON.parse(String(init.body)))
           const jobId = nextJobId++
-          return Promise.resolve(
-            jsonResponse({ jobId, contentDigest: 'd'.repeat(64) }, 202),
-          )
+          return Promise.resolve(turnPreviewResponse(jobId, init))
         }
         const jobMatch = path.match(/^\/api\/jobs\/(\d+)$/)
         if (jobMatch) {
@@ -766,14 +879,16 @@ describe('direct creation view', () => {
       tagIds: [4, 5],
       visibility: 'public',
       utterances: [
-        { previewJobId: 40, text: 'First.' },
-        { previewJobId: 41, text: 'Second.' },
+        { segments: [{ previewJobId: 40, text: 'First.' }], text: 'First.' },
+        { segments: [{ previewJobId: 41, text: 'Second.' }], text: 'Second.' },
       ],
     })
     expect(publishBodies[1]).toMatchObject({
       title: 'Monologue draft',
       tagIds: [4, 6],
-      utterances: [{ previewJobId: 42, text: 'Report.' }],
+      utterances: [
+        { segments: [{ previewJobId: 42, text: 'Report.' }], text: 'Report.' },
+      ],
     })
     expect(store.drafts).toHaveLength(1)
     expect(wrapper.findAll('audio')).toHaveLength(1)
@@ -787,7 +902,9 @@ describe('direct creation view', () => {
     expect(publishBodies).toHaveLength(3)
     expect(publishBodies[2]).toMatchObject({
       title: 'Monologue draft',
-      utterances: [{ previewJobId: 42, text: 'Report.' }],
+      utterances: [
+        { segments: [{ previewJobId: 42, text: 'Report.' }], text: 'Report.' },
+      ],
     })
     expect(wrapper.find('a[href="/audio/51"]').exists()).toBe(true)
     expect(wrapper.find('a[href="/audio/52"]').exists()).toBe(true)

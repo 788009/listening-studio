@@ -21,6 +21,14 @@ export type DialogueTurnPreviewStatus =
 export interface DialogueTurnPreview {
   status: DialogueTurnPreviewStatus
   progress: number
+  errorMessage?: string
+  segments: DialogueTurnPreviewSegment[]
+}
+
+export interface DialogueTurnPreviewSegment {
+  text: string
+  status: DialogueTurnPreviewStatus
+  progress: number
   mediaPath?: string
   errorMessage?: string
 }

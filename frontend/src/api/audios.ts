@@ -144,8 +144,24 @@ export interface AudioPreviewAccepted {
   contentDigest: string
 }
 
-export interface PreviewAudioUtterance extends AudioPreviewInput {
+export interface AudioPreviewSegmentAccepted extends AudioPreviewAccepted {
+  position: number
+  text: string
+}
+
+export interface AudioTurnPreviewAccepted {
+  contentDigest: string
+  segments: AudioPreviewSegmentAccepted[]
+}
+
+export interface PreviewAudioSegment {
   previewJobId: number
+  text: string
+}
+
+export interface PreviewAudioUtterance extends AudioPreviewInput {
+  previewJobId?: number
+  segments?: PreviewAudioSegment[]
 }
 
 export interface PublishAudioFromPreviewsInput {
@@ -213,6 +229,15 @@ export function createAudioPreview(
   input: AudioPreviewInput,
 ): Promise<AudioPreviewAccepted> {
   return apiRequest<AudioPreviewAccepted>('/audio-previews', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+}
+
+export function createAudioTurnPreview(
+  input: AudioPreviewInput,
+): Promise<AudioTurnPreviewAccepted> {
+  return apiRequest<AudioTurnPreviewAccepted>('/audio-previews/turns', {
     method: 'POST',
     body: JSON.stringify(input),
   })

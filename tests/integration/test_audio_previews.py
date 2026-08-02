@@ -143,6 +143,18 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             },
         )
 
+    def submit_turn_preview(self, speaker: str, text: str) -> httpx.Response:
+        return self.send(
+            "POST",
+            "/api/audio-previews/turns",
+            headers=self.headers("first"),
+            json={
+                "voiceId": self.voice_id,
+                "speakerDisplayName": speaker,
+                "text": text,
+            },
+        )
+
     @staticmethod
     def wav_bytes() -> bytes:
         output = io.BytesIO()
@@ -336,6 +348,113 @@ class AudioPreviewIntegrationTest(unittest.TestCase):
             audio = session.get(Audio, body["id"])
             assert audio is not None
             self.assertGreater(audio.duration_seconds or 0, 0.2)
+
+    def test_turn_preview_exposes_segments_and_publishes_as_one_utterance(self) -> None:
+        text = (
+            "One two three four five six seven eight nine ten. "
+            "Eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen. "
+            "Nineteen twenty twenty-one twenty-two twenty-three twenty-four "
+            "twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty "
+            "thirty-one thirty-two thirty-three thirty-four thirty-five thirty-six "
+            "thirty-seven thirty-eight."
+        )
+        response = self.submit_turn_preview("Narrator", text)
+
+        self.assertEqual(response.status_code, 202, response.text)
+        body = response.json()
+        self.assertEqual(
+            [segment["text"] for segment in body["segments"]],
+            [
+                "One two three four five six seven eight nine ten. "
+                "Eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen.",
+                "Nineteen twenty twenty-one twenty-two twenty-three twenty-four "
+                "twenty-five twenty-six twenty-seven twenty-eight twenty-nine thirty "
+                "thirty-one thirty-two thirty-three thirty-four thirty-five thirty-six "
+                "thirty-seven thirty-eight.",
+            ],
+        )
+        self.assertEqual(
+            [segment["position"] for segment in body["segments"]],
+            [0, 1],
+        )
+
+        fake = FakeCosyVoiceIntegration()
+        worker = self.worker(fake)
+        self.assertTrue(worker.run_once())
+        self.assertTrue(worker.run_once())
+        self.assertEqual(
+            [call.text for call in fake.calls],
+            [segment["text"] for segment in body["segments"]],
+        )
+
+        published = self.send(
+            "POST",
+            "/api/audios/from-previews",
+            headers=self.headers("first"),
+            json={
+                "title": "Segmented preview",
+                "utterances": [
+                    {
+                        "voiceId": self.voice_id,
+                        "speakerDisplayName": "Narrator",
+                        "text": text,
+                        "segments": [
+                            {
+                                "previewJobId": segment["jobId"],
+                                "text": segment["text"],
+                            }
+                            for segment in body["segments"]
+                        ],
+                    }
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+
+        self.assertEqual(published.status_code, 201, published.text)
+        self.assertEqual(len(published.json()["utterances"]), 1)
+        self.assertEqual(published.json()["utterances"][0]["text"], text)
+        for segment in body["segments"]:
+            self.assertFalse(self.job_storage.directory(segment["jobId"]).exists())
+
+    def test_publish_rejects_segments_that_do_not_match_current_turn_split(self) -> None:
+        text = (
+            "First sentence has enough words to remain complete. "
+            "Second sentence also remains complete for this preview."
+        )
+        response = self.submit_turn_preview("Narrator", text)
+        body = response.json()
+        worker = self.worker(FakeCosyVoiceIntegration())
+        for _ in body["segments"]:
+            self.assertTrue(worker.run_once())
+
+        rejected = self.send(
+            "POST",
+            "/api/audios/from-previews",
+            headers=self.headers("first"),
+            json={
+                "title": "Rejected segmented preview",
+                "utterances": [
+                    {
+                        "voiceId": self.voice_id,
+                        "speakerDisplayName": "Narrator",
+                        "text": f"{text} Added sentence.",
+                        "segments": [
+                            {
+                                "previewJobId": segment["jobId"],
+                                "text": segment["text"],
+                            }
+                            for segment in body["segments"]
+                        ],
+                    }
+                ],
+                "tagIds": [],
+                "visibility": "private",
+            },
+        )
+
+        self.assertEqual(rejected.status_code, 409, rejected.text)
 
     def test_admin_uploads_preview_and_publishes_with_voice_tag(self) -> None:
         with self.app.state.session_factory() as session:
