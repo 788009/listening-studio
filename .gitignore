@@ -32,6 +32,7 @@ logs/
 
 # Frontend dependencies and build output
 node_modules/
+.vite/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
