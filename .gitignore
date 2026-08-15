@@ -30,6 +30,12 @@ logs/
 *.mp3
 *.flac
 
+# Vendored CosyVoice local state
+voice/CosyVoice/pretrained_models/
+voice/CosyVoice/.venv_vllm/
+voice/CosyVoice/.gradio/
+voice/CosyVoice/requirements_.txt
+
 # Frontend dependencies and build output
 node_modules/
 .vite/
