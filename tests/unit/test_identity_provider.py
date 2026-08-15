@@ -186,6 +186,10 @@ class OidcIdentityProviderTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(provider.verify_session(token), result.identity)
         self.assertEqual(provider.capabilities().login_method, LoginMethod.REDIRECT)
+        self.assertEqual(
+            provider.capabilities().login_url,
+            "http://127.0.0.1:8000/auth/oidc/login",
+        )
 
     async def test_mismatched_userinfo_is_not_merged_with_id_token(self) -> None:
         provider = self.provider()

@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from authlib.integrations.base_client.errors import OAuthError
@@ -265,6 +266,10 @@ class OidcIdentityProvider:
         self.cookie_name = settings.auth_session_cookie_name
         self.max_age_seconds = settings.auth_session_max_age_seconds
         self.redirect_uri = settings.oidc_redirect_uri
+        redirect = urlsplit(self.redirect_uri)
+        self.login_url = urlunsplit(
+            (redirect.scheme, redirect.netloc, "/auth/oidc/login", "", "")
+        )
         self.post_login_url = settings.oidc_post_login_url
         self._session_provider = PlaceholderIdentityProvider(
             settings,
@@ -298,7 +303,7 @@ class OidcIdentityProvider:
     def capabilities(self) -> IdentityProviderCapabilities:
         return IdentityProviderCapabilities(
             login_method=LoginMethod.REDIRECT,
-            login_url="/auth/oidc/login",
+            login_url=self.login_url,
         )
 
     def issue_session(self, identity: ExternalIdentity) -> str:
