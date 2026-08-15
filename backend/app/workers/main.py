@@ -45,7 +45,14 @@ from backend.app.workers.voice_upload import VoiceUploadJobHandler
 
 
 def build_handlers(settings: Settings) -> dict[str, JobHandler]:
-    integration = CosyVoiceAdapter(settings.cosyvoice_model_dir)
+    integration = CosyVoiceAdapter(
+        settings.cosyvoice_model_dir,
+        vllm_enabled=settings.cosyvoice_vllm_enabled,
+        vllm_gpu_memory_utilization=(
+            settings.cosyvoice_vllm_gpu_memory_utilization
+        ),
+        vllm_max_num_seqs=settings.cosyvoice_vllm_max_num_seqs,
+    )
     voice_storage = VoiceStorage(settings.data_dir)
     audio_storage = AudioStorage(settings.data_dir)
     voice_service = VoiceUploadService(
@@ -112,6 +119,7 @@ def main() -> None:
         JobWorker(
             create_session_factory(engine),
             build_handlers(settings),
+            max_concurrency=settings.worker_concurrency,
             job_storage=JobStorage(settings.data_dir),
         ).run_forever(stop_event)
     finally:

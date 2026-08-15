@@ -7,7 +7,6 @@ from typing import Any
 
 import torch
 import torchaudio
-from vllm import ModelRegistry
 
 
 ROOT_DIR = Path(__file__).resolve().parent
@@ -16,7 +15,6 @@ if str(MATCHA_TTS_DIR) not in sys.path:
     sys.path.append(str(MATCHA_TTS_DIR))
 
 from cosyvoice.cli.cosyvoice import AutoModel
-from cosyvoice.vllm.cosyvoice2 import CosyVoice2ForCausalLM
 
 
 MODEL_DIR = Path(
@@ -36,12 +34,20 @@ def _get_model():
     if _MODEL is None:
         with _MODEL_LOCK:
             if _MODEL is None:
-                ModelRegistry.register_model(
-                    "CosyVoice2ForCausalLM", CosyVoice2ForCausalLM
-                )
+                vllm_enabled = os.environ.get(
+                    "COSYVOICE_VLLM_ENABLED", "true"
+                ).casefold() in {"1", "true", "yes", "on"}
+                if vllm_enabled:
+                    from vllm import ModelRegistry
+
+                    from cosyvoice.vllm.cosyvoice2 import CosyVoice2ForCausalLM
+
+                    ModelRegistry.register_model(
+                        "CosyVoice2ForCausalLM", CosyVoice2ForCausalLM
+                    )
                 _MODEL = AutoModel(
                     model_dir=str(MODEL_DIR),
-                    load_vllm=True,
+                    load_vllm=vllm_enabled,
                     fp16=False,
                 )
     return _MODEL

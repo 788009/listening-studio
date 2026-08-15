@@ -100,12 +100,34 @@ class CosyVoiceAdapter:
         self,
         model_dir: Path,
         *,
+        vllm_enabled: bool = True,
+        vllm_gpu_memory_utilization: float = 0.2,
+        vllm_max_num_seqs: int = 4,
         cosyvoice_root: Path = DEFAULT_COSYVOICE_ROOT,
         function_loader: CosyVoiceFunctionLoader = load_cosyvoice_functions,
         audio_normalizer: NormalizeAudioFunction = normalize_audio_to_pcm16,
     ) -> None:
+        if not isinstance(vllm_enabled, bool):
+            raise ValueError("vLLM enabled flag must be a boolean")
+        if (
+            isinstance(vllm_gpu_memory_utilization, bool)
+            or not isinstance(vllm_gpu_memory_utilization, (int, float))
+            or not 0 < vllm_gpu_memory_utilization <= 0.9
+        ):
+            raise ValueError(
+                "vLLM GPU memory utilization must be greater than 0 and at most 0.9"
+            )
+        if (
+            isinstance(vllm_max_num_seqs, bool)
+            or not isinstance(vllm_max_num_seqs, int)
+            or not 1 <= vllm_max_num_seqs <= 16
+        ):
+            raise ValueError("vLLM maximum sequence count must be between 1 and 16")
         self.model_dir = Path(model_dir).expanduser().resolve()
         self.cosyvoice_root = Path(cosyvoice_root).expanduser().resolve()
+        self.vllm_enabled = vllm_enabled
+        self.vllm_gpu_memory_utilization = float(vllm_gpu_memory_utilization)
+        self.vllm_max_num_seqs = vllm_max_num_seqs
         self.function_loader = function_loader
         self.audio_normalizer = audio_normalizer
         self._functions: CosyVoiceFunctions | None = None
@@ -158,6 +180,22 @@ class CosyVoiceAdapter:
             with self._load_lock:
                 if self._functions is None:
                     try:
+                        os.environ["COSYVOICE_VLLM_ENABLED"] = (
+                            "true" if self.vllm_enabled else "false"
+                        )
+                        os.environ["COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION"] = str(
+                            self.vllm_gpu_memory_utilization
+                        )
+                        os.environ["COSYVOICE_VLLM_MAX_NUM_SEQS"] = str(
+                            self.vllm_max_num_seqs
+                        )
+                        logger.info(
+                            "CosyVoice loading vllm_enabled={} "
+                            "vllm_gpu_memory_utilization={} vllm_max_num_seqs={}",
+                            self.vllm_enabled,
+                            self.vllm_gpu_memory_utilization,
+                            self.vllm_max_num_seqs,
+                        )
                         self._functions = self.function_loader(
                             self.cosyvoice_root,
                             self.model_dir,

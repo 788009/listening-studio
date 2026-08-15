@@ -23,6 +23,10 @@ class SettingsTest(unittest.TestCase):
             "LISTENING_MAX_CORPUS_BYTES": "2048",
             "LISTENING_MAX_BATCH_GENERATION_COUNT": "12",
             "LISTENING_DIALOGUE_SILENCE_MILLISECONDS": "750",
+            "LISTENING_WORKER_CONCURRENCY": "3",
+            "LISTENING_COSYVOICE_VLLM_ENABLED": "false",
+            "LISTENING_COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION": "0.35",
+            "LISTENING_COSYVOICE_VLLM_MAX_NUM_SEQS": "6",
             "LISTENING_DEBUG_AUTH_ENABLED": "true",
             "LISTENING_METRICS_TOKEN": "internal-metrics-token",
             "DASHSCOPE_API_KEY": "dashscope-secret",
@@ -44,6 +48,10 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.max_corpus_bytes, 2048)
         self.assertEqual(settings.max_batch_generation_count, 12)
         self.assertEqual(settings.dialogue_silence_milliseconds, 750)
+        self.assertEqual(settings.worker_concurrency, 3)
+        self.assertFalse(settings.cosyvoice_vllm_enabled)
+        self.assertEqual(settings.cosyvoice_vllm_gpu_memory_utilization, 0.35)
+        self.assertEqual(settings.cosyvoice_vllm_max_num_seqs, 6)
         self.assertTrue(settings.debug_auth_enabled)
         self.assertEqual(
             settings.metrics_token.get_secret_value() if settings.metrics_token else None,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from threading import Event
 from typing import Any, Protocol
@@ -109,17 +110,25 @@ class JobWorker:
         handlers: dict[str, JobHandler],
         *,
         poll_interval_seconds: float = 1.0,
+        max_concurrency: int = 1,
         repository: JobRepository | None = None,
         job_storage: JobStorage | None = None,
     ) -> None:
         if poll_interval_seconds <= 0:
             raise ValueError("Poll interval must be positive")
+        if (
+            isinstance(max_concurrency, bool)
+            or not isinstance(max_concurrency, int)
+            or max_concurrency < 1
+        ):
+            raise ValueError("Worker concurrency must be a positive integer")
         self.session_factory = session_factory
         self.handlers = {
             JobService.normalize_job_type(job_type): handler
             for job_type, handler in handlers.items()
         }
         self.poll_interval_seconds = poll_interval_seconds
+        self.max_concurrency = max_concurrency
         self.repository = repository or JobRepository()
         self.job_storage = job_storage
 
@@ -164,11 +173,18 @@ class JobWorker:
         return result
 
     def run_once(self) -> bool:
+        payload = self._claim_next()
+        if payload is None:
+            return False
+        self._execute(payload)
+        return True
+
+    def _claim_next(self) -> JobPayload | None:
         with self.session_factory() as session:
             job = self.repository.claim_next(session)
             if job is None:
                 session.rollback()
-                return False
+                return None
             payload = JobPayload(
                 id=job.id,
                 type=job.type,
@@ -177,11 +193,13 @@ class JobWorker:
                 attempt_count=job.attempt_count,
             )
             session.commit()
+        return payload
 
+    def _execute(self, payload: JobPayload) -> None:
         handler = self.handlers.get(payload.type)
         if handler is None:
             self._fail(payload.id, "No handler is registered for this job type")
-            return True
+            return
 
         context = JobContext(payload.id, self.session_factory, self.repository)
         resource_type, resource_id = self._resource_context(payload.input_summary)
@@ -226,7 +244,6 @@ class JobWorker:
                     session.rollback()
                     self._cancel(payload.id)
                     job_logger.info("Job cancelled at completion job_id={}", payload.id)
-        return True
 
     @staticmethod
     def _resource_context(input_summary: dict[str, Any]) -> tuple[str, object]:
@@ -245,12 +262,42 @@ class JobWorker:
     def run_forever(self, stop_event: Event | None = None) -> None:
         stop_event = stop_event or Event()
         self.recover()
-        logger.info("Job worker started")
+        logger.info("Job worker started max_concurrency={}", self.max_concurrency)
         try:
-            while not stop_event.is_set():
-                processed = self.run_once()
-                if not processed:
-                    stop_event.wait(self.poll_interval_seconds)
+            with ThreadPoolExecutor(
+                max_workers=self.max_concurrency,
+                thread_name_prefix="job-worker",
+            ) as executor:
+                in_flight: set[Future[None]] = set()
+                while not stop_event.is_set():
+                    while (
+                        len(in_flight) < self.max_concurrency
+                        and not stop_event.is_set()
+                    ):
+                        payload = self._claim_next()
+                        if payload is None:
+                            break
+                        in_flight.add(executor.submit(self._execute, payload))
+
+                    if not in_flight:
+                        stop_event.wait(self.poll_interval_seconds)
+                        continue
+
+                    done, in_flight = wait(
+                        in_flight,
+                        timeout=self.poll_interval_seconds,
+                        return_when=FIRST_COMPLETED,
+                    )
+                    for future in done:
+                        future.result()
+
+                if in_flight:
+                    logger.info(
+                        "Job worker waiting for active jobs count={}",
+                        len(in_flight),
+                    )
+                    for future in in_flight:
+                        future.result()
         finally:
             logger.info("Job worker stopped")
 

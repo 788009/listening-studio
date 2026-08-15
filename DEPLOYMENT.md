@@ -69,6 +69,10 @@ At minimum, review these values:
 | `LISTENING_DATA_DIR` | Absolute writable resource directory. |
 | `LISTENING_LOG_DIR` | Absolute writable log directory. |
 | `LISTENING_FRONTEND_DIST_DIR` | Absolute path to `frontend/dist`. |
+| `LISTENING_WORKER_CONCURRENCY` | Concurrent jobs in the single GPU worker; start with `4`. |
+| `LISTENING_COSYVOICE_VLLM_ENABLED` | Enable vLLM dynamic batching; normally `true`. |
+| `LISTENING_COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION` | Fraction reserved by vLLM; start with `0.2`. |
+| `LISTENING_COSYVOICE_VLLM_MAX_NUM_SEQS` | Maximum active vLLM sequences; start with `4`. |
 | `LISTENING_DEBUG_AUTH_ENABLED` | `false`; debug headers are not production authentication. |
 | `LISTENING_AUTH_SESSION_SECRET` | Unique random value of at least 32 characters. |
 | `LISTENING_METRICS_TOKEN` | Unique random token; expose metrics only to internal monitoring. |
@@ -148,6 +152,14 @@ export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models
 source .venv/bin/activate
 .venv/bin/python -m backend.app.workers.main
 ```
+
+The worker runs up to `LISTENING_WORKER_CONCURRENCY` jobs in one process. Their
+speech-token requests share one vLLM engine and can be scheduled as a dynamic
+batch. Do not add worker processes to increase throughput on the same GPU,
+because each process loads another model instance. Tune worker concurrency,
+`LISTENING_COSYVOICE_VLLM_MAX_NUM_SEQS`, and GPU memory utilization together,
+then run the GPU acceptance test under representative batch load. The default
+values are conservative starting points rather than a measured capacity limit.
 
 Both processes must use the same working directory, `.env`, database URL, data
 directory, log directory, model directory, and application revision. Configure

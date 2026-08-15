@@ -67,6 +67,21 @@ npm --prefix frontend ci
 
 项目最近一次验证使用 Python 3.10、CUDA 12.8 对应的 PyTorch 和 torchaudio 2.8.0，以及 vLLM 0.11.0。
 
+### 并发语音生成
+
+持久化任务进程会并发处理多个任务，使批量草稿的话轮请求进入同一个 vLLM 引擎。vLLM 会将活动中的语音 token 请求组成动态批次；Flow 和声码器推理仍由 vLLM 之外的 CosyVoice 执行。
+
+`.env.example` 默认允许 4 个并发任务和 4 个 vLLM 活动序列：
+
+```dotenv
+LISTENING_WORKER_CONCURRENCY=4
+LISTENING_COSYVOICE_VLLM_ENABLED=true
+LISTENING_COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION=0.2
+LISTENING_COSYVOICE_VLLM_MAX_NUM_SEQS=4
+```
+
+每块 GPU 只运行一个持久化任务进程。只有在检查显存占用和生成稳定性后，才同时提高任务并发数与 vLLM 序列上限。8 GB 显卡应先使用默认值。设置 `LISTENING_COSYVOICE_VLLM_ENABLED=false` 后会改用原有 PyTorch token 生成路径，模型启动时也不会导入 vLLM。
+
 ## 下载模型
 
 将 `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` 下载到 `.env` 配置的目录。可以使用 ModelScope：

@@ -81,6 +81,29 @@ then verify the project environment:
 The last verified project baseline used Python 3.10, PyTorch and torchaudio
 2.8.0 with CUDA 12.8, and vLLM 0.11.0.
 
+### Concurrent Speech Generation
+
+The persistent worker accepts several jobs concurrently so requests from batch
+drafts can enter the same vLLM engine. vLLM then schedules active speech-token
+requests as a dynamic batch. Flow and vocoder inference still run through
+CosyVoice outside vLLM.
+
+The defaults in `.env.example` allow four concurrent jobs and four active vLLM
+sequences:
+
+```dotenv
+LISTENING_WORKER_CONCURRENCY=4
+LISTENING_COSYVOICE_VLLM_ENABLED=true
+LISTENING_COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION=0.2
+LISTENING_COSYVOICE_VLLM_MAX_NUM_SEQS=4
+```
+
+Use one persistent worker process per GPU. Increase concurrency and vLLM
+capacity together only after checking GPU memory use and generation stability.
+On an 8 GB GPU, start with the defaults. Set
+`LISTENING_COSYVOICE_VLLM_ENABLED=false` to use the original PyTorch token
+generation path; this also avoids importing vLLM at model startup.
+
 ## Download the Model
 
 Download `FunAudioLLM/Fun-CosyVoice3-0.5B-2512` into the path configured in

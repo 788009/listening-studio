@@ -150,6 +150,65 @@ class CosyVoiceIntegrationTest(unittest.TestCase):
             with self.assertRaises(JobFailedError):
                 unavailable.extract_voice(source, output)
 
+    def test_adapter_configures_vllm_before_loading_functions(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_dir:
+            root = Path(temporary_dir)
+            model_dir = root / "model"
+            cosyvoice_root = root / "voice" / "CosyVoice"
+            model_dir.mkdir()
+            cosyvoice_root.mkdir(parents=True)
+            (cosyvoice_root / "modules.py").write_text("", encoding="utf-8")
+            source = root / "source.wav"
+            source.write_bytes(b"source")
+            output = root / "output.pt"
+            loaded_environment: dict[str, str | None] = {}
+
+            def loader(root: Path, model: Path) -> CosyVoiceFunctions:
+                del root, model
+                for name in (
+                    "COSYVOICE_VLLM_ENABLED",
+                    "COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION",
+                    "COSYVOICE_VLLM_MAX_NUM_SEQS",
+                ):
+                    loaded_environment[name] = os.environ.get(name)
+                return CosyVoiceFunctions(
+                    lambda source, target: target.write_bytes(b"voice"),
+                    lambda source, text, target: target.write_bytes(b"audio"),
+                )
+
+            with patch.dict(os.environ, {}, clear=True):
+                adapter = CosyVoiceAdapter(
+                    model_dir,
+                    cosyvoice_root=cosyvoice_root,
+                    function_loader=loader,
+                    vllm_enabled=False,
+                    vllm_gpu_memory_utilization=0.35,
+                    vllm_max_num_seqs=6,
+                )
+                adapter.extract_voice(source, output)
+
+            self.assertEqual(
+                loaded_environment,
+                {
+                    "COSYVOICE_VLLM_ENABLED": "false",
+                    "COSYVOICE_VLLM_GPU_MEMORY_UTILIZATION": "0.35",
+                    "COSYVOICE_VLLM_MAX_NUM_SEQS": "6",
+                },
+            )
+
+    def test_adapter_rejects_invalid_vllm_configuration(self) -> None:
+        invalid_options = (
+            {"vllm_enabled": 1},
+            {"vllm_gpu_memory_utilization": 0},
+            {"vllm_gpu_memory_utilization": 0.91},
+            {"vllm_max_num_seqs": 0},
+            {"vllm_max_num_seqs": 17},
+        )
+
+        for options in invalid_options:
+            with self.subTest(options=options), self.assertRaises(ValueError):
+                CosyVoiceAdapter(Path("model"), **options)
+
     def test_adapter_maps_loader_and_model_errors(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_dir:
             root = Path(temporary_dir)

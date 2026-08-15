@@ -77,6 +77,14 @@ class Settings(BaseSettings):
             "COSYVOICE_MODEL_DIR", "LISTENING_COSYVOICE_MODEL_DIR"
         )
     )
+    worker_concurrency: int = Field(default=4, ge=1, le=16)
+    cosyvoice_vllm_enabled: bool = True
+    cosyvoice_vllm_gpu_memory_utilization: float = Field(
+        default=0.2,
+        gt=0,
+        le=0.9,
+    )
+    cosyvoice_vllm_max_num_seqs: int = Field(default=4, ge=1, le=16)
     log_rotation_bytes: PositiveInt = 10 * 1024 * 1024
     log_retention_files: PositiveInt = 5
     rate_limit_window_seconds: PositiveInt = 60

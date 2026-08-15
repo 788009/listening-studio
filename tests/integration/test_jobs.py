@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 import unittest
 from pathlib import Path
+from threading import Event, Lock, Thread
 
 import httpx
 from alembic import command
@@ -141,6 +142,75 @@ class JobIntegrationTest(unittest.TestCase):
             self.assertEqual([job.progress for job in jobs if job], [100, 100])
             self.assertEqual([job.attempt_count for job in jobs if job], [1, 1])
             self.assertEqual(handled.count(first.id), 1)
+
+    def test_worker_runs_jobs_concurrently_and_waits_during_shutdown(self) -> None:
+        with self.app.state.session_factory() as session:
+            jobs = [self.create_job(session) for _ in range(3)]
+            session.commit()
+            job_ids = [job.id for job in jobs]
+
+        release_handlers = Event()
+        both_started = Event()
+        state_lock = Lock()
+        active_count = 0
+        maximum_active_count = 0
+
+        def handler(context: JobContext, job: JobPayload) -> JobResult:
+            del context
+            nonlocal active_count, maximum_active_count
+            with state_lock:
+                active_count += 1
+                maximum_active_count = max(maximum_active_count, active_count)
+                if active_count == 2:
+                    both_started.set()
+            self.assertTrue(release_handlers.wait(3))
+            with state_lock:
+                active_count -= 1
+            return JobResult("audio", job.id)
+
+        stop_event = Event()
+        worker = JobWorker(
+            self.app.state.session_factory,
+            {"fake_generation": handler},
+            poll_interval_seconds=0.01,
+            max_concurrency=2,
+        )
+        worker_thread = Thread(target=worker.run_forever, args=(stop_event,))
+        worker_thread.start()
+        try:
+            self.assertTrue(both_started.wait(3))
+            stop_event.set()
+            worker_thread.join(0.05)
+            self.assertTrue(worker_thread.is_alive())
+            release_handlers.set()
+            worker_thread.join(3)
+        finally:
+            release_handlers.set()
+            stop_event.set()
+            worker_thread.join(3)
+
+        self.assertFalse(worker_thread.is_alive())
+        self.assertEqual(maximum_active_count, 2)
+        with self.app.state.session_factory() as session:
+            completed = [session.get(Job, job_id) for job_id in job_ids]
+            self.assertTrue(all(job is not None for job in completed))
+            self.assertEqual(
+                [job.status for job in completed if job],
+                [
+                    JobStatus.SUCCEEDED,
+                    JobStatus.SUCCEEDED,
+                    JobStatus.QUEUED,
+                ],
+            )
+
+    def test_worker_rejects_invalid_concurrency(self) -> None:
+        for value in (True, 0, -1, 1.5):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                JobWorker(
+                    self.app.state.session_factory,
+                    {},
+                    max_concurrency=value,
+                )
 
     def test_handler_failure_and_cancellation_reach_terminal_states(self) -> None:
         with self.app.state.session_factory() as session:

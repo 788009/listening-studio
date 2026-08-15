@@ -12,6 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import hashlib
 import os, queue
 import random
 import time
@@ -508,7 +509,10 @@ class Qwen2LM(TransformerLM):
             sampling_params = SamplingParams(top_k=sampling,
                                              stop_token_ids=self.stop_token_ids,
                                              min_tokens=min_len,
-                                             max_tokens=max_len)
+                                             max_tokens=max_len,
+                                             seed=int.from_bytes(
+                                                 hashlib.sha256(uuid.encode()).digest()[:4],
+                                                 'big'))
             with self.lock:
                 self.vllm.add_request(uuid, {"prompt_embeds": lm_input.squeeze(0).to(torch.bfloat16).to(lm_input.device)}, sampling_params)
                 self.vllm_output_queue[uuid] = queue.Queue()
