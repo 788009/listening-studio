@@ -35,6 +35,11 @@ class GenerationDraftResponse(TagApiModel):
     questions: list[GenerationDraftQuestionResponse]
 
 
+class GenerationDraftRevisionRequest(TagApiModel):
+    prompt: str = Field(min_length=1, max_length=4_000)
+    draft: GenerationDraftResponse
+
+
 class GenerationBatchItemResponse(TagApiModel):
     id: int
     position: int = Field(ge=0)

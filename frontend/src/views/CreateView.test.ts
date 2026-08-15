@@ -741,6 +741,99 @@ describe('direct creation view', () => {
     wrapper.unmount()
   })
 
+  it('shows AI revision progress and supports undo and redo', async () => {
+    let resolveRevision: ((response: Response) => void) | undefined
+    let revisionBody: unknown
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const path = String(input)
+        const options = optionsResponse(path)
+        if (options) return Promise.resolve(options)
+        if (path === '/api/generation-batches/7/revise-draft') {
+          revisionBody = JSON.parse(String(init?.body))
+          return new Promise<Response>((resolve) => {
+            resolveRevision = resolve
+          })
+        }
+        throw new Error(`Unexpected request: ${path}`)
+      }),
+    )
+    const pinia = createPinia()
+    const store = useListeningDraftsStore(pinia)
+    store.setBatch({
+      id: 7,
+      jobId: 9,
+      questionTypeCounts: { monologue: 1 },
+      status: 'completed',
+      progress: 100,
+      tags: [{ id: 6, type: 'category', englishValue: 'monologue' }],
+      speakerVoices: [],
+      items: [{
+        id: 1,
+        position: 0,
+        status: 'completed',
+        attemptCount: 1,
+        draft: {
+          questionType: 'monologue',
+          title: 'Original draft',
+          utterances: [{ speakerDisplayName: 'Narrator', voiceId: 2, text: 'Original text.' }],
+          questions: [{
+            prompt: 'Original question?',
+            correctAnswers: ['Original answer'],
+            incorrectAnswers: ['Wrong answer'],
+          }],
+        },
+      }],
+      createdAt: '',
+      updatedAt: '',
+    })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/create', component: CreateView },
+        { path: '/audio/:id', component: { template: '<div />' } },
+        { path: '/voices/create', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/create?batch=7')
+    await router.isReady()
+    const wrapper = mount({ template: '<router-view />' }, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    await wrapper.findAll('button').find((item) => item.text() === 'AI modify')!.trigger('click')
+    await wrapper.get('#ai-revision-prompt').setValue('Make it shorter.')
+    await wrapper.findAll('button').find((item) => item.text() === 'Submit modification')!.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[role="progressbar"]').text()).toContain('Waiting for AI response')
+    expect(revisionBody).toMatchObject({
+      prompt: 'Make it shorter.',
+      draft: { title: 'Original draft', questionType: 'monologue' },
+    })
+    resolveRevision?.(jsonResponse({
+      questionType: 'monologue',
+      title: 'Revised draft',
+      utterances: [{ speakerDisplayName: 'Narrator', voiceId: 2, text: 'Short text.' }],
+      questions: [{
+        prompt: 'Revised question?',
+        correctAnswers: ['Revised answer'],
+        incorrectAnswers: ['Wrong answer'],
+      }],
+    }))
+    await flushPromises()
+
+    expect(wrapper.find('[role="progressbar"]').exists()).toBe(false)
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Revised draft')
+    await wrapper.findAll('button').find((item) => item.text() === 'Undo')!.trigger('click')
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Original draft')
+    await wrapper.findAll('button').find((item) => item.text() === 'Redo')!.trigger('click')
+    expect(wrapper.get('#audio-title').element).toHaveProperty('value', 'Revised draft')
+    wrapper.unmount()
+  })
+
   it('generates every draft preview before publishing and retains failed drafts', async () => {
     const previewBodies: unknown[] = []
     const publishBodies: unknown[] = []

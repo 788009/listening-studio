@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import httpx
 from alembic import command
@@ -17,12 +18,37 @@ from backend.app.db.models.job import Job, JobStatus
 from backend.app.db.models.voice import VoiceStatus
 from backend.app.factory import create_app
 from backend.app.integrations.identity import DEBUG_ISSUER_HEADER, DEBUG_SUBJECT_HEADER
+from backend.app.integrations.llm import DraftRevisionResult
 from backend.app.repositories.users import UserRepository
 from backend.app.services.voice_storage import VoiceAsset, VoiceStorage
 from backend.app.services.voices import VoiceService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+class FakeDraftReviser:
+    def __init__(self) -> None:
+        self.calls: list[object] = []
+
+    def revise_draft(self, request: object, *, call_id: str) -> DraftRevisionResult:
+        self.calls.append((request, call_id))
+        return DraftRevisionResult.model_validate(
+            {
+                "title": "Revised dialogue",
+                "utterances": [
+                    {"speakerDisplayName": "Guest", "text": "Revised answer."},
+                    {"speakerDisplayName": "Host", "text": "Revised question."},
+                ],
+                "questions": [
+                    {
+                        "prompt": "What changed?",
+                        "correctAnswers": ["The wording."],
+                        "incorrectAnswers": ["The speakers."],
+                    }
+                ],
+            }
+        )
 
 
 class GenerationBatchIntegrationTest(unittest.TestCase):
@@ -214,6 +240,60 @@ class GenerationBatchIntegrationTest(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 422)
+
+    def test_revises_owned_draft_and_preserves_voice_assignments(self) -> None:
+        accepted = self.submit("short_dialogue", 1, 2)
+        self.assertEqual(accepted.status_code, 202, accepted.text)
+        batch_id = accepted.json()["batchId"]
+        reviser = FakeDraftReviser()
+        self.app.state.draft_reviser = reviser
+
+        async def call_directly(function: object, *args: object, **kwargs: object):
+            return function(*args, **kwargs)  # type: ignore[operator]
+
+        with patch(
+            "backend.app.api.generation_batches.asyncio.to_thread",
+            new=call_directly,
+        ):
+            response = self.send(
+                "POST",
+                f"/api/generation-batches/{batch_id}/revise-draft",
+                headers=self.headers(),
+                json={
+                    "prompt": "Use more formal language.",
+                    "draft": {
+                        "questionType": "short_dialogue",
+                        "title": "Original dialogue",
+                        "utterances": [
+                            {
+                                "speakerDisplayName": "Host",
+                                "voiceId": self.voice_ids[0],
+                                "text": "Question.",
+                            },
+                            {
+                                "speakerDisplayName": "Guest",
+                                "voiceId": self.voice_ids[1],
+                                "text": "Answer.",
+                            },
+                        ],
+                        "questions": [
+                            {
+                                "prompt": "What happened?",
+                                "correctAnswers": ["A conversation."],
+                                "incorrectAnswers": ["A speech."],
+                            }
+                        ],
+                    },
+                },
+            )
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["title"], "Revised dialogue")
+        self.assertEqual(
+            [item["voiceId"] for item in response.json()["utterances"]],
+            [self.voice_ids[1], self.voice_ids[0]],
+        )
+        self.assertEqual(len(reviser.calls), 1)
 
 
 if __name__ == "__main__":

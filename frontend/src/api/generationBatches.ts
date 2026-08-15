@@ -93,6 +93,20 @@ export function getGenerationBatch(batchId: number): Promise<GenerationBatch> {
   return apiRequest<GenerationBatch>(`/generation-batches/${positiveId(batchId)}`)
 }
 
+export function reviseGenerationDraft(
+  batchId: number,
+  prompt: string,
+  draft: GenerationDraft,
+): Promise<GenerationDraft> {
+  return apiRequest<GenerationDraft>(
+    `/generation-batches/${positiveId(batchId)}/revise-draft`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ prompt, draft }),
+    },
+  )
+}
+
 function positiveId(value: number): number {
   if (!Number.isInteger(value) || value < 1) {
     throw new TypeError('Resource ID must be a positive integer')

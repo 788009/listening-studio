@@ -9,8 +9,9 @@ from pydantic import ValidationError
 
 from backend.app.core.exceptions import JobFailedError
 from backend.app.integrations.llm import (
-    GeneratedListeningContent,
     DashScopeLlmIntegration,
+    DraftRevisionRequest,
+    GeneratedListeningContent,
     ListeningGenerationRequest,
     PlaceholderListeningContentGenerator,
     PlaceholderTopicTagSuggester,
@@ -217,6 +218,60 @@ class LlmIntegrationTest(unittest.TestCase):
         self.assertIn("# 短对话", user_prompt)
         self.assertIn('"Finding a Parking Space"', user_prompt)
         self.assertIn("A corpus about community gardens", user_prompt)
+
+    def test_dashscope_revises_a_draft_and_requires_the_original_speakers(self) -> None:
+        revised_payload = {
+            "title": "A More Formal Meeting",
+            "utterances": [
+                {"speakerDisplayName": "Host", "text": "Welcome to the meeting."},
+                {"speakerDisplayName": "Guest", "text": "Thank you for inviting me."},
+            ],
+            "questions": [
+                {
+                    "prompt": "Why is the guest speaking?",
+                    "correctAnswers": ["The guest was invited."],
+                    "incorrectAnswers": ["The guest is lost."],
+                }
+            ],
+        }
+        fake = FakeOpenAI([completion(json.dumps(revised_payload))])
+        integration = DashScopeLlmIntegration(
+            api_key="secret",
+            base_url="https://example.invalid/v1",
+            model="test-model",
+            client=fake,  # type: ignore[arg-type]
+            sleep=lambda _: None,
+        )
+
+        result = integration.revise_draft(
+            DraftRevisionRequest(
+                prompt="Make the language more formal.",
+                question_type=QuestionType.SHORT_DIALOGUE,
+                title="Meeting",
+                utterances=[
+                    {"speakerDisplayName": "Host", "text": "Hi."},
+                    {"speakerDisplayName": "Guest", "text": "Hello."},
+                ],
+                questions=[
+                    {
+                        "prompt": "Why?",
+                        "correctAnswers": ["Invitation"],
+                        "incorrectAnswers": ["Accident"],
+                    }
+                ],
+            ),
+            call_id="revision-test",
+        )
+
+        self.assertEqual(result.title, "A More Formal Meeting")
+        call = fake.completions.calls[0]
+        self.assertIn(
+            "Make the language more formal.", call["messages"][1]["content"]
+        )
+        self.assertIn(
+            'exact list and no other speaker names: ["Guest", "Host"]',
+            call["messages"][1]["content"],
+        )
 
     def test_dashscope_retries_three_times_for_any_response_error(self) -> None:
         valid = completion(

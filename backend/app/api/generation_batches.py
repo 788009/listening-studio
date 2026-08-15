@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Annotated
+from unicodedata import normalize
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from backend.app.api.generation_batch_schemas import (
@@ -14,6 +17,7 @@ from backend.app.api.generation_batch_schemas import (
     GenerationBatchSpeakerVoiceResponse,
     GenerationBatchTagResponse,
     GenerationDraftResponse,
+    GenerationDraftRevisionRequest,
 )
 from backend.app.api.schemas import ResourceId
 from backend.app.core.auth import require_completed_profile
@@ -24,7 +28,11 @@ from backend.app.db.models.generation_batch import (
 )
 from backend.app.db.models.user import User
 from backend.app.db.session import get_db_session
-from backend.app.integrations.llm import QuestionType
+from backend.app.integrations.llm import (
+    DashScopeLlmIntegration,
+    DraftRevisionRequest,
+    QuestionType,
+)
 from backend.app.services.corpus_storage import CorpusStorage
 from backend.app.services.generation_batches import GenerationBatchService
 from backend.app.services.voice_storage import VoiceStorage
@@ -41,6 +49,26 @@ def _service(request: Request) -> GenerationBatchService:
         max_corpus_bytes=settings.max_corpus_bytes,
         max_generation_count=settings.max_batch_generation_count,
     )
+
+
+def _draft_reviser(request: Request) -> DashScopeLlmIntegration:
+    existing = getattr(request.app.state, "draft_reviser", None)
+    if existing is not None:
+        return existing
+    settings = request.app.state.settings
+    if (
+        settings.dashscope_api_key is None
+        or not settings.dashscope_base_url
+        or not settings.dashscope_model
+    ):
+        raise DomainValidationError("LLM settings are not configured")
+    reviser = DashScopeLlmIntegration(
+        api_key=settings.dashscope_api_key.get_secret_value(),
+        base_url=settings.dashscope_base_url,
+        model=settings.dashscope_model,
+    )
+    request.app.state.draft_reviser = reviser
+    return reviser
 
 
 def _response(batch: GenerationBatch) -> GenerationBatchResponse:
@@ -227,3 +255,71 @@ async def get_generation_batch(
     session: Session = Depends(get_db_session),
 ) -> GenerationBatchResponse:
     return _response(_service(request).get_owned(session, user, batch_id))
+
+
+@router.post(
+    "/{batch_id}/revise-draft",
+    response_model=GenerationDraftResponse,
+)
+async def revise_generation_draft(
+    batch_id: ResourceId,
+    payload: GenerationDraftRevisionRequest,
+    request: Request,
+    user: User = Depends(require_completed_profile),
+    session: Session = Depends(get_db_session),
+) -> GenerationDraftResponse:
+    logger.bind(
+        request_id=request.state.request_id,
+        resource_type="generation_batch",
+        resource_id=batch_id,
+    ).info("AI draft revision requested batch_id={}", batch_id)
+    _service(request).get_owned(session, user, batch_id)
+    revision_request = DraftRevisionRequest(
+        prompt=payload.prompt,
+        question_type=payload.draft.question_type,
+        title=payload.draft.title,
+        utterances=[
+            {
+                "speakerDisplayName": utterance.speaker_display_name,
+                "text": utterance.text,
+            }
+            for utterance in payload.draft.utterances
+        ],
+        questions=[question.model_dump() for question in payload.draft.questions],
+    )
+    normalized_speakers: dict[str, tuple[str, int]] = {}
+    speaker_voices: dict[str, int] = {}
+    for utterance, source in zip(
+        revision_request.utterances,
+        payload.draft.utterances,
+        strict=True,
+    ):
+        identity = normalize("NFKC", utterance.speaker_display_name).casefold()
+        speaker = (utterance.speaker_display_name, source.voice_id)
+        if identity in normalized_speakers and normalized_speakers[identity] != speaker:
+            raise DomainValidationError("Draft speaker names must be unique")
+        normalized_speakers[identity] = speaker
+        speaker_voices[utterance.speaker_display_name] = source.voice_id
+    revision = await asyncio.to_thread(
+        _draft_reviser(request).revise_draft,
+        revision_request,
+        call_id=request.state.request_id,
+    )
+    logger.bind(
+        request_id=request.state.request_id,
+        resource_type="generation_batch",
+        resource_id=batch_id,
+    ).info("AI draft revision completed batch_id={}", batch_id)
+    return GenerationDraftResponse(
+        question_type=payload.draft.question_type,
+        title=revision.title,
+        utterances=[
+            {
+                "speakerDisplayName": utterance.speaker_display_name,
+                "voiceId": speaker_voices[utterance.speaker_display_name],
+                "text": utterance.text,
+            }
+            for utterance in revision.utterances
+        ],
+        questions=[question.model_dump() for question in revision.questions],
+    )

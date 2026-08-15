@@ -3,6 +3,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute } from 'vue-router'
 
 import {
+  reviseGenerationDraft,
+  type GenerationDraft,
+} from '@/api/generationBatches'
+import {
   audioPreviewMediaPath,
   createAudioPreview,
   createAudioTurnPreview,
@@ -62,6 +66,17 @@ const publishedAudioId = ref<number | null>(null)
 const discardChangesDialogOpen = ref(false)
 const batchResults = ref<{ title: string; audioId: number }[]>([])
 const batchFailures = ref<string[]>([])
+const aiEditorOpen = ref(false)
+const aiPrompts = ref<Record<number, string>>({})
+const aiRevisionErrors = ref<Record<number, string>>({})
+const revisingDraftIndex = ref<number | null>(null)
+
+interface DraftRevisionHistory {
+  past: ListeningDraft[]
+  future: ListeningDraft[]
+}
+
+const draftRevisionHistories = ref<Record<number, DraftRevisionHistory>>({})
 
 interface GeneratedTurnPreview {
   source: 'generated' | 'upload'
@@ -338,6 +353,111 @@ function cloneQuestions(values: AudioQuestionInput[]): AudioQuestionInput[] {
     correctAnswers: [...question.correctAnswers],
     incorrectAnswers: [...question.incorrectAnswers],
   }))
+}
+
+function cloneDraft(draft: ListeningDraft): ListeningDraft {
+  return {
+    ...draft,
+    utterances: draft.utterances.map((utterance) => ({ ...utterance })),
+    questions: cloneQuestions(draft.questions),
+    tagIds: [...draft.tagIds],
+  }
+}
+
+function revisionHistory(index = draftStore.currentIndex): DraftRevisionHistory {
+  return draftRevisionHistories.value[index] ?? { past: [], future: [] }
+}
+
+function replaceRevisionHistory(index: number, history: DraftRevisionHistory): void {
+  draftRevisionHistories.value = {
+    ...draftRevisionHistories.value,
+    [index]: history,
+  }
+}
+
+function applyRevisionDraft(draft: ListeningDraft): void {
+  draftStore.updateDraft(draftStore.currentIndex, cloneDraft(draft))
+  applyDraft(draft)
+}
+
+function generationDraft(draft: ListeningDraft): GenerationDraft {
+  return {
+    questionType: draft.questionType,
+    title: draft.title,
+    utterances: draft.utterances.map(({ speakerDisplayName, voiceId, text }) => ({
+      speakerDisplayName,
+      voiceId,
+      text,
+    })),
+    questions: cloneQuestions(draft.questions),
+  }
+}
+
+async function reviseActiveDraft(): Promise<void> {
+  const batchId = draftStore.sourceBatchId
+  const prompt = aiPrompts.value[draftStore.currentIndex]?.trim() ?? ''
+  if (!batchMode.value || batchId === null || !prompt) return
+  saveActiveDraft()
+  const source = draftStore.activeDraft
+  if (!source) return
+  const index = draftStore.currentIndex
+  revisingDraftIndex.value = index
+  aiRevisionErrors.value = { ...aiRevisionErrors.value, [index]: '' }
+  try {
+    const revised = await reviseGenerationDraft(batchId, prompt, generationDraft(source))
+    if (draftStore.currentIndex !== index) return
+    const speakerKeys = new Map(
+      source.utterances.map((utterance) => [utterance.speakerDisplayName, utterance.speakerKey]),
+    )
+    const beforeApply = currentDraft() ?? source
+    const next: ListeningDraft = {
+      ...revised,
+      utterances: revised.utterances.map((utterance) => ({
+        ...utterance,
+        speakerKey: speakerKeys.get(utterance.speakerDisplayName) ?? 0,
+      })),
+      tagIds: [...beforeApply.tagIds],
+    }
+    const history = revisionHistory(index)
+    replaceRevisionHistory(index, {
+      past: [...history.past, cloneDraft(beforeApply)],
+      future: [],
+    })
+    applyRevisionDraft(next)
+  } catch (error) {
+    aiRevisionErrors.value = {
+      ...aiRevisionErrors.value,
+      [index]: error instanceof ApiError ? error.message : t('AI revision failed'),
+    }
+  } finally {
+    if (revisingDraftIndex.value === index) revisingDraftIndex.value = null
+  }
+}
+
+function undoDraftRevision(): void {
+  saveActiveDraft()
+  const current = draftStore.activeDraft
+  const history = revisionHistory()
+  const previous = history.past[history.past.length - 1]
+  if (!current || !previous) return
+  replaceRevisionHistory(draftStore.currentIndex, {
+    past: history.past.slice(0, -1),
+    future: [cloneDraft(current), ...history.future],
+  })
+  applyRevisionDraft(previous)
+}
+
+function redoDraftRevision(): void {
+  saveActiveDraft()
+  const current = draftStore.activeDraft
+  const history = revisionHistory()
+  const next = history.future[0]
+  if (!current || !next) return
+  replaceRevisionHistory(draftStore.currentIndex, {
+    past: [...history.past, cloneDraft(current)],
+    future: history.future.slice(1),
+  })
+  applyRevisionDraft(next)
 }
 
 function saveActiveDraft(): void {
@@ -1224,16 +1344,29 @@ async function publishDraftBatchFromPreviews(): Promise<void> {
     }
 
     const retainedPreviewStates: Record<number, Record<number, TurnPreviewState>> = {}
+    const retainedPrompts: Record<number, string> = {}
+    const retainedRevisionErrors: Record<number, string> = {}
+    const retainedRevisionHistories: Record<number, DraftRevisionHistory> = {}
     let retainedIndex = 0
     for (const [index] of draftStore.drafts.entries()) {
       if (succeeded.has(index)) continue
       retainedPreviewStates[retainedIndex] = batchPreviewStates.value[index] ?? {}
+      if (aiPrompts.value[index]) retainedPrompts[retainedIndex] = aiPrompts.value[index]!
+      if (aiRevisionErrors.value[index]) {
+        retainedRevisionErrors[retainedIndex] = aiRevisionErrors.value[index]!
+      }
+      if (draftRevisionHistories.value[index]) {
+        retainedRevisionHistories[retainedIndex] = draftRevisionHistories.value[index]!
+      }
       retainedIndex += 1
     }
     for (const index of [...succeeded].sort((a, b) => b - a)) {
       draftStore.removeDraft(index)
     }
     batchPreviewStates.value = retainedPreviewStates
+    aiPrompts.value = retainedPrompts
+    aiRevisionErrors.value = retainedRevisionErrors
+    draftRevisionHistories.value = retainedRevisionHistories
     if (draftStore.drafts.length > 0) {
       draftStore.currentIndex = 0
       applyDraft(draftStore.drafts[0]!)
@@ -1341,6 +1474,10 @@ function startAnother(): void {
   discardChangesDialogOpen.value = false
   batchResults.value = []
   batchFailures.value = []
+  aiEditorOpen.value = false
+  aiPrompts.value = {}
+  aiRevisionErrors.value = {}
+  draftRevisionHistories.value = {}
 }
 
 async function cleanupPreviews(): Promise<void> {
@@ -1412,14 +1549,82 @@ onUnmounted(() => clearTimeout(previewPollTimer))
 
     <form v-else class="mt-6 min-w-0 overflow-hidden rounded-lg border border-line bg-surface shadow-panel" @submit.prevent="submit">
       <div v-if="batchMode" class="flex flex-wrap items-center justify-between gap-4 border-b border-line bg-canvas px-5 py-3">
-        <p class="text-sm font-medium">{{ t('Draft {current} of {total}', { current: draftStore.currentIndex + 1, total: draftStore.drafts.length }) }}</p>
+        <div class="flex flex-wrap items-center gap-3">
+          <p class="text-sm font-medium">{{ t('Draft {current} of {total}', { current: draftStore.currentIndex + 1, total: draftStore.drafts.length }) }}</p>
+          <button
+            type="button"
+            class="inline-flex h-9 items-center gap-2 border border-line bg-surface px-3 text-sm font-medium hover:border-ink"
+            :aria-expanded="aiEditorOpen"
+            @click="aiEditorOpen = !aiEditorOpen"
+          >
+            <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true">
+              <path d="m12 3 1.3 4.2L17.5 8.5l-4.2 1.3L12 14l-1.3-4.2-4.2-1.3 4.2-1.3L12 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+              <path d="m18.5 14 .7 2.3 2.3.7-2.3.7-.7 2.3-.7-2.3-2.3-.7 2.3-.7.7-2.3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            </svg>
+            {{ t('AI modify') }}
+          </button>
+        </div>
         <div class="flex items-center gap-2">
-          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex === 0" :title="t('Previous')" @click="selectDraft(draftStore.currentIndex - 1)">
+          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex === 0 || revisingDraftIndex !== null" :title="t('Previous')" @click="selectDraft(draftStore.currentIndex - 1)">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m15 5-7 7 7 7" stroke="currentColor" stroke-width="2" /></svg>
           </button>
-          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex >= draftStore.drafts.length - 1" :title="t('Next')" @click="selectDraft(draftStore.currentIndex + 1)">
+          <button type="button" class="flex h-9 w-9 items-center justify-center border border-line bg-surface disabled:opacity-30" :disabled="draftStore.currentIndex >= draftStore.drafts.length - 1 || revisingDraftIndex !== null" :title="t('Next')" @click="selectDraft(draftStore.currentIndex + 1)">
             <svg viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="m9 5 7 7-7 7" stroke="currentColor" stroke-width="2" /></svg>
           </button>
+        </div>
+      </div>
+      <div v-if="batchMode && aiEditorOpen" class="border-b border-line bg-canvas px-5 py-5">
+        <label for="ai-revision-prompt" class="mb-1 block text-sm font-medium">{{ t('Modification prompt') }}</label>
+        <textarea
+          id="ai-revision-prompt"
+          v-model="aiPrompts[draftStore.currentIndex]"
+          rows="4"
+          maxlength="4000"
+          class="w-full resize-y border border-line bg-surface px-3 py-2 text-sm focus:border-accent focus:outline-none focus:shadow-focus"
+        />
+        <div
+          v-if="revisingDraftIndex === draftStore.currentIndex"
+          class="mt-3"
+          role="progressbar"
+          :aria-label="t('AI revision progress')"
+        >
+          <div class="mb-1 flex items-center justify-between gap-3 text-xs text-muted">
+            <span>{{ t('Modifying') }}</span>
+            <span>{{ t('Waiting for AI response') }}</span>
+          </div>
+          <div class="h-2 overflow-hidden bg-raised">
+            <span class="ai-revision-progress block h-full bg-accent" aria-hidden="true" />
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p v-if="aiRevisionErrors[draftStore.currentIndex]" class="text-sm text-danger" role="alert">{{ aiRevisionErrors[draftStore.currentIndex] }}</p>
+          <span v-else />
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="h-9 border border-line bg-surface px-3 text-sm font-medium disabled:opacity-30"
+              :disabled="revisionHistory().past.length === 0 || revisingDraftIndex !== null"
+              @click="undoDraftRevision"
+            >
+              {{ t('Undo') }}
+            </button>
+            <button
+              type="button"
+              class="h-9 border border-line bg-surface px-3 text-sm font-medium disabled:opacity-30"
+              :disabled="revisionHistory().future.length === 0 || revisingDraftIndex !== null"
+              @click="redoDraftRevision"
+            >
+              {{ t('Redo') }}
+            </button>
+            <button
+              type="button"
+              class="h-9 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:opacity-50"
+              :disabled="!(aiPrompts[draftStore.currentIndex]?.trim()) || revisingDraftIndex !== null"
+              @click="reviseActiveDraft"
+            >
+              {{ revisingDraftIndex === draftStore.currentIndex ? t('Modifying') : t('Submit modification') }}
+            </button>
+          </div>
         </div>
       </div>
       <div class="border-b border-line px-5 py-6">
@@ -1488,7 +1693,7 @@ onUnmounted(() => clearTimeout(previewPollTimer))
           </label>
           <div>
             <p v-if="formError" role="alert" class="mb-3 break-words text-sm text-danger">{{ formError }}</p>
-            <button type="submit" :disabled="publishing || previewGenerationActive || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
+            <button type="submit" :disabled="publishing || previewGenerationActive || revisingDraftIndex !== null || loadingOptions || voices.length === 0" class="inline-flex h-10 w-full items-center justify-center gap-2 bg-ink px-4 text-sm font-medium text-white hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50">
               <svg v-if="batchMode ? allBatchPreviewsReady : allPreviewsReady" viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M5 12.5 9.5 17 19 7" stroke="currentColor" stroke-width="2" /></svg>
               <svg v-else viewBox="0 0 24 24" fill="none" class="h-4 w-4" aria-hidden="true"><path d="M8 5v14l11-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" /></svg>
               {{ publishing ? t('Submitting') : batchMode ? allBatchPreviewsReady ? t('Publish all drafts') : t('Generate all draft audio') : allPreviewsReady ? t('Publish') : t('Generate audio') }}
@@ -1521,3 +1726,26 @@ onUnmounted(() => clearTimeout(previewPollTimer))
     </ConfirmDialog>
   </section>
 </template>
+
+<style scoped>
+.ai-revision-progress {
+  width: 36%;
+  animation: ai-revision-progress 1.6s ease-in-out infinite;
+}
+
+@keyframes ai-revision-progress {
+  0% {
+    transform: translateX(-105%);
+  }
+  100% {
+    transform: translateX(285%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-revision-progress {
+    width: 100%;
+    animation: none;
+  }
+}
+</style>

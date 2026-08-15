@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createGenerationBatch,
   getGenerationBatch,
+  reviseGenerationDraft,
 } from './generationBatches'
 
 
@@ -54,5 +55,31 @@ describe('generation batch API', () => {
     await getGenerationBatch(4)
 
     expect(calls.map(([path]) => path)).toEqual(['/api/generation-batches/4'])
+  })
+
+  it('submits a draft and prompt for AI revision', async () => {
+    let call: [string, RequestInit | undefined] | undefined
+    const draft = {
+      questionType: 'monologue' as const,
+      title: 'Original',
+      utterances: [{ speakerDisplayName: 'Narrator', voiceId: 3, text: 'Text.' }],
+      questions: [{ prompt: 'Question?', correctAnswers: ['Yes'], incorrectAnswers: ['No'] }],
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        call = [String(input), init]
+        return Promise.resolve(response(draft))
+      }),
+    )
+
+    await reviseGenerationDraft(4, 'Make it shorter.', draft)
+
+    expect(call?.[0]).toBe('/api/generation-batches/4/revise-draft')
+    expect(call?.[1]?.method).toBe('POST')
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({
+      prompt: 'Make it shorter.',
+      draft,
+    })
   })
 })
