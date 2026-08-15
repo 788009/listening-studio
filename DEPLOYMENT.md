@@ -24,22 +24,17 @@ python --version
 ```
 
 `uv sync` installs the application and test dependencies, but not the
-CosyVoice inference stack. Install the repository's verified inference lock
-before starting a production worker. Preinstalling `pyworld` avoids its
-isolated-build failure; the final inexact sync restores the application's
-newer dependency constraints without removing inference-only packages:
+CosyVoice inference stack. Before starting a production worker, install a
+CUDA-compatible runtime that provides the packages documented in
+`voice/CosyVoice/requirements.txt` together with compatible `torch`,
+`torchaudio`, and `vllm` versions. See the CosyVoice Runtime section in
+`README.md`, then verify the environment:
 
 ```bash
-export COSYVOICE_MODEL_DIR=/home/uuk/listening/voice/CosyVoice/pretrained_models/Fun-CosyVoice3-0.5B
 source .venv/bin/activate
-uv pip install --python .venv/bin/python wheel-stub
-uv pip install --python .venv/bin/python pyworld==0.3.4
-uv pip sync voice/CosyVoice/requirements_.txt --python .venv/bin/python --no-build-isolation
-uv sync --python 3.10 --inexact
 .venv/bin/python -c "import torch, torchaudio, vllm"
 ```
 
-Treat `voice/CosyVoice/requirements_.txt` as part of the tested model runtime.
 Review and rerun the GPU acceptance test before deploying any dependency or
 model revision change.
 
